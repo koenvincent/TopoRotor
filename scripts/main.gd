@@ -29,7 +29,12 @@ var endpoint: LineEdit
 var ocr_token: LineEdit
 var ocr_in_flight: bool = false
 var ocr_input_snapshot: String = ""
-var is_test_mode: bool = OS.get_cmdline_user_args().has("--smoke-test")
+var ocr_retry_after_msec: int = 0
+# Test/capture harness is only reachable from debug (editor/CI) builds, never from release exports.
+var is_test_mode: bool = OS.is_debug_build() and OS.get_cmdline_user_args().has("--smoke-test")
+var is_capture_mode: bool = OS.is_debug_build() and OS.get_cmdline_user_args().has("--capture")
+# Smoke tests exercise the real save path against a separate file, never the player's profile.
+var save_path: String = "user://smoke-progress.json" if is_test_mode else "user://progress.json"
 var http: HTTPRequest
 var photo_bytes: PackedByteArray
 var photo_image: Image
@@ -53,21 +58,34 @@ var photo_open: bool = false
 var answer_cooldown: float = 0.0
 var keyboard: Vector2 = Vector2.ZERO
 var show_overview: bool = false
+var camera_level: int = 0
+var height_label: Label
+var lower_button: Button
+var higher_button: Button
+const FLIGHT_ZOOMS = [22.0,38.0,64.0]
+const FLIGHT_ALTITUDES = [9.0,14.0,23.0]
+const HEIGHT_NAMES = ["Laag","Midden","Hoog"]
+var best_label: Label
+var custom_mission: bool = false
+var progress_readonly: bool = false
 
+var nl_bounds: Array = TopoWorld.map_bounds("nl")
+
+const SPAWN = Vector2(5.1214,52.0907) # Utrecht (lon, lat)
 const INK = Color("143740")
 const CREAM = Color("f5efdc")
 const GOLD = Color("ffc35c")
 
 func _ready() -> void:
-	if not is_test_mode:
+	if not is_test_mode and not is_capture_mode:
 		load_save()
 	build_environment()
 	build_ui()
 	load_world("nl")
 	state="menu"
-	if OS.get_cmdline_user_args().has("--smoke-test"):
+	if is_test_mode:
 		call_deferred("smoke_test")
-	if OS.get_cmdline_user_args().has("--capture"):
+	if is_capture_mode:
 		call_deferred("capture_preview")
 
 func build_environment() -> void:
@@ -77,16 +95,19 @@ func build_environment() -> void:
 	e.background_color=Color("286375")
 	e.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color=Color("d6e8df")
-	e.ambient_light_energy=.65
+	e.ambient_light_energy=.55
 	e.tonemap_mode=Environment.TONE_MAPPER_LINEAR
 	env.environment=e
 	add_child(env)
 	var sun=DirectionalLight3D.new()
-	sun.rotation_degrees=Vector3(-65,-32,0)
+	sun.rotation_degrees=Vector3(-48,-28,0)
 	sun.light_color=Color("fff2d2")
-	sun.light_energy=1.05
+	sun.light_energy=.9
 	sun.shadow_enabled=true
-	sun.directional_shadow_max_distance=300
+	sun.directional_shadow_max_distance=450
+	sun.shadow_bias=.03
+	sun.light_specular=.25
+	sun.directional_shadow_mode=DirectionalLight3D.SHADOW_ORTHOGONAL
 	add_child(sun)
 	camera=Camera3D.new()
 	camera.projection=Camera3D.PROJECTION_ORTHOGONAL
@@ -94,9 +115,9 @@ func build_environment() -> void:
 	add_child(camera)
 	camera.current=true
 	helicopter=RotorHelicopter.new()
-	helicopter.scale=Vector3.ONE*1.55
+	helicopter.scale=Vector3.ONE*1.25
 	add_child(helicopter)
-	helicopter.position=Vector3(0,3.3,0)
+	helicopter.position=Vector3(0,9.0 if region=="nl" else 3.3,0)
 	rotor_audio=AudioStreamPlayer.new()
 	rotor_audio.stream=load("res://assets/rotor.wav")
 	rotor_audio.volume_db=-24
@@ -138,6 +159,12 @@ func button(text: String,action: Callable,gold: bool=false) -> Button:
 	b.add_theme_color_override("font_hover_color",INK if gold else CREAM)
 	b.add_theme_color_override("font_pressed_color",INK if gold else CREAM)
 	b.pressed.connect(action)
+	# Only touch index 0 is emulated as mouse input; handle extra fingers (e.g. while steering) here.
+	b.gui_input.connect(func(event: InputEvent):
+		if event is InputEventScreenTouch and event.pressed and event.index>0 and not b.disabled:
+			b.accept_event()
+			action.call()
+	)
 	return b
 
 func build_ui() -> void:
@@ -182,27 +209,23 @@ func build_ui() -> void:
 	col.add_child(hint)
 	mute_button=button("Geluid: uit" if saved.mute else "Geluid: aan",toggle_sound)
 	col.add_child(mute_button)
-	var best=label("Klaar voor vertrek, piloot?",15,Color("b1c9c1"))
-	best.name="Best"
-	col.add_child(best)
-	var tag=label("ECHTE KAART. EIGEN MISSIES.",15,Color("f1ecd1"))
-	tag.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	tag.position=Vector2(-380,-42)
-	ui.add_child(tag)
+	best_label=label("Klaar voor vertrek, piloot?",15,Color("b1c9c1"))
+	best_label.name="Best"
+	col.add_child(best_label)
 	hud=Control.new()
 	hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hud.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	ui.add_child(hud)
 	var top=PanelContainer.new()
 	top.position=Vector2(24,20)
-	top.size=Vector2(630,128)
+	top.size=Vector2(470,112)
 	top.add_theme_stylebox_override("panel",style(Color(.035,.12,.16,.94),18))
 	hud.add_child(top)
 	var topcol=VBoxContainer.new()
 	top.add_child(topcol)
 	progress_label=label("MISSIE 01 / 12",13,Color("a8c8bf"))
 	topcol.add_child(progress_label)
-	title_label=label("Vlieg naar Utrecht",28,GOLD)
+	title_label=label("Vlieg naar Utrecht",26,GOLD)
 	topcol.add_child(title_label)
 	detail_label=label("",15)
 	topcol.add_child(detail_label)
@@ -217,6 +240,33 @@ func build_ui() -> void:
 	minimap.size=Vector2(210,180)
 	minimap.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	hud.add_child(minimap)
+	var height_panel=PanelContainer.new()
+	height_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	height_panel.position=Vector2(-234,280)
+	height_panel.size=Vector2(210,108)
+	height_panel.add_theme_stylebox_override("panel",style(Color(.035,.12,.16,.94),14))
+	hud.add_child(height_panel)
+	var height_col=VBoxContainer.new()
+	height_panel.add_child(height_col)
+	height_label=label("Vlieghoogte · Laag",15,GOLD)
+	height_col.add_child(height_label)
+	var height_row=HBoxContainer.new()
+	height_col.add_child(height_row)
+	lower_button=button("Lager −",func(): change_height(-1))
+	higher_button=button("Hoger +",func(): change_height(1))
+	for control in [lower_button,higher_button]:
+		control.custom_minimum_size=Vector2(82,42)
+		control.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		control.add_theme_font_size_override("font_size",15)
+		for visual in ["normal","hover","pressed"]:
+			var compact=style(Color("28505a"),10)
+			compact.content_margin_left=8
+			compact.content_margin_right=8
+			compact.content_margin_top=8
+			compact.content_margin_bottom=8
+			control.add_theme_stylebox_override(visual,compact)
+		height_row.add_child(control)
+	update_height_controls()
 	joystick=FlightJoystick.new()
 	joystick.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	joystick.position=Vector2(28,-205)
@@ -235,13 +285,17 @@ func build_ui() -> void:
 	hint_button=button("Hint / kaartnamen",toggle_hint)
 	actions.add_child(hint_button)
 	actions.add_child(button("Overzichtskaart",toggle_overview))
-	status_label=label("",19,CREAM)
-	status_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	status_label.position=Vector2(250,-98)
-	status_label.size=Vector2(720,60)
+	var status_panel=PanelContainer.new()
+	status_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	status_panel.position=Vector2(235,-86)
+	status_panel.size=Vector2(485,64)
+	status_panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	status_panel.add_theme_stylebox_override("panel",style(Color(.035,.12,.16,.9),14))
+	hud.add_child(status_panel)
+	status_label=label("",16,CREAM)
 	status_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	status_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	hud.add_child(status_label)
+	status_panel.add_child(status_label)
 	hud.hide()
 	build_photo_dialog()
 
@@ -254,13 +308,23 @@ func load_world(new_region: String) -> void:
 	add_child(world)
 	world.build(region,catalog)
 	minimap.world=world
-	helicopter.position=world.project(5.1214,52.0907)+Vector3(0,3.3,0)
+	helicopter.position=world.project(SPAWN.x,SPAWN.y)+Vector3(0,flight_altitude(),0)
 	position_menu_camera()
 	world.set_hints(false)
+	update_best_label()
 
-func start_mission(custom: Array = []) -> void:
+func update_best_label() -> void:
+	var practice=clampi(int(saved.best.get(region+"_oefenen",0)),0,3)
+	var test=clampi(int(saved.best.get(region+"_test",0)),0,3)
+	if practice==0 and test==0:
+		best_label.text="Klaar voor vertrek, piloot?"
+		return
+	best_label.text="Beste: oefenen %s · test %s" % ["★".repeat(practice)+"☆".repeat(3-practice),"★".repeat(test)+"☆".repeat(3-test)]
+
+func start_mission(custom: Array = [],as_custom: bool = true) -> void:
 	if is_instance_valid(summary):
 		summary.queue_free()
+	custom_mission=as_custom and not custom.is_empty()
 	mission=custom.duplicate() if not custom.is_empty() else catalog.presets(region)
 	mission.shuffle()
 	world.ensure_mission_markers(mission)
@@ -273,15 +337,17 @@ func start_mission(custom: Array = []) -> void:
 	hint_button.text="Hints verbergen" if show_hints else "Hint / kaartnamen"
 	hints_used=false
 	show_overview=false
+	camera_level=0
+	update_height_controls()
 	state="flight"
 	menu.hide()
 	hud.show()
 	velocity=Vector2.ZERO
 	joystick.reset()
-	helicopter.position=world.project(5.1214,52.0907)+Vector3(0,3.3,0)
+	helicopter.position=world.project(SPAWN.x,SPAWN.y)+Vector3(0,flight_altitude(),0)
 	if not saved.mute:
 		rotor_audio.play()
-	camera.size=92 if region=="nl" else 130
+	camera.size=flight_zoom()
 	update_goal()
 
 func update_goal() -> void:
@@ -307,21 +373,23 @@ func _process(delta: float) -> void:
 	keyboard=Vector2(float(Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT))-float(Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT)),float(Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN))-float(Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP)))
 	var direction=(keyboard+joystick.value).limit_length()
 	direction *= direction.length()
-	var speed=18.0 if region=="nl" else 24.0
+	var speed=4.5 if region=="nl" else 24.0
 	velocity=velocity.lerp(direction*speed,min(delta*4,1.0))
 	helicopter.position.x=clamp(helicopter.position.x+velocity.x*delta,world.bounds.position.x+1,world.bounds.end.x-1)
 	helicopter.position.z=clamp(helicopter.position.z+velocity.y*delta,world.bounds.position.y+1,world.bounds.end.y-1)
 	if velocity.length()>1:
 		helicopter.rotation.y=lerp_angle(helicopter.rotation.y,atan2(-velocity.x,-velocity.y),min(delta*5,1.0))
 	helicopter.lean(direction,delta)
-	var cam_goal=helicopter.position+Vector3(0,95,72)
+	helicopter.position.y=lerp(helicopter.position.y,flight_altitude(),min(delta*2.5,1.0))
+	var cam_goal=helicopter.position+(Vector3(0,38,44) if region=="nl" else Vector3(0,95,72))
 	if show_overview:
 		cam_goal=Vector3(world.bounds.get_center().x,600,world.bounds.get_center().y+400)
 	camera.position=camera.position.lerp(cam_goal,min(delta*3,1.0))
 	camera.look_at(Vector3(world.bounds.get_center().x,0,world.bounds.get_center().y) if show_overview else helicopter.position,Vector3.UP)
-	camera.size=lerp(camera.size,(max(world.bounds.size.x,world.bounds.size.y)*1.03 if show_overview else (92.0 if region=="nl" else 130.0)),min(delta*3,1.0))
+	camera.size=lerp(camera.size,(max(world.bounds.size.x,world.bounds.size.y)*1.03 if show_overview else flight_zoom()),min(delta*3,1.0))
 	minimap.aircraft=helicopter.position
 	minimap.refresh_navigation()
+	world.refresh_labels(helicopter.position,show_overview,camera.size)
 	if mission_index<mission.size():
 		var p: Dictionary=mission[mission_index]
 		var km=distance_km(p)
@@ -330,15 +398,27 @@ func _process(delta: float) -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if state=="flight" and not photo_open:
+		if event.physical_keycode==KEY_ESCAPE:
+			go_back(false)
+		elif state=="flight" and not photo_open:
 			if event.physical_keycode==KEY_SPACE:
 				answer()
 			elif event.physical_keycode==KEY_H:
 				toggle_hint()
 			elif event.physical_keycode==KEY_M:
 				toggle_overview()
-			elif event.physical_keycode==KEY_ESCAPE:
-				return_menu()
+			elif event.physical_keycode in [KEY_Q,KEY_EQUAL,KEY_KP_ADD]:
+				change_height(-1)
+			elif event.physical_keycode in [KEY_E,KEY_MINUS,KEY_KP_SUBTRACT]:
+				change_height(1)
+
+func go_back(allow_quit: bool) -> void:
+	if photo_open:
+		close_photo_dialog()
+	elif state=="flight" or state=="paused" or state=="summary":
+		return_menu()
+	elif allow_quit:
+		get_tree().quit()
 
 func distance_km(place: Dictionary) -> float:
 	var pos=world.unproject(helicopter.position)
@@ -353,7 +433,8 @@ func answer() -> void:
 	if state!="flight" or answer_cooldown>0 or photo_open:
 		return
 	var p: Dictionary=mission[mission_index]
-	var hit=world.country_contains(p.code,helicopter.position) if p.kind=="land" else distance_km(p)<(6 if region=="nl" else 25)
+	# Countries without usable map geometry fall back to the catalog reference point.
+	var hit=(world.country_contains(p.code,helicopter.position) if world.has_country(p.code) else distance_km(p)<25) if p.kind=="land" else distance_km(p)<(6 if region=="nl" else 25)
 	if hit:
 		completed.append({"name":p.name,"hints":show_hints,"mistakes":mistakes})
 		if not saved.mute:
@@ -379,6 +460,33 @@ func toggle_hint() -> void:
 	minimap.show_goal=show_hints
 	hint_button.text="Hints verbergen" if show_hints else "Hint / kaartnamen"
 
+func flight_altitude() -> float:
+	return FLIGHT_ALTITUDES[camera_level] if region=="nl" else FLIGHT_ALTITUDES[camera_level]*.6
+
+func flight_zoom() -> float:
+	return FLIGHT_ZOOMS[camera_level] if region=="nl" else FLIGHT_ZOOMS[camera_level]*2.5
+
+func update_height_controls() -> void:
+	if not is_instance_valid(height_label):
+		return
+	height_label.text="Vlieghoogte · "+HEIGHT_NAMES[camera_level]
+	lower_button.disabled=camera_level==0
+	higher_button.disabled=camera_level==FLIGHT_ZOOMS.size()-1
+
+func change_height(direction: int) -> void:
+	if state!="flight" or photo_open:
+		return
+	camera_level=clampi(camera_level+direction,0,FLIGHT_ZOOMS.size()-1)
+	show_overview=false
+	update_height_controls()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if state=="flight" and not photo_open and event is InputEventMouseButton and event.pressed:
+		if event.button_index==MOUSE_BUTTON_WHEEL_UP:
+			change_height(-1)
+		elif event.button_index==MOUSE_BUTTON_WHEEL_DOWN:
+			change_height(1)
+
 func toggle_overview() -> void:
 	show_overview=not show_overview
 	joystick.reset()
@@ -389,9 +497,10 @@ func finish_mission() -> void:
 	world.target.hide()
 	rotor_audio.stop()
 	var stars=3 if mistakes==0 and exam and not hints_used else 2 if mistakes<=2 else 1
-	var key=region+("_test" if exam else "_oefenen")
-	saved.best[key]=max(int(saved.best.get(key,0)),stars)
-	save_data()
+	if not custom_mission:
+		var key=region+("_test" if exam else "_oefenen")
+		saved.best[key]=max(int(saved.best.get(key,0)),stars)
+		save_data()
 	summary=PanelContainer.new()
 	summary.position=Vector2(340,110)
 	summary.size=Vector2(600,500)
@@ -407,7 +516,7 @@ func finish_mission() -> void:
 	var tip=label("Drie sterren: een foutloze testvlucht zonder hints.",16,Color("b5cec4"))
 	tip.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(tip)
-	col.add_child(button("Dezelfde locaties opnieuw",func(): start_mission(mission),true))
+	col.add_child(button("Dezelfde locaties opnieuw",func(): start_mission(mission,custom_mission),true))
 	col.add_child(button("Terug naar de hangar",return_menu))
 
 func return_menu() -> void:
@@ -421,6 +530,7 @@ func return_menu() -> void:
 	world.target.hide()
 	world.set_hints(false)
 	position_menu_camera()
+	update_best_label()
 
 func position_menu_camera() -> void:
 	var center=world.bounds.get_center()
@@ -436,20 +546,25 @@ func toggle_sound() -> void:
 	save_data()
 
 func load_save() -> void:
-	if FileAccess.file_exists("user://progress.json"):
-		saved=ProgressStore.clean(JSON.parse_string(FileAccess.get_file_as_string("user://progress.json")))
+	if FileAccess.file_exists(save_path):
+		var raw: Variant=JSON.parse_string(FileAccess.get_file_as_string(save_path))
+		progress_readonly=ProgressStore.is_newer(raw)
+		if progress_readonly:
+			push_warning("Voortgang komt uit een nieuwere app-versie; het bestand wordt niet overschreven.")
+		saved=ProgressStore.clean(raw)
 	custom_places=saved.custom
 
 func save_data() -> void:
-	if is_test_mode:
+	if is_capture_mode or progress_readonly:
 		return
-	var f=FileAccess.open("user://progress.json.tmp",FileAccess.WRITE)
+	saved.version=ProgressStore.VERSION
+	var f=FileAccess.open(save_path+".tmp",FileAccess.WRITE)
 	if f==null:
 		push_warning("Kon de voortgang niet opslaan.")
 		return
 	f.store_string(JSON.stringify(saved,"\t"))
 	f.close()
-	if DirAccess.rename_absolute("user://progress.json.tmp","user://progress.json")!=OK:
+	if DirAccess.rename_absolute(save_path+".tmp",save_path)!=OK:
 		push_warning("Kon het voortgangsbestand niet vervangen.")
 
 func build_photo_dialog() -> void:
@@ -500,6 +615,9 @@ func build_photo_dialog() -> void:
 	mission_text.text_changed.connect(validate_custom)
 	import_status=label("Voer eerst de locaties in.",14,GOLD)
 	import_status.clip_text=true
+	import_status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	import_status.max_lines_visible=2
+	import_status.mouse_filter=Control.MOUSE_FILTER_PASS
 	import_status.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 	right.add_child(import_status)
 	right.add_child(label("Optioneel: tekstherkenning via eigen OCR-service",14))
@@ -517,13 +635,7 @@ func build_photo_dialog() -> void:
 	var footer=HBoxContainer.new()
 	footer.add_theme_constant_override("separation",14)
 	layout.add_child(footer)
-	var close=button("Terug",func():
-		http.cancel_request()
-		ocr_in_flight=false
-		photo_dialog.hide()
-		photo_backdrop.hide()
-		photo_open=false
-	)
+	var close=button("Terug",close_photo_dialog)
 	close.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	footer.add_child(close)
 	launch_button=button("Vlieg deze locaties  →",launch_custom,true)
@@ -537,23 +649,31 @@ func build_photo_dialog() -> void:
 	file_picker.file_selected.connect(import_photo)
 	ui.add_child(file_picker)
 	http=HTTPRequest.new()
-	http.timeout=45
+	# Must exceed the server worst case (upload 20 s + decode + Tesseract 30 s in ocr-service/app.py).
+	http.timeout=60
 	http.max_redirects=0
 	http.body_size_limit=1024*1024
 	http.request_completed.connect(ocr_response)
 	add_child(http)
+
+func close_photo_dialog() -> void:
+	http.cancel_request()
+	ocr_in_flight=false
+	photo_dialog.hide()
+	photo_backdrop.hide()
+	photo_open=false
 
 func open_photo_dialog() -> void:
 	photo_open=true
 	if mission_text.text.is_empty() and not custom_places.is_empty():
 		var names=PackedStringArray()
 		for p in custom_places:
-			if catalog.lookup.has(catalog.normalize(p.name)):
+			if p.kind!="eigen punt" and catalog.lookup.has(catalog.normalize(p.name)):
 				names.append(p.name)
 			else:
 				names.append("%s | %s | %s" % [p.name,p.lat,p.lon])
 		mission_text.text="\n".join(names)
-	if FileAccess.file_exists("user://worksheet.png"):
+	if not is_test_mode and not is_capture_mode and FileAccess.file_exists("user://worksheet.png"):
 		var img=Image.load_from_file("user://worksheet.png")
 		if img:
 			photo_image=img
@@ -589,6 +709,8 @@ func import_photo(path: String) -> void:
 	if error!=OK or img.is_empty():
 		import_status.text="Deze foto is beschadigd. Kies een andere JPG of PNG."
 		return
+	# The PNG re-encode below drops EXIF, so apply the phone's Orientation tag here.
+	apply_exif_orientation(img,exif_orientation(bytes))
 	if max(img.get_width(),img.get_height())>1800:
 		var factor=1800.0/max(img.get_width(),img.get_height())
 		img.resize(max(1,int(img.get_width()*factor)),max(1,int(img.get_height()*factor)),Image.INTERPOLATE_LANCZOS)
@@ -596,12 +718,77 @@ func import_photo(path: String) -> void:
 	ocr_in_flight=false
 	photo_image=img
 	photo_bytes=img.save_png_to_buffer()
-	if img.save_png("user://worksheet.png")!=OK:
+	if not is_test_mode and not is_capture_mode and img.save_png("user://worksheet.png")!=OK:
 		push_warning("De foto is geladen, maar kon niet lokaal worden bewaard.")
 	photo_preview.texture=ImageTexture.create_from_image(img)
 	photo_dialog.size=Vector2(1140,640)
 	call_deferred("fit_photo_panel")
 	import_status.text="Foto toegevoegd. Typ de namen over of gebruik tekstherkenning."
+
+func exif_orientation(bytes: PackedByteArray) -> int:
+	if bytes.size()<4 or bytes[0]!=0xFF or bytes[1]!=0xD8:
+		return 1
+	var i=2
+	while i+4<=bytes.size():
+		if bytes[i]!=0xFF:
+			return 1
+		var marker=bytes[i+1]
+		if marker==0xFF:
+			i+=1
+			continue
+		if marker==0xD9 or marker==0xDA:
+			return 1
+		var length=(bytes[i+2]<<8)|bytes[i+3]
+		if length<2 or i+2+length>bytes.size():
+			return 1
+		if marker==0xE1 and length>=16 and bytes.slice(i+4,i+10)==PackedByteArray([69,120,105,102,0,0]):
+			return tiff_orientation(bytes.slice(i+10,i+2+length))
+		i+=2+length
+	return 1
+
+func tiff_orientation(tiff: PackedByteArray) -> int:
+	if tiff.size()<8:
+		return 1
+	var le=tiff[0]==0x49 and tiff[1]==0x49
+	if not le and not (tiff[0]==0x4D and tiff[1]==0x4D):
+		return 1
+	var ifd=exif_uint(tiff,4,4,le)
+	if ifd<8 or ifd+2>tiff.size():
+		return 1
+	var count=exif_uint(tiff,ifd,2,le)
+	for k in range(count):
+		var entry=ifd+2+12*k
+		if entry+12>tiff.size():
+			return 1
+		if exif_uint(tiff,entry,2,le)==0x0112:
+			var value=exif_uint(tiff,entry+8,2,le)
+			return value if value>=1 and value<=8 else 1
+	return 1
+
+func exif_uint(data: PackedByteArray,offset: int,width: int,le: bool) -> int:
+	var v=0
+	for b in range(width):
+		v|=data[offset+(b if le else width-1-b)]<<(8*b)
+	return v
+
+func apply_exif_orientation(img: Image,orientation: int) -> void:
+	match orientation:
+		2:
+			img.flip_x()
+		3:
+			img.rotate_180()
+		4:
+			img.flip_y()
+		5:
+			img.rotate_90(CLOCKWISE)
+			img.flip_x()
+		6:
+			img.rotate_90(CLOCKWISE)
+		7:
+			img.rotate_90(CLOCKWISE)
+			img.flip_y()
+		8:
+			img.rotate_90(COUNTERCLOCKWISE)
 
 func parse_custom() -> Dictionary:
 	var ordinary: Array = []
@@ -610,15 +797,19 @@ func parse_custom() -> Dictionary:
 	for raw in mission_text.text.replace(";","\n").split("\n"):
 		if raw.contains("|"):
 			var parts=raw.split("|")
-			if parts.size()!=3 or not parts[1].strip_edges().is_valid_float() or not parts[2].strip_edges().is_valid_float() or parts[0].strip_edges().is_empty():
-				errors.append(raw)
+			if parts.size()==3:
+				# Accept a Dutch decimal comma (52,123) in the coordinate fields.
+				parts[1]=parts[1].strip_edges().replace(",",".")
+				parts[2]=parts[2].strip_edges().replace(",",".")
+			if parts.size()!=3 or not parts[1].is_valid_float() or not parts[2].is_valid_float() or parts[0].strip_edges().is_empty() or parts[0].strip_edges().length()>120:
+				errors.append(raw.strip_edges()+" (gebruik: naam | 52.12 | 5.45)")
 				continue
 			var lat=float(parts[1])
 			var lon=float(parts[2])
 			if not is_finite(lat) or not is_finite(lon) or lon < -25 or lon > 45 or lat < 34 or lat > 72:
 				errors.append(raw+" (buiten de Europakaart)")
 				continue
-			manual.append({"name":parts[0].strip_edges(),"lat":lat,"lon":lon,"region":"nl" if lat>=50.5 and lat<=54 and lon>=3.1 and lon<=7.5 else "eu","kind":"eigen punt","code":""})
+			manual.append({"name":parts[0].strip_edges(),"lat":lat,"lon":lon,"region":"nl" if TopoWorld.in_bounds(nl_bounds,lat,lon) else "eu","kind":"eigen punt","code":""})
 		else:
 			ordinary.append(raw)
 	var result=catalog.parse_list("\n".join(ordinary))
@@ -629,20 +820,29 @@ func parse_custom() -> Dictionary:
 		var name=catalog.normalize(place.name)
 		if names.has(name):
 			result.unknown.append(place.name+" (dubbele naam)")
+		elif catalog.lookup.has(name):
+			result.unknown.append(place.name+" (naam bestaat al in de kaart; kies een andere naam)")
 		else:
 			names[name]=true
 			result.found.append(place)
 	result.unknown.append_array(errors)
 	if result.found.size()>200:
-		result.unknown.append("Gebruik maximaal 200 locaties per missie")
+		result.unknown.insert(0,"Gebruik maximaal 200 locaties per missie")
 	return result
 
 func validate_custom() -> void:
 	var result=parse_custom()
 	if not result.unknown.is_empty():
-		import_status.text="Controleer onbekende namen: "+", ".join(result.unknown)
+		var shown=PackedStringArray()
+		for entry in result.unknown.slice(0,3):
+			var s=str(entry).strip_edges()
+			shown.append(s if s.length()<=40 else s.left(39)+"…")
+		var more=result.unknown.size()-shown.size()
+		import_status.text="Controleer %d regel%s: " % [result.unknown.size(),"" if result.unknown.size()==1 else "s"]+", ".join(shown)+(" (+%d meer)" % more if more>0 else "")
+		import_status.tooltip_text="\n".join(PackedStringArray(result.unknown))
 	else:
 		import_status.text="%d locaties herkend. Klaar om te vliegen." % result.found.size()
+		import_status.tooltip_text=""
 	launch_button.disabled=result.found.is_empty() or not result.unknown.is_empty()
 
 func launch_custom() -> void:
@@ -682,6 +882,9 @@ func request_ocr() -> void:
 	if ocr_in_flight:
 		import_status.text="De herkenning is al bezig."
 		return
+	if Time.get_ticks_msec()<ocr_retry_after_msec:
+		import_status.text="De OCR-service is bezet. Probeer het over %d seconden opnieuw." % ceili((ocr_retry_after_msec-Time.get_ticks_msec())/1000.0)
+		return
 	import_status.text="Foto wordt naar jouw OCR-service verstuurd…"
 	ocr_in_flight=true
 	ocr_input_snapshot=mission_text.text
@@ -689,20 +892,61 @@ func request_ocr() -> void:
 	if error!=OK:
 		ocr_in_flight=false
 		import_status.text="Kan de OCR-service niet bereiken. Je kunt de namen zelf typen."
+	elif saved.endpoint!=url:
+		# Persist the (non-secret) endpoint so OCR-only sessions keep it; the token stays in memory.
+		saved.endpoint=url
+		save_data()
 
-func ocr_response(result: int,code: int,_headers: PackedStringArray,body: PackedByteArray) -> void:
+func ocr_error_message(result: int,code: int,headers: PackedStringArray) -> String:
+	match result:
+		HTTPRequest.RESULT_TIMEOUT:
+			return "De herkenning duurde te lang. Probeer het opnieuw of typ de namen."
+		HTTPRequest.RESULT_TLS_HANDSHAKE_ERROR:
+			return "Beveiligde verbinding mislukt (certificaat). Controleer de HTTPS-instelling van je service."
+		HTTPRequest.RESULT_CANT_RESOLVE, HTTPRequest.RESULT_CANT_CONNECT, HTTPRequest.RESULT_CONNECTION_ERROR, HTTPRequest.RESULT_NO_RESPONSE:
+			return "De OCR-service is niet bereikbaar. Controleer het adres en je internet, of typ de namen."
+		HTTPRequest.RESULT_REDIRECT_LIMIT_REACHED:
+			return "De OCR-service stuurt door naar een ander adres. Gebruik het exacte HTTPS-adres."
+		HTTPRequest.RESULT_BODY_SIZE_LIMIT_EXCEEDED:
+			return "Onverwacht antwoord van de OCR-service."
+	if result!=HTTPRequest.RESULT_SUCCESS:
+		return "Verbinding met de OCR-service mislukt. Controleer het adres of typ de namen."
+	match code:
+		401, 403:
+			return "Het OCR-toegangstoken klopt niet. Controleer het token."
+		413:
+			return "De foto is te groot voor de OCR-service. Kies een kleinere foto."
+		429:
+			var wait=5
+			for h in headers:
+				if h.to_lower().begins_with("retry-after:"):
+					var v=h.substr(12).strip_edges()
+					if v.is_valid_int():
+						wait=clampi(int(v),1,300)
+			ocr_retry_after_msec=Time.get_ticks_msec()+wait*1000
+			return "De OCR-service is bezet. Probeer het over %d seconden opnieuw." % wait
+		503:
+			return "De OCR-service is niet ingesteld. Zie README."
+		504:
+			return "De herkenning duurde te lang. Probeer het opnieuw of typ de namen."
+	return "Tekstherkenning niet gelukt (%d). Controleer het adres of typ de namen." % code
+
+func ocr_response(result: int,code: int,headers: PackedStringArray,body: PackedByteArray) -> void:
 	ocr_in_flight=false
 	if not photo_open:
+		return
+	if result!=HTTPRequest.RESULT_SUCCESS or code!=200:
+		import_status.text=ocr_error_message(result,code,headers)
 		return
 	if mission_text.text!=ocr_input_snapshot:
 		import_status.text="Herkenning klaar; je aangepaste lijst blijft bewaard. Herhaal indien gewenst."
 		return
-	if result!=HTTPRequest.RESULT_SUCCESS or code!=200:
-		import_status.text="Tekstherkenning niet gelukt (%d). Controleer het adres of typ de namen." % code
-		return
 	var data=JSON.parse_string(body.get_string_from_utf8())
 	if not data is Dictionary or not data.get("candidates") is Array or data.candidates.size()>200:
 		import_status.text="Onverwacht antwoord van de OCR-service."
+		return
+	if data.get("api_version") is float and int(data.api_version)!=1:
+		import_status.text="De OCR-service gebruikt een andere API-versie (%d). Werk app of service bij." % int(data.api_version)
 		return
 	var names=PackedStringArray()
 	for name in data.candidates:
@@ -713,21 +957,73 @@ func ocr_response(result: int,code: int,_headers: PackedStringArray,body: Packed
 	if names.is_empty():
 		import_status.text="Geen bekende locaties gevonden. Typ ze over van de foto."
 		return
-	mission_text.text="\n".join(names)
+	# Merge: keep existing lines (incl. custom coordinate points) and only append new names.
+	var existing: Dictionary={}
+	for raw in mission_text.text.replace(";","\n").split("\n"):
+		if raw.contains("|"):
+			existing[catalog.normalize(raw.split("|")[0].strip_edges())]=true
+		else:
+			for part in raw.split(","):
+				existing[catalog.normalize(part.strip_edges())]=true
+	var added=PackedStringArray()
+	for name in names:
+		var key=catalog.normalize(name)
+		if not existing.has(key):
+			existing[key]=true
+			added.append(name)
+	if added.is_empty():
+		validate_custom()
+		import_status.text="Herkenning klaar; geen nieuwe locaties gevonden. Je lijst blijft ongewijzigd."
+		return
+	var note=""
+	if data.get("catalog_version") is String and data.catalog_version!=FileAccess.get_sha256("res://data/places.json").left(16):
+		for name in added:
+			if not catalog.lookup.has(catalog.normalize(name)):
+				note=" De OCR-service gebruikt een andere plaatsenlijst dan deze app; werk app en service bij naar dezelfde versie."
+				break
+	var current=mission_text.text.strip_edges(false,true)
+	mission_text.text=(current+"\n" if not current.is_empty() else "")+"\n".join(added)
 	validate_custom()
-	import_status.text+=" Controleer of er namen missen of onterecht zijn toegevoegd."
+	import_status.text+=" Controleer of er namen missen of onterecht zijn toegevoegd."+note
 
 func _notification(what: int) -> void:
-	if what==NOTIFICATION_APPLICATION_FOCUS_OUT:
+	if is_test_mode or is_capture_mode:
+		return
+	if what==NOTIFICATION_WM_GO_BACK_REQUEST:
+		go_back(true)
+	elif what==NOTIFICATION_APPLICATION_FOCUS_OUT and not is_test_mode and not is_capture_mode:
 		if is_instance_valid(joystick):
 			joystick.reset()
 		velocity=Vector2.ZERO
 		if state=="flight":
-			return_menu()
+			state="paused"
+			rotor_audio.stop()
+			status_label.text="Vlucht gepauzeerd."
+	elif what==NOTIFICATION_APPLICATION_FOCUS_IN:
+		if state=="paused":
+			state="flight"
+			if not saved.mute:
+				rotor_audio.play()
+			status_label.text="Welkom terug, piloot! Je vlucht gaat verder."
 
 func smoke_test() -> void:
+	assert(world.dutch_scenery.landmarks.has("Amsterdam") and world.dutch_scenery.landmarks.has("Rotterdam") and world.dutch_scenery.landmarks.has("Utrecht"),"Dutch landmarks built at catalog anchors")
+	world.set_hints(true)
+	world.refresh_labels(helicopter.position,false)
+	var visible_names=0
+	for marker in world.labels:
+		if marker.visible:
+			visible_names+=1
+	assert(visible_names>0 and visible_names<world.labels.size(),"Nearby names remain readable without showing the whole catalog")
+	world.set_hints(false)
+	world.refresh_labels(helicopter.position,false)
+	for marker in world.labels:
+		assert(not marker.visible,"Test mode cannot leak place names")
 	var progress_existed=FileAccess.file_exists("user://progress.json")
 	var progress_before=FileAccess.get_file_as_bytes("user://progress.json") if progress_existed else PackedByteArray()
+	for leftover in [save_path,save_path+".tmp"]:
+		if FileAccess.file_exists(leftover):
+			DirAccess.remove_absolute(leftover)
 	saved.mute=true # Headless tests have no audio output device.
 	var parsed=catalog.parse_list("1. Arnhem\nDen Haag, Parijs\nOnbekenddorp")
 	assert(parsed.found.size()==3,"Catalog parser: number prefixes and comma lists")
@@ -737,15 +1033,37 @@ func smoke_test() -> void:
 	assert(abs(geo.x-5.8987)<.001 and abs(geo.y-51.9851)<.001,"Coordinate round trip")
 	assert(world.country_contains("NLD",world.project(5.1214,52.0907)),"Utrecht in Netherlands")
 	assert(not world.country_contains("NLD",world.project(3.4,53.0)),"North Sea not Netherlands")
+	assert(not world.lake_contains(world.project(5.2647,52.3508)),"Almere is on Flevoland, not in the lake")
+	assert(not world.lake_contains(world.project(5.4714,52.5185)),"Lelystad remains on land")
+	assert(world.lake_contains(world.project(5.33,52.8)),"IJsselmeer remains water")
+	assert(world.lake_contains(world.project(5.18,52.55)),"Markermeer remains water")
 	start_mission([catalog.lookup.arnhem])
-	helicopter.position=world.project(5.8987,51.9851)+Vector3(0,3.3,0)
+	var flight_start=helicopter.position
+	var close_zoom=flight_zoom()
+	var low_altitude=flight_altitude()
+	change_height(1)
+	change_height(1)
+	assert(flight_zoom()>close_zoom and flight_altitude()>low_altitude,"Higher flight provides a wider view")
+	assert(helicopter.position==flight_start and mission_index==0 and state=="flight","Height changes do not teleport or restart the mission")
+	toggle_overview()
+	change_height(-1)
+	assert(not show_overview and camera_level==1,"Height control exits the overview into the chosen flight view")
+	change_height(-1)
+	assert(flight_zoom()==close_zoom,"Pilot can return to low search flight")
+	helicopter.position=world.project(5.8987,51.9851)+Vector3(0,9.0 if region=="nl" else 3.3,0)
 	assert(distance_km(mission[0])<.01,"Distance at target")
 	answer()
 	assert(state=="summary" and completed.size()==1,"Mission completes on correct answer")
 	return_menu()
 	load_world("eu")
+	for place in catalog.places:
+		if place.kind=="land":
+			assert(world.has_country(place.code),"Country %s has map polygons" % place.code)
 	assert(world.country_contains("FRA",world.project(2.3522,48.8566)),"Paris in France")
 	assert(not world.country_contains("FRA",world.project(13.405,52.52)),"Berlin not France")
+	assert(world.country_contains("UKR",world.project(34.1,44.95)) and not world.country_contains("RUS",world.project(34.1,44.95)),"Crimea counts as Ukraine")
+	assert(world.country_contains("CYP",world.project(33.9,35.3)),"Northern Cyprus counts as Cyprus")
+	assert(world.country_contains("FIN",world.project(19.95,60.2)),"Aland counts as Finland")
 	mission_text.text="Mijn dorp | 52.123 | 5.456\nAmsterdam"
 	var custom=parse_custom()
 	assert(custom.found.size()==2 and custom.unknown.is_empty(),"Custom coordinate import")
@@ -767,10 +1085,24 @@ func smoke_test() -> void:
 	assert(WorksheetImage.dimensions(png)==Vector2i(12,8),"PNG header validation")
 	var jpeg=img.save_jpg_to_buffer()
 	assert(WorksheetImage.dimensions(jpeg)==Vector2i(12,8),"JPEG header validation")
+	var exif_segment=PackedByteArray([0xFF,0xE1,0,34,69,120,105,102,0,0,0x4D,0x4D,0,0x2A,0,0,0,8,0,1,0x01,0x12,0,3,0,0,0,1,0,6,0,0,0,0,0,0])
+	var rotated_jpeg=jpeg.slice(0,2)+exif_segment+jpeg.slice(2)
+	assert(exif_orientation(rotated_jpeg)==6 and exif_orientation(png)==1,"EXIF orientation parsed")
+	var oriented=Image.new()
+	assert(oriented.load_jpg_from_buffer(rotated_jpeg)==OK,"EXIF JPEG decodes")
+	apply_exif_orientation(oriented,exif_orientation(rotated_jpeg))
+	assert(oriented.get_width()==8 and oriented.get_height()==12,"Orientation-6 photo is rotated upright")
 	assert(not WorksheetImage.allowed_size(Vector2i(5000,5000)),"Oversized pixel buffers rejected")
 	assert(WorksheetImage.dimensions(png.slice(0,12))==Vector2i.ZERO,"Truncated image rejected")
+	saved.best["nl_oefenen"]=2
 	var old_best=JSON.stringify(saved.best)
+	var old_custom=saved.custom.size()
 	save_data()
+	save_data()
+	assert(FileAccess.file_exists(save_path) and not FileAccess.file_exists(save_path+".tmp"),"Second save replaces the existing progress file")
+	load_save()
+	assert(JSON.stringify(saved.best)==old_best and saved.mute==true and saved.custom.size()==old_custom,"Saved progress round-trips through load_save")
+	DirAccess.remove_absolute(save_path)
 	assert(FileAccess.file_exists("user://progress.json")==progress_existed,"Smoke mode does not create or delete progress")
 	if progress_existed:
 		assert(FileAccess.get_file_as_bytes("user://progress.json")==progress_before,"Smoke mode preserves existing progress bytes")
@@ -792,17 +1124,27 @@ func smoke_test() -> void:
 	get_tree().quit()
 
 func capture_preview() -> void:
+	saved.mute=true
+	seed(1206)
 	DirAccess.make_dir_recursive_absolute("res://build")
 	start_mission([catalog.lookup.amsterdam,catalog.lookup.rotterdam])
-	helicopter.position=world.project(5.0,52.23)+Vector3(0,3.3,0)
-	camera.position=helicopter.position+Vector3(0,95,72)
+	helicopter.position=world.project(5.0,52.23)+Vector3(0,9.0 if region=="nl" else 3.3,0)
+	camera.position=helicopter.position+Vector3(0,38,44)
 	camera.look_at(helicopter.position)
 	await get_tree().create_timer(2).timeout
 	var background_count=minimap.background_draws
 	await get_tree().create_timer(.2).timeout
 	assert(minimap.background_draws==background_count,"Moving navigation does not redraw country geometry")
+	assert(state=="flight","Flight screenshot must show actual gameplay")
 	var image=get_viewport().get_texture().get_image()
 	image.save_png("res://build/preview-flight.png")
+	image=null
+	change_height(1)
+	await get_tree().create_timer(1).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-flight-middle.png")
+	change_height(1)
+	await get_tree().create_timer(1).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-flight-high.png")
 	return_menu()
 	await get_tree().create_timer(.5).timeout
 	get_viewport().get_texture().get_image().save_png("res://build/preview-hangar.png")
@@ -814,5 +1156,32 @@ func capture_preview() -> void:
 	assert(photo_dialog.size.y<=641,"Photo panel fits landscape screen")
 	assert(not launch_button.disabled,"Valid photo mission can be launched")
 	get_viewport().get_texture().get_image().save_png("res://build/preview-photo.png")
+	photo_open=false
+	photo_dialog.hide()
+	photo_backdrop.hide()
+	for city in ["amsterdam","utrecht","rotterdam"]:
+		var place: Dictionary=catalog.lookup[city]
+		start_mission([place])
+		state="preview" # Freeze flight while photographing a detail view.
+		var center=world.project(place.lon,place.lat)
+		helicopter.position=center+Vector3(7,9,8)
+		camera.size=29
+		camera.position=center+Vector3(0,34,38)
+		camera.look_at(center)
+		detail_label.text="Nederland · herkenningspunten van dichtbij"
+		world.refresh_labels(center,false,camera.size)
+		minimap.aircraft=helicopter.position
+		minimap.refresh_navigation()
+		await get_tree().create_timer(.4).timeout
+		get_viewport().get_texture().get_image().save_png("res://build/preview-"+city+".png")
+	# Shared camera/UI/helicopter changes also get a visual check in Europe.
+	load_world("eu")
+	start_mission([catalog.lookup.parijs])
+	helicopter.position=world.project(2.35,48.85)+Vector3(0,3.3,0)
+	await get_tree().create_timer(2).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-europe.png")
+	rotor_audio.stop()
+	feedback_audio.stop()
+	await get_tree().process_frame
 	print("VISUAL CHECK PASSED")
 	get_tree().quit()

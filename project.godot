@@ -2,8 +2,10 @@ config_version=5
 
 [application]
 config/name="TopoRotor"
+config/version="0.3.0"
 config/description="Vlieg je topografie. Een helikopteravontuur voor Nederland en Europa."
 run/main_scene="res://main.tscn"
+config/quit_on_go_back=false
 config/features=PackedStringArray("4.5", "GL Compatibility")
 config/icon="res://assets/icon.svg"
 

@@ -8,10 +8,28 @@ var origin: Vector2 = Vector2(5.3,52.2)
 var bounds: Rect2
 var labels: Array[Label3D] = []
 var label_names: Dictionary = {}
+var marker_labels: Dictionary = {}
+var hints_enabled: bool = false
+var dutch_scenery: DutchScenery
+var water_material: ShaderMaterial
 var target: Node3D
 var helipads: Dictionary = {}
 var country_polys: Dictionary = {}
+var lake_polys: Array = []
 var rng = RandomNumberGenerator.new()
+
+# Natural Earth's default admin_0 layer follows de-facto control. Dutch school
+# topography (and the Dutch government position) counts these areas as part of
+# the country below, so the land check uses that assignment.
+const COUNTRY_MERGE = {"CYN":"CYP","ALD":"FIN"}
+
+# Map files are the single source of truth for region extents: [min_lon,min_lat,max_lon,max_lat].
+static func map_bounds(map_region: String) -> Array:
+	var data = JSON.parse_string(FileAccess.get_file_as_string("res://data/map_%s.json" % map_region))
+	return data.bounds if data is Dictionary and data.get("bounds") is Array else []
+
+static func in_bounds(b: Array, lat: float, lon: float) -> bool:
+	return b.size()==4 and lon>=b[0] and lon<=b[2] and lat>=b[1] and lat<=b[3]
 
 func project(lon: float, lat: float) -> Vector3:
 	return Vector3((lon-origin.x)*cos(deg_to_rad(origin.y))*geo_scale,0,-(lat-origin.y)*geo_scale)
@@ -42,8 +60,12 @@ func build(new_region: String, catalog: TopoCatalog) -> void:
 	sea.mesh = box_mesh
 	sea.position = Vector3(bounds.get_center().x,-1.8,bounds.get_center().y)
 	sea.material_override = mat(Color("286375"),true)
+	if region == "nl":
+		water_material = ShaderMaterial.new()
+		water_material.shader = load("res://assets/shaders/water.gdshader")
+		sea.material_override = water_material
 	add_child(sea)
-	var colors = [Color("84b494"),Color("93b89b"),Color("a4c2a0"),Color("7da98d"),Color("b0c59f")]
+	var colors = [Color("94b68a"),Color("a7b998"),Color("b3bea0"),Color("8eae87"),Color("bac4a1")] if region == "nl" else [Color("84b494"),Color("93b89b"),Color("a4c2a0"),Color("7da98d"),Color("b0c59f")]
 	var index = 0
 	for country in map_data.countries:
 		var rings: Array = []
@@ -56,9 +78,22 @@ func build(new_region: String, catalog: TopoCatalog) -> void:
 				ring.remove_at(ring.size()-1)
 			rings.append(ring)
 			land_polygon(ring,colors[index%colors.size()],0)
-			line(ring,Color("d7d5a9"),.16,.55,true)
-		country_polys[country.code] = rings
+			if region == "nl":
+				coast_wall(ring)
+				line(ring,Color("517f7e"),-.67,2.2,true)
+				line(ring,Color("d9d7ad"),.045,.32,true)
+			else:
+				line(ring,Color("d7d5a9"),.16,.55,true)
+		var code = COUNTRY_MERGE.get(country.code,country.code)
+		if not country_polys.has(code):
+			country_polys[code] = []
+		country_polys[code].append_array(rings)
 		index += 1
+	if region == "eu":
+		reassign_crimea()
+	if region == "nl":
+		dutch_scenery=DutchScenery.new(self)
+		dutch_scenery.landscape()
 	build_landscape_detail()
 	for lake in map_data.lakes:
 		var ring = PackedVector2Array()
@@ -67,18 +102,23 @@ func build(new_region: String, catalog: TopoCatalog) -> void:
 			ring.append(Vector2(v.x,v.z))
 		if ring.size()>3 and ring[0].is_equal_approx(ring[-1]):
 			ring.remove_at(ring.size()-1)
+		lake_polys.append(ring)
 		land_polygon(ring,Color("377f94"),.08)
 	for river in map_data.rivers:
 		var points = PackedVector2Array()
 		for p in river:
 			var v = project(p[0],p[1])
 			points.append(Vector2(v.x,v.z))
+		if region == "nl":
+			line(points,Color("c1c9ac"),.09,1.0)
 		line(points,Color("377f94"),.12,.65 if region=="nl" else .38)
 	rng.seed = 1206
 	for p in catalog.places:
 		if (region == "nl" and p.region != "nl") or (region == "eu" and p.region == "nl" and p.name != "Amsterdam") :
 			continue
 		add_place_marker(p)
+	if region=="nl":
+		dutch_scenery.bake()
 	if region=="eu":
 		for p in [Vector2(7.5,46),Vector2(9.5,46.5),Vector2(11.5,47),Vector2(13,47),Vector2(1,42.7),Vector2(23,42.5),Vector2(8,60)]:
 			mountain(project(p.x,p.y))
@@ -115,9 +155,9 @@ func land_polygon(points: PackedVector2Array, color: Color, y: float) -> void:
 			st.add_vertex(Vector3(p.x,y,p.y))
 	var mesh = MeshInstance3D.new()
 	mesh.mesh = st.commit()
-	var land_mat = mat(color,true)
+	var land_mat = mat(color,region != "nl")
 	land_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mesh.material_override = land_mat
+	mesh.material_override = water_material if region == "nl" and color == Color("377f94") else land_mat
 	add_child(mesh)
 
 func line(points: PackedVector2Array,color: Color,y: float,width: float,closed: bool=false) -> void:
@@ -140,7 +180,27 @@ func line(points: PackedVector2Array,color: Color,y: float,width: float,closed: 
 	mesh.material_override = m
 	add_child(mesh)
 
-func make_city(pos: Vector3) -> void:
+func coast_wall(points: PackedVector2Array) -> void:
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in points.size():
+		var a = Vector3(points[i].x,0,points[i].y)
+		var b = Vector3(points[(i+1)%points.size()].x,0,points[(i+1)%points.size()].y)
+		var down = Vector3(0,-.95,0)
+		for v in [a,b,b+down,a,b+down,a+down]:
+			st.add_vertex(v)
+	st.generate_normals()
+	var mesh = MeshInstance3D.new()
+	mesh.mesh = st.commit()
+	var edge = mat(Color("b3b28a"))
+	edge.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mesh.material_override = edge
+	add_child(mesh)
+
+func make_city(pos: Vector3,place_name: String="") -> void:
+	if region == "nl":
+		dutch_scenery.town(pos,place_name)
+		return
 	for i in 4:
 		var mesh = MeshInstance3D.new()
 		var b = BoxMesh.new()
@@ -187,8 +247,24 @@ func mountain(pos: Vector3) -> void:
 		add_child(peak)
 
 func set_hints(enabled: bool) -> void:
+	hints_enabled = enabled
 	for label in labels:
 		label.visible = enabled
+
+func reassign_crimea() -> void:
+	# The Crimean peninsula is a separate ring inside the RUS polygons; count it as Ukraine.
+	var probe = project(34.1,44.95)
+	var point = Vector2(probe.x,probe.z)
+	var rus: Array = country_polys.get("RUS",[])
+	for i in range(rus.size()-1,-1,-1):
+		if Geometry2D.is_point_in_polygon(point,rus[i]):
+			if not country_polys.has("UKR"):
+				country_polys["UKR"] = []
+			country_polys["UKR"].append(rus[i])
+			rus.remove_at(i)
+
+func has_country(code: String) -> bool:
+	return not country_polys.get(code,[]).is_empty()
 
 func country_contains(code: String, position3: Vector3) -> bool:
 	for polygon in country_polys.get(code,[]):
@@ -200,7 +276,7 @@ func build_landscape_detail() -> void:
 	if map_data.has("fields"):
 		var st=SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
-		var tones=[Color("7fad87"),Color("91b28c"),Color("8caf8a"),Color("9ab893"),Color("a5bb8f"),Color("86ae89"),Color("90b794")]
+		var tones=[Color("a3b45c"),Color("aebb68"),Color("a7b864"),Color("bdc67a"),Color("c8bd76"),Color("94aa58"),Color("b1bd68")] if region == "nl" else [Color("7fad87"),Color("91b28c"),Color("8caf8a"),Color("9ab893"),Color("a5bb8f"),Color("86ae89"),Color("90b794")]
 		for field in map_data.fields:
 			var points=PackedVector2Array()
 			for p in field.polygon:
@@ -210,17 +286,20 @@ func build_landscape_detail() -> void:
 				points.remove_at(points.size()-1)
 			var indices=Geometry2D.triangulate_polygon(points)
 			for index in indices:
-				st.set_color(tones[int(field.tone)])
+				st.set_color(tones[int(field.tone)].srgb_to_linear() if region == "nl" else tones[int(field.tone)])
 				st.set_normal(Vector3.UP)
 				st.add_vertex(Vector3(points[index].x,.025,points[index].y))
 		var mesh=MeshInstance3D.new()
 		mesh.mesh=st.commit()
-		var m=mat(Color.WHITE,true)
+		var m=mat(Color.WHITE,region != "nl")
+		m.vertex_color_is_srgb=false
 		m.vertex_color_use_as_albedo=true
 		m.cull_mode=BaseMaterial3D.CULL_DISABLED
 		mesh.material_override=m
 		add_child(mesh)
-	if map_data.has("trees"):
+	if map_data.has("trees") and region == "nl":
+		dutch_scenery.forest(map_data.trees)
+	elif map_data.has("trees"):
 		var crowns=MultiMeshInstance3D.new()
 		var multi=MultiMesh.new()
 		multi.transform_format=MultiMesh.TRANSFORM_3D
@@ -237,7 +316,7 @@ func build_landscape_detail() -> void:
 			multi.set_instance_transform(i,Transform3D(Basis.IDENTITY,pos))
 			i+=1
 		crowns.multimesh=multi
-		crowns.material_override=mat(Color("366b57"),true)
+		crowns.material_override=mat(Color("416f58"),region != "nl")
 		add_child(crowns)
 
 func ensure_mission_markers(places: Array) -> void:
@@ -246,22 +325,44 @@ func ensure_mission_markers(places: Array) -> void:
 
 func add_place_marker(p: Dictionary) -> void:
 	if label_names.has(p.name):
+		if p.kind == "eigen punt" and marker_labels.has(p.name):
+			marker_labels[p.name].position = project(p.lon,p.lat)+Vector3(0,3.8,0)
 		return
 	label_names[p.name]=true
 	var pos = project(p.lon,p.lat)
 	if p.kind == "stad":
-		make_city(pos)
+		make_city(pos,p.name)
 		make_pad(pos,p.name)
 	var label = Label3D.new()
 	label.text = p.name
-	label.position = pos+Vector3(0,2.1,0)
+	label.position = pos+Vector3(0,3.8 if region=="nl" else 2.1,0)
 	label.font = load("res://assets/interface.ttf")
 	label.font_size = 36 if p.kind == "stad" else 30
-	label.pixel_size = .045 if region=="nl" else .06
+	label.pixel_size = .035 if region=="nl" else .06
 	label.modulate = Color("153c48") if p.kind == "stad" else Color("2b5b63")
 	label.outline_modulate = Color("f6f2d7")
-	label.outline_size = 8
+	label.outline_size = 4 if region=="nl" else 8
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
 	add_child(label)
+	label.set_meta("kind",p.kind)
+	marker_labels[p.name]=label
 	labels.append(label)
+
+func refresh_labels(focus: Vector3, overview: bool, view_size: float=46.0) -> void:
+	if region != "nl":
+		return
+	# Limit visible names spatially, without sorting every frame.
+	for marker in labels:
+		marker.pixel_size=.035*clampf(view_size/46.0,.4,2.0)
+		var distance = Vector2(marker.position.x-focus.x,marker.position.z-focus.z).length()
+		var is_city = marker.get_meta("kind","") in ["stad","eigen punt"]
+		marker.visible = hints_enabled and (distance < (32.0 if is_city else 18.0))
+		if overview:
+			marker.visible = hints_enabled and is_city and marker.text in ["Amsterdam","Rotterdam","Den Haag","Utrecht","Arnhem","Groningen","Maastricht","Leeuwarden","Zwolle"]
+
+func lake_contains(position3: Vector3) -> bool:
+	for polygon in lake_polys:
+		if Geometry2D.is_point_in_polygon(Vector2(position3.x,position3.z),polygon):
+			return true
+	return false
