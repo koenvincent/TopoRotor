@@ -16,6 +16,10 @@ var target: Node3D
 var helipads: Dictionary = {}
 var country_polys: Dictionary = {}
 var lake_polys: Array = []
+var boundary_data: Dictionary = {}
+var boundary_paths: Dictionary = {}
+var province_regions: Array = []
+var municipal_boundary: MeshInstance3D
 var rng = RandomNumberGenerator.new()
 
 # Natural Earth's default admin_0 layer follows de-facto control. Dutch school
@@ -119,6 +123,7 @@ func build(new_region: String, catalog: TopoCatalog) -> void:
 		add_place_marker(p)
 	if region=="nl":
 		dutch_scenery.bake()
+		build_boundaries()
 	if region=="eu":
 		for p in [Vector2(7.5,46),Vector2(9.5,46.5),Vector2(11.5,47),Vector2(13,47),Vector2(1,42.7),Vector2(23,42.5),Vector2(8,60)]:
 			mountain(project(p.x,p.y))
@@ -366,3 +371,81 @@ func lake_contains(position3: Vector3) -> bool:
 		if Geometry2D.is_point_in_polygon(Vector2(position3.x,position3.z),polygon):
 			return true
 	return false
+
+func build_boundaries() -> void:
+	boundary_data=JSON.parse_string(FileAccess.get_file_as_string("res://data/boundaries_nl.json"))
+	for level in boundary_data.lines:
+		var paths: Array=[]
+		for source in boundary_data.lines[level]:
+			var path=PackedVector2Array()
+			for geo in source:
+				var point=project(geo[0],geo[1])
+				path.append(Vector2(point.x,point.z))
+			paths.append(path)
+		boundary_paths[level]=paths
+	for province in boundary_data.provinces:
+		var polygons: Array=[]
+		for source in province.polygons:
+			var polygon=PackedVector2Array()
+			for geo in source:
+				var point=project(geo[0],geo[1])
+				polygon.append(Vector2(point.x,point.z))
+			if polygon.size()>3 and polygon[0].is_equal_approx(polygon[-1]):
+				polygon.remove_at(polygon.size()-1)
+			polygons.append(polygon)
+		province_regions.append({"code":province.code,"name":province.name,"polygons":polygons})
+	# Neutral strokes only on the real landscape. Coloured fills belong to the minimap.
+	municipal_boundary=boundary_mesh(boundary_paths.municipal,.035,.18,.24,.18)
+	boundary_mesh(boundary_paths.provincial,.085,.19,1.0,.45)
+	boundary_mesh(boundary_paths.national,.15,.2,0,0)
+
+func boundary_mesh(paths: Array,width: float,height: float,dash: float,gap: float) -> MeshInstance3D:
+	var surface=SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for path in paths:
+		var walked=0.0
+		for i in range(path.size()-1):
+			var a: Vector2=path[i]
+			var b: Vector2=path[i+1]
+			var length=a.distance_to(b)
+			if length<.00001:
+				continue
+			var direction=(b-a)/length
+			var normal=direction.orthogonal()*width*.5
+			var offset=0.0
+			while offset<length-.00001:
+				var advance=length-offset
+				var visible=true
+				if dash>0:
+					var phase=fposmod(walked+offset,dash+gap)
+					visible=phase<dash
+					advance=minf(advance,(dash if visible else dash+gap)-phase)
+				advance=maxf(advance,.00001)
+				if visible:
+					var start=a+direction*offset
+					var finish=a+direction*minf(offset+advance,length)
+					for point in [start-normal,start+normal,finish+normal,start-normal,finish+normal,finish-normal]:
+						surface.set_normal(Vector3.UP)
+						surface.add_vertex(Vector3(point.x,height,point.y))
+				offset+=advance
+			walked+=length
+	var node=MeshInstance3D.new()
+	node.mesh=surface.commit()
+	var neutral=mat(Color("566056"),true)
+	neutral.cull_mode=BaseMaterial3D.CULL_DISABLED
+	node.material_override=neutral
+	node.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(node)
+	return node
+
+func set_boundary_detail(view_size: float) -> void:
+	if is_instance_valid(municipal_boundary):
+		municipal_boundary.visible=view_size<=40.0
+
+func province_at(position3: Vector3) -> String:
+	var point=Vector2(position3.x,position3.z)
+	for province in province_regions:
+		for polygon in province.polygons:
+			if Geometry2D.is_point_in_polygon(point,polygon):
+				return province.name
+	return ""
