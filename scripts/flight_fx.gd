@@ -31,6 +31,9 @@ var spark_material: StandardMaterial3D
 var bursts_started: int = 0
 var misses_shown: int = 0
 var rng = RandomNumberGenerator.new()
+const RADAR_COLOR = Color("5ce1ff")
+var radar_rings: Array = []
+var radar_shown: int = 0
 
 func _ready() -> void:
 	rng.randomize()
@@ -79,7 +82,7 @@ func update_sight(aircraft: Vector3, active: bool) -> void:
 		return
 	sight.global_position = Vector3(aircraft.x, .34, aircraft.z)
 	sight.scale = Vector3.ONE * view_scale * 1.1
-	var color = Color("fffbe8").lerp(Color("5cff8f"), inside_amount)
+	var color = (RADAR_COLOR if radar_shown > 0 else Color("fffbe8")).lerp(Color("5cff8f"), inside_amount)
 	sight_material.set_shader_parameter("sight_color", Vector3(color.r, color.g, color.b))
 	plumb_material.albedo_color = Color(color.r, color.g, color.b, .5)
 	var top = maxf(aircraft.y - 1.0 * view_scale, .5)
@@ -192,12 +195,43 @@ func set_zone(radius_units: float, with_ring: bool, east_stretch: float = 1.0) -
 func set_inside(value: bool) -> void:
 	inside = value
 
+# Records radar: the range circle of every candidate place the pilot is over,
+# all in the same neutral colour, so it confirms "you are inside this place's
+# range" without telling whether that place is the goal.
+func show_radar(rings: Array) -> void:
+	while radar_rings.size() < rings.size():
+		var ring = MeshInstance3D.new()
+		var plane = PlaneMesh.new()
+		plane.size = Vector2.ONE * 2.0
+		ring.mesh = plane
+		var m = ShaderMaterial.new()
+		m.shader = load("res://assets/shaders/target_zone.gdshader")
+		m.set_shader_parameter("extent", ZONE_EXTENT)
+		m.set_shader_parameter("zone_color", Vector3(RADAR_COLOR.r, RADAR_COLOR.g, RADAR_COLOR.b))
+		m.set_shader_parameter("inside", 0.0)
+		ring.material_override = m
+		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(ring)
+		radar_rings.append(ring)
+	for i in radar_rings.size():
+		var ring = radar_rings[i]
+		ring.visible = i < rings.size()
+		if ring.visible:
+			var r = maxf(float(rings[i].radius), .2)
+			ring.position = Vector3(rings[i].at.x, .31, rings[i].at.z)
+			ring.scale = Vector3(r * ZONE_EXTENT * float(rings[i].get("stretch", 1.0)), 1.0, r * ZONE_EXTENT)
+			ring.set_meta("radius", r)
+	radar_shown = rings.size()
+
 func _process(delta: float) -> void:
 	time += delta
 	inside_amount = move_toward(inside_amount, 1.0 if inside else 0.0, delta * 4.0)
 	zone_material.set_shader_parameter("inside", inside_amount)
 	# Keep the edge line a few pixels wide however large the ring is on screen.
 	zone_material.set_shader_parameter("edge_width", clampf(.24 * pow(view_scale, .8) / maxf(zone_radius, .1), .018, .2))
+	for ring in radar_rings:
+		if ring.visible:
+			ring.material_override.set_shader_parameter("edge_width", clampf(.24 * pow(view_scale, .8) / float(ring.get_meta("radius", 1.0)), .018, .2))
 	var tall = 26.0 * view_scale
 	beacon.scale = Vector3(view_scale * .9, tall, view_scale * .9)
 	beacon.position.y = tall * .5
@@ -414,6 +448,7 @@ func idle() -> void:
 	update_sight(Vector3.ZERO, false)
 
 func clear_effects() -> void:
+	show_radar([])
 	for child in get_children():
-		if child not in [downwash, sight, plumb]:
+		if child not in [downwash, sight, plumb] and not child in radar_rings:
 			child.queue_free()
