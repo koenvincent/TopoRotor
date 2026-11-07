@@ -118,6 +118,12 @@ var model_buttons: Dictionary = {}
 var scheme_buttons: Dictionary = {}
 var accessory_buttons: Dictionary = {}
 var upgrade_buttons: Dictionary = {}
+# A locked item tapped in the hangar shows on the preview only:
+# {"kind": "model"|"scheme"|"accessory"|"upgrade", "id", "level", "item", "name"}.
+var hangar_peek: Dictionary = {}
+var hangar_peek_note: PanelContainer
+var hangar_peek_text: Label
+var lock_texture: ImageTexture
 var unlock_label: Label
 # Ranglijst: local high scores per route and mode.
 var board_panel: PanelContainer
@@ -140,6 +146,9 @@ var pilot_delete: Button
 var pilot_delete_armed: bool = false
 var pilot_unlocks: Label
 var pilot_values: Dictionary = {}
+# Locked looks stepped to on the pilot screen, per attribute: shown on the
+# preview figure only, never worn or saved.
+var pilot_trial: Dictionary = {}
 var pilot_preview: PilotFigure
 var hangar_pilot: PilotFigure
 var pilot_button: Button
@@ -193,6 +202,10 @@ const BUTTON_TONES = {
 	"gold":{"base":Color("ffc94a"),"hover":Color("ffdb7a"),"pressed":Color("f0a92c"),"edge":Color("b8640f"),"ink":Color("0b2530"),"glow":Color(1,.79,.29,.5)},
 	"teal":{"base":Color("1d6577"),"hover":Color("27839a"),"pressed":Color("164f5d"),"edge":Color("082a33"),"ink":Color("fff7e6"),"glow":Color(.31,.85,1,.4)},
 	"ghost":{"base":Color(1,1,1,.08),"hover":Color(.31,.85,1,.18),"pressed":Color(1,1,1,.04),"edge":Color(0,0,0,.35),"ink":Color("fff7e6"),"glow":Color(.31,.85,1,.3)},
+	# Locked items: dim glass and faded text, but still tappable for a preview.
+	"locked":{"base":Color(1,1,1,.04),"hover":Color(1,1,1,.09),"pressed":Color(1,1,1,.02),"edge":Color(0,0,0,.3),"ink":Color(1,.97,.9,.5),"glow":Color(1,1,1,.12)},
+	# The locked item shown in the preview right now: a faint gold plate.
+	"peek":{"base":Color(1,.79,.29,.14),"hover":Color(1,.79,.29,.2),"pressed":Color(1,.79,.29,.08),"edge":Color(.72,.39,.06,.65),"ink":Color("ffdb7a"),"glow":Color(1,.79,.29,.3)},
 }
 var region_tiles: Array = []
 var stars_label: Label
@@ -416,6 +429,33 @@ func tone_button(b: Control,tone: String,radius: int=14,margin: int=16,skew: flo
 	for key in ["font_color","font_hover_color","font_pressed_color","font_focus_color","font_hover_pressed_color"]:
 		b.add_theme_color_override(key,t.ink)
 	b.add_theme_color_override("font_disabled_color",Color(CREAM,.35))
+
+# A small padlock drawn in code (the bundled fonts have no lock glyph): a
+# shackle over a rounded body with a keyhole, edges smoothed by distance.
+func lock_icon() -> Texture2D:
+	if lock_texture!=null:
+		return lock_texture
+	var img=Image.create(16,20,false,Image.FORMAT_RGBA8)
+	for y in 20:
+		for x in 16:
+			var p=Vector2(x+.5,y+.5)
+			var q=(p-Vector2(8,14.5)).abs()-Vector2(5.5,3.5)
+			var body=Vector2(maxf(q.x,0),maxf(q.y,0)).length()+minf(maxf(q.x,q.y),0)-2.0
+			var shackle=absf(p.distance_to(Vector2(8,8))-4.0)-1.3 if p.y<=8 else minf(absf(p.x-4.0),absf(p.x-12.0))-1.3
+			var hole=minf(p.distance_to(Vector2(8,13.6))-1.6,maxf(absf(p.x-8)-.75,absf(p.y-15.8)-1.6))
+			var shape=maxf(minf(body,shackle),-hole)
+			img.set_pixel(x,y,Color(CREAM,.8*clampf(.5-shape,0,1)))
+	lock_texture=ImageTexture.create_from_image(img)
+	return lock_texture
+
+# Locked hangar buttons stay tappable: a padlock, dim glass and faded text,
+# or a gold plate while that item is on the preview stage.
+func lock_style(b: Button,open: bool,chosen: bool,peeking: bool) -> void:
+	b.icon=null if open else lock_icon()
+	if open:
+		style_button(b,chosen,12,10)
+	else:
+		tone_button(b,"peek" if peeking else "locked",12,10)
 
 # Toggle tile/segment: dim glass when off, a solid colour plate when chosen.
 func toggle_style(b: Button,color: Color,radius: int=14,skew: float=0.0) -> void:
@@ -1931,6 +1971,36 @@ func build_paint_shop() -> void:
 	hangar_pilot.position=Vector3(2.5,.05,2.1)
 	hangar_pilot.rotation.y=PI-.45
 	hangar_pilot.configure(pilot_look())
+	# A chip at the bottom of the stage says when a locked item is on show.
+	var overlay=VBoxContainer.new()
+	overlay.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	stage.add_child(overlay)
+	var spacer=Control.new()
+	spacer.size_flags_vertical=Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	overlay.add_child(spacer)
+	hangar_peek_note=PanelContainer.new()
+	hangar_peek_note.name="PeekNote"
+	var chip=style(Color(.015,.055,.07,.86),12,Color(GOLD,.6),2)
+	for side in [SIDE_LEFT,SIDE_RIGHT]:
+		chip.set_content_margin(side,10)
+	for side in [SIDE_TOP,SIDE_BOTTOM]:
+		chip.set_content_margin(side,6)
+	hangar_peek_note.add_theme_stylebox_override("panel",chip)
+	hangar_peek_note.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	overlay.add_child(hangar_peek_note)
+	var chip_row=HBoxContainer.new()
+	chip_row.add_theme_constant_override("separation",8)
+	hangar_peek_note.add_child(chip_row)
+	var padlock=TextureRect.new()
+	padlock.texture=lock_icon()
+	padlock.stretch_mode=TextureRect.STRETCH_KEEP_CENTERED
+	chip_row.add_child(padlock)
+	hangar_peek_text=label("",13,GOLD)
+	hangar_peek_text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	hangar_peek_text.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	chip_row.add_child(hangar_peek_text)
+	hangar_peek_note.hide()
 	hangar_rank=label("",19,GOLD)
 	left.add_child(hangar_rank)
 	hangar_progress=ProgressBar.new()
@@ -2139,18 +2209,7 @@ func build_colour_page(page: VBoxContainer) -> void:
 		swatch.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 		swatch.add_theme_font_size_override("font_size",13)
 		swatch.clip_text=true
-		var body=Color(scheme.body)
-		var ink=INK if body.get_luminance()>.55 else CREAM
-		for state_name in ["normal","hover","pressed","hover_pressed","disabled"]:
-			var face_style=face(body.lightened(.12) if state_name=="hover" else body,Color(scheme.trim),state_name.contains("pressed"),12,6)
-			face_style.border_width_bottom=0 if state_name.contains("pressed") else 6
-			if state_name=="disabled":
-				face_style.bg_color=Color(body,.28)
-				face_style.border_color=Color(Color(scheme.trim),.28)
-			swatch.add_theme_stylebox_override(state_name,face_style)
-		for key in ["font_color","font_hover_color","font_pressed_color","font_focus_color","font_hover_pressed_color"]:
-			swatch.add_theme_color_override(key,ink)
-		swatch.add_theme_color_override("font_disabled_color",Color(CREAM,.55))
+		style_swatch(swatch,scheme,"open")
 		grid.add_child(swatch)
 		scheme_buttons[scheme.name]=swatch
 	page.add_child(kicker("EIGEN KLEUR PER ONDERDEEL"))
@@ -2176,6 +2235,28 @@ func build_colour_page(page: VBoxContainer) -> void:
 			set_paint(paint,false))
 		paint_pickers[part[0]]=picker
 		cell.add_child(picker)
+
+# A colour scheme button wears its own colours: full when earned, faded
+# behind a padlock when locked, and with a gold rim while it is previewed.
+func style_swatch(swatch: Button,scheme: Dictionary,mode: String) -> void:
+	var body=Color(scheme.body)
+	var trim=Color(scheme.trim)
+	var open=mode=="open"
+	var ink=(INK if body.get_luminance()>.55 else CREAM) if open else Color(CREAM,.7)
+	for state_name in ["normal","hover","pressed","hover_pressed","disabled"]:
+		var face_style=face(body.lightened(.12) if state_name=="hover" else body,trim,state_name.contains("pressed"),12,6)
+		face_style.border_width_bottom=0 if state_name.contains("pressed") else 6
+		if not open:
+			face_style.bg_color=Color(face_style.bg_color,.28)
+			face_style.border_color=Color(GOLD,.75) if mode=="peek" else Color(trim,.28)
+			if mode=="peek":
+				face_style.set_border_width_all(2)
+				face_style.border_width_bottom=6
+		swatch.add_theme_stylebox_override(state_name,face_style)
+	for key in ["font_color","font_hover_color","font_pressed_color","font_focus_color","font_hover_pressed_color"]:
+		swatch.add_theme_color_override(key,ink)
+	swatch.add_theme_color_override("font_disabled_color",Color(CREAM,.55))
+	swatch.icon=null if open else lock_icon()
 
 func build_accessory_page(page: VBoxContainer) -> void:
 	page.add_child(kicker("ACCESSOIRES"))
@@ -2214,6 +2295,7 @@ func build_upgrade_page(page: VBoxContainer) -> void:
 			upgrade_buttons[upgrade.id].append(b)
 
 func show_hangar_page(id: String) -> void:
+	end_peek()
 	hangar_page=id
 	for key in hangar_pages:
 		hangar_pages[key].visible=key==id
@@ -2253,23 +2335,71 @@ func equipped() -> Dictionary:
 	return HangarCatalog.effective(saved.get("garage",{}),points(),medals())
 
 func apply_garage() -> void:
+	var was_scheme=hangar_peek.get("kind","")=="scheme"
+	hangar_peek={}
 	var garage=equipped()
 	helicopter.configure(garage)
+	show_on_stage(garage)
+	if was_scheme and is_instance_valid(preview_heli) and not preview_heli.paint_materials.is_empty():
+		preview_heli.apply_paint(current_paint())
+	refresh_hangar()
+
+func show_on_stage(garage: Dictionary) -> void:
 	if is_instance_valid(preview_heli):
 		preview_heli.configure(garage)
 		# Long and wide types need a step back to fit the preview stage.
 		preview_heli.scale=Vector3.ONE*float(HangarCatalog.find(HangarCatalog.MODELS,garage.model).get("preview",1.0))
+
+# Tapping a locked item shows it on the preview stage only: the real
+# helicopter, the save and the equipped choices stay as they are. Tapping
+# the same item again, an earned item, another tab or Klaar ends the peek.
+func peek_item(kind: String,id: String,level: int,item: Dictionary,name: String) -> void:
+	if hangar_peek.get("kind","")==kind and hangar_peek.get("id","")==id and int(hangar_peek.get("level",-1))==level:
+		end_peek()
+		return
+	var was_scheme=hangar_peek.get("kind","")=="scheme"
+	var trial=equipped()
+	match kind:
+		"model":
+			trial.model=id
+		"accessory":
+			trial.accessories.append(id)
+		"upgrade":
+			trial[id]=level
+	show_on_stage(trial)
+	if is_instance_valid(preview_heli) and not preview_heli.paint_materials.is_empty():
+		if kind=="scheme":
+			preview_heli.apply_paint(HangarCatalog.scheme_paint(item))
+		elif was_scheme:
+			preview_heli.apply_paint(current_paint())
+	hangar_peek={"kind":kind,"id":id,"level":level,"item":item,"name":name}
+	if is_instance_valid(sfx):
+		sfx.play("whoosh",1.6)
 	refresh_hangar()
 
+func end_peek() -> void:
+	if hangar_peek.is_empty():
+		return
+	apply_garage()
+
+func is_peeking(kind: String,id: String,level: int=-1) -> bool:
+	return hangar_peek.get("kind","")==kind and hangar_peek.get("id","")==id and int(hangar_peek.get("level",-1))==level
+
 func choose_model(id: String) -> void:
-	if not is_unlocked(HangarCatalog.find(HangarCatalog.MODELS,id)):
+	var model=HangarCatalog.find(HangarCatalog.MODELS,id)
+	if not is_unlocked(model):
+		if not model.is_empty():
+			peek_item("model",id,-1,model,model.name)
 		return
 	saved.garage.model=id
 	sfx.play("whoosh",1.0)
 	apply_garage()
 
 func toggle_accessory(id: String) -> void:
-	if not is_unlocked(HangarCatalog.find(HangarCatalog.ACCESSORIES,id)):
+	var item=HangarCatalog.find(HangarCatalog.ACCESSORIES,id)
+	if not is_unlocked(item):
+		if not item.is_empty():
+			peek_item("accessory",id,-1,item,item.name)
 		return
 	if id in saved.garage.accessories:
 		saved.garage.accessories.erase(id)
@@ -2279,8 +2409,12 @@ func toggle_accessory(id: String) -> void:
 	apply_garage()
 
 func set_upgrade(id: String,level: int) -> void:
-	var levels: Array=HangarCatalog.find(HangarCatalog.UPGRADES,id).levels
-	if level<0 or level>=levels.size() or not is_unlocked(levels[level]):
+	var upgrade=HangarCatalog.find(HangarCatalog.UPGRADES,id)
+	var levels: Array=upgrade.levels
+	if level<0 or level>=levels.size():
+		return
+	if not is_unlocked(levels[level]):
+		peek_item("upgrade",id,level,levels[level],"%s %s" % [upgrade.name,levels[level].name])
 		return
 	saved.garage[id]=level
 	sfx.play("star",1.0+level*.15)
@@ -2289,6 +2423,8 @@ func set_upgrade(id: String,level: int) -> void:
 func choose_scheme(scheme: Dictionary) -> void:
 	if is_unlocked(scheme):
 		set_paint(HangarCatalog.scheme_paint(scheme))
+	else:
+		peek_item("scheme",scheme.name,-1,scheme,"kleur "+scheme.name)
 
 # Texts, locks and selection of every hangar control.
 func refresh_hangar() -> void:
@@ -2308,34 +2444,45 @@ func refresh_hangar() -> void:
 	hangar_progress.value=pts
 	hangar_progress.visible=not next.is_empty()
 	hangar_next.text=("Volgende: %s bij %d punten (nog %d)." % [next.name,next.points,next.points-pts] if not next.is_empty() else "Alles met punten is verdiend!")+" Punten verdien je met elke missie: meer bij Oefenen en Records, extra voor in één keer goed, sterren en records."
+	# Locked items stay tappable so they can be previewed; they never equip.
 	for model in HangarCatalog.MODELS:
 		var b: Button=model_buttons[model.id]
 		var open=is_unlocked(model)
-		b.disabled=not open
-		b.text=("%s%s\n%s" % [model.name,"  ✓" if garage.model==model.id else "",model.about]) if open else "%s · op slot\n%s" % [model.name,HangarCatalog.requirement(model,pts)]
-		style_button(b,garage.model==model.id,12,10)
+		var peeking=is_peeking("model",model.id)
+		b.text=("%s%s\n%s" % [model.name,"  ✓" if garage.model==model.id else "",model.about]) if open else "%s · %s\n%s" % [model.name,"voorproefje" if peeking else "op slot",HangarCatalog.requirement(model,pts)]
+		lock_style(b,open,garage.model==model.id,peeking)
 	for scheme in HangarCatalog.SCHEMES:
 		var swatch: Button=scheme_buttons[scheme.name]
 		var open=is_unlocked(scheme)
-		swatch.disabled=not open
 		swatch.text=scheme.name if open else "%s · %s" % [scheme.name,str(scheme.points) if scheme.has("points") else "medaille"]
-		swatch.tooltip_text="" if open else HangarCatalog.requirement(scheme,pts)
+		swatch.tooltip_text="" if open else HangarCatalog.requirement(scheme,pts)+". Tik voor een voorproefje."
+		style_swatch(swatch,scheme,"open" if open else "peek" if is_peeking("scheme",scheme.name) else "locked")
 	for item in HangarCatalog.ACCESSORIES:
 		var b: Button=accessory_buttons[item.id]
 		var open=is_unlocked(item)
 		var on=item.id in garage.accessories
-		b.disabled=not open
-		b.text=("%s\n%s" % [item.name,"aan ✓" if on else "uit"]) if open else "%s · op slot\n%s" % [item.name,HangarCatalog.requirement(item,pts)]
-		style_button(b,on,12,10)
+		var peeking=is_peeking("accessory",item.id)
+		b.text=("%s\n%s" % [item.name,"aan ✓" if on else "uit"]) if open else "%s · %s\n%s" % [item.name,"voorproefje" if peeking else "op slot",HangarCatalog.requirement(item,pts)]
+		lock_style(b,open,on,peeking)
 	for upgrade in HangarCatalog.UPGRADES:
 		for level in upgrade.levels.size():
 			var b: Button=upgrade_buttons[upgrade.id][level]
 			var step: Dictionary=upgrade.levels[level]
 			var open=is_unlocked(step)
-			b.disabled=not open
 			b.text=step.name if open else "%s · %s" % [step.name,str(step.points) if step.has("points") else "medaille"]
-			b.tooltip_text="" if open else HangarCatalog.requirement(step,pts)
-			style_button(b,int(garage[upgrade.id])==level,12,10)
+			b.tooltip_text="" if open else HangarCatalog.requirement(step,pts)+". Tik voor een voorproefje."
+			lock_style(b,open,int(garage[upgrade.id])==level,is_peeking("upgrade",upgrade.id,level))
+	if not is_instance_valid(hangar_peek_note):
+		return
+	hangar_peek_note.visible=not hangar_peek.is_empty()
+	if not hangar_peek.is_empty():
+		hangar_peek_text.text="Voorproefje: %s. %s" % [hangar_peek.name,earn_text(hangar_peek.item,pts)]
+
+# What a locked item still needs, as one sentence for the preview notes.
+func earn_text(item: Dictionary,pts: int) -> String:
+	if item.has("medal"):
+		return "Verdien het met de medaille ‘%s’." % String(HangarCatalog.MEDALS.get(item.medal,item.medal)).to_lower()
+	return "Nog %d vliegpunten om te verdienen." % maxi(int(item.get("points",0))-pts,0)
 
 func current_paint() -> Dictionary:
 	var paint: Dictionary={}
@@ -2344,6 +2491,7 @@ func current_paint() -> Dictionary:
 	return paint
 
 func set_paint(paint: Dictionary,sync_pickers: bool=true) -> void:
+	end_peek()
 	helicopter.apply_paint(paint)
 	if is_instance_valid(preview_heli) and not preview_heli.paint_materials.is_empty():
 		preview_heli.apply_paint(paint)
@@ -2366,6 +2514,7 @@ func close_paint_shop() -> void:
 	if not paint_open:
 		return
 	paint_open=false
+	end_peek()
 	for picker in paint_pickers.values():
 		picker.get_popup().hide()
 	paint_panel.hide()
@@ -2845,6 +2994,15 @@ func build_pilots() -> void:
 			swatch.custom_minimum_size=Vector2(22,22)
 			swatch.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 			line.add_child(swatch)
+		# A locked look can be stepped to and tried on the preview; it then
+		# shows a padlock and faded text and is not worn.
+		var padlock=TextureRect.new()
+		padlock.name="Lock_"+attribute
+		padlock.texture=lock_icon()
+		padlock.stretch_mode=TextureRect.STRETCH_KEEP_CENTERED
+		padlock.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+		padlock.hide()
+		line.add_child(padlock)
 		var value=label("",15,CREAM)
 		value.name="Value_"+attribute
 		value.size_flags_horizontal=Control.SIZE_EXPAND_FILL
@@ -2856,7 +3014,7 @@ func build_pilots() -> void:
 		next.custom_minimum_size=Vector2(44,38)
 		tone_button(next,"ghost",10,6)
 		line.add_child(next)
-		pilot_values[attribute]={"label":value,"swatch":swatch,"count":count}
+		pilot_values[attribute]={"label":value,"swatch":swatch,"count":count,"lock":padlock}
 	# New looks are earned with flight points and medals, like the hangar.
 	pilot_unlocks=label("",13,GOLD)
 	pilot_unlocks.name="PilotUnlocks"
@@ -2882,6 +3040,7 @@ func open_pilots() -> void:
 		return
 	pilots_open=true
 	pilot_delete_armed=false
+	pilot_trial.clear()
 	pilot_status.text="Elke piloot heeft eigen punten, hangar en sterren. De ranglijst is van iedereen samen."
 	refresh_pilots()
 	pilots_backdrop.move_to_front()
@@ -2894,6 +3053,7 @@ func close_pilots() -> void:
 	if not pilots_open:
 		return
 	pilots_open=false
+	pilot_trial.clear()
 	pilot_new.release_focus()
 	pilots_panel.hide()
 	pilots_backdrop.hide()
@@ -2920,23 +3080,42 @@ func refresh_pilots() -> void:
 	pilot_delete.text="Zeker?" if pilot_delete_armed else "Verwijder"
 	pilot_delete.tooltip_text="Verwijdert %s en de eigen punten en hangar. Vluchten op de ranglijst blijven staan." % active
 	var look=pilot_look()
+	# The preview shows the worn look with any locked look being tried on.
+	var shown=look.duplicate()
+	var tried: Array=[]
+	for attribute in pilot_trial:
+		shown[attribute]=pilot_trial[attribute]
 	for attribute in pilot_values:
 		var cell: Dictionary=pilot_values[attribute]
 		var open=PilotFigure.open_ids(attribute,points(),medals())
-		cell.label.text=PilotFigure.option_name(attribute,look[attribute])
+		var trying=pilot_trial.has(attribute)
+		var option=PilotFigure.find_option(attribute,shown[attribute])
+		cell.label.text=PilotFigure.option_name(attribute,shown[attribute])+(" · %s" % (str(option[2].points) if option[2].has("points") else "medaille") if trying else "")
+		cell.label.add_theme_color_override("font_color",Color(CREAM,.5) if trying else CREAM)
 		cell.label.tooltip_text="%d van %d vrijgespeeld" % [open.size(),PilotFigure.options(attribute).size()]
+		cell.lock.visible=trying
 		cell.count.text="%d/%d" % [open.size(),PilotFigure.options(attribute).size()]
 		if cell.swatch!=null:
-			cell.swatch.color=Color(look[attribute])
+			cell.swatch.color=Color(shown[attribute])
+		if trying:
+			var part_name=""
+			for entry in PilotFigure.ATTRIBUTES:
+				if entry[0]==attribute:
+					part_name=String(entry[1]).to_lower()
+			var need=earn_text(option[2],points()).trim_suffix(".")
+			tried.append("%s (%s): %s" % [option[1],part_name,need[0].to_lower()+need.substr(1)])
 	var left=PilotFigure.locked_count(points(),medals())
 	var next=next_look_unlock()
 	pilot_unlocks.text=("Nog %d looks op slot. Volgende: %s bij %d punten (nog %d)." % [left,next.name,next.points,next.points-points()] if not next.is_empty() else "Nog %d looks op slot, die verdien je met medailles." % left) if left>0 else "Alle looks zijn vrijgespeeld!"
-	pilot_preview.configure(look)
+	if not tried.is_empty():
+		pilot_unlocks.text="Voorproefje · "+"; ".join(tried)+". Wat op slot zit draag je pas als je het verdiend hebt."
+	pilot_preview.configure(shown)
 	if is_instance_valid(hangar_pilot):
 		hangar_pilot.configure(look)
 
 # Puts the active profile on the helicopter, hangar and menu.
 func apply_profile() -> void:
+	pilot_trial.clear()
 	helicopter.apply_paint(saved.get("paint",RotorHelicopter.DEFAULT_PAINT))
 	if is_instance_valid(preview_heli) and not preview_heli.paint_materials.is_empty():
 		preview_heli.apply_paint(saved.get("paint",RotorHelicopter.DEFAULT_PAINT))
@@ -3001,8 +3180,21 @@ func next_look_unlock() -> Dictionary:
 				best={"name":"%s (%s)" % [option[1],String(entry[1]).to_lower()],"points":int(option[2].points)}
 	return best
 
+# The arrows walk past every option, locked ones too: a locked option is
+# only tried on the preview, the worn look keeps the last earned one.
 func step_look(attribute: String,direction: int) -> void:
-	var look=PilotFigure.step(pilot_look(),attribute,direction,points(),medals())
+	var shown=pilot_look()
+	if pilot_trial.has(attribute):
+		shown[attribute]=pilot_trial[attribute]
+	var stepped: String=PilotFigure.step(shown,attribute,direction)[attribute]
+	sfx.play("star",1.15)
+	if not PilotFigure.option_open(PilotFigure.find_option(attribute,stepped),points(),medals()):
+		pilot_trial[attribute]=stepped
+		refresh_pilots()
+		return
+	pilot_trial.erase(attribute)
+	var look=pilot_look()
+	look[attribute]=stepped
 	# A new figure starts with a matching haircut; every part stays changeable.
 	if attribute=="figuur":
 		if look.figuur=="vrouw" and look.haar=="kort":
@@ -3010,10 +3202,10 @@ func step_look(attribute: String,direction: int) -> void:
 		elif look.figuur=="man" and look.haar=="staart":
 			look.haar="kort"
 	saved.look=look
-	sfx.play("star",1.15)
 	refresh_pilots()
 
 func random_look() -> void:
+	pilot_trial.clear()
 	var look: Dictionary={}
 	for entry in PilotFigure.ATTRIBUTES:
 		var ids=PilotFigure.open_ids(entry[0],points(),medals())
@@ -4001,14 +4193,28 @@ func smoke_test() -> void:
 	saved.garage=HangarCatalog.DEFAULT_GARAGE.duplicate(true)
 	open_paint_shop()
 	var libel_button: Button=paint_panel.find_child("Model_libel",true,false)
-	assert(libel_button.disabled and paint_panel.find_child("Scheme_Ambulance",true,false).disabled,"New types and schemes start locked")
+	var ambulance_button: Button=paint_panel.find_child("Scheme_Ambulance",true,false)
+	assert(libel_button.icon!=null and ambulance_button.icon!=null and not libel_button.disabled and not ambulance_button.disabled,"New types and schemes start locked, with a padlock, but stay tappable")
+	# Tapping a locked item previews it on the stage without equipping it.
 	choose_model("libel")
-	assert(equipped().model=="redder" and helicopter.config.model=="redder","A locked type cannot be chosen")
+	assert(equipped().model=="redder" and helicopter.config.model=="redder" and saved.garage.model=="redder","A locked type cannot be chosen")
+	assert(preview_heli.config.model=="libel" and hangar_peek_note.visible and hangar_peek_text.text.contains("Libel") and libel_button.text.contains("voorproefje"),"A locked type shows on the preview stage")
+	choose_model("libel")
+	assert(hangar_peek.is_empty() and preview_heli.config.model=="redder" and not hangar_peek_note.visible,"Tapping it again ends the preview")
+	var ambulance=HangarCatalog.SCHEMES.filter(func(s): return s.name=="Ambulance")[0]
+	var body_before=helicopter.paint_hex("body")
+	choose_scheme(ambulance)
+	assert(preview_heli.paint_hex("body")==String(ambulance.body).to_lower() and helicopter.paint_hex("body")==body_before and saved.paint.body==body_before,"A locked scheme paints only the preview")
+	toggle_accessory("wimpel")
+	assert(hangar_peek.kind=="accessory" and "wimpel" in preview_heli.config.accessories and not "wimpel" in equipped().accessories and preview_heli.paint_hex("body")==body_before,"A locked accessory is tried on the preview; the scheme preview ends")
+	set_upgrade("rotor",2)
+	assert(int(preview_heli.config.rotor)==2 and int(equipped().rotor)==0 and hangar_peek_text.text.contains("vliegpunten"),"A locked upgrade shows on the preview")
 	show_hangar_page("upgrades")
 	assert(hangar_pages.upgrades.visible and not hangar_pages.type.visible,"Hangar tabs switch pages")
+	assert(hangar_peek.is_empty() and int(preview_heli.config.rotor)==0,"Switching tabs ends the preview")
 	saved.points=HangarCatalog.MAX_POINTS
 	refresh_hangar()
-	assert(not libel_button.disabled and not paint_panel.find_child("Scheme_Ambulance",true,false).disabled,"Points unlock types and schemes")
+	assert(libel_button.icon==null and ambulance_button.icon==null,"Points unlock types and schemes")
 	assert(HangarCatalog.models_of("vliegtuig").size()>=4 and HangarCatalog.models_of("jet").size()>=3 and HangarCatalog.models_of("heli").size()>=8,"The hangar has helicopters, aeroplanes and jets")
 	var rotor_counts={"tandem":2,"coax":2}
 	for model in HangarCatalog.MODELS:
@@ -4173,6 +4379,18 @@ func smoke_test() -> void:
 	assert(pilot_name()=="Sara" and points()==0 and saved.profiles.size()==pilots_before.profiles.size()+1 and pilot_button.text=="Piloot: Sara","A new pilot becomes the active one")
 	step_look("hoofd",1)
 	assert(saved.look.hoofd!=PilotFigure.DEFAULT_LOOK.hoofd and pilot_preview.look.hoofd==saved.look.hoofd and hangar_pilot.look.hoofd==saved.look.hoofd,"A new look reaches the preview and the hangar pilot")
+	# The arrows also reach locked looks: tried on the preview, never worn.
+	var worn_hair=pilot_look().haar
+	step_look("haar",-1)
+	var tried_hair=PilotFigure.HAIR[-1]
+	assert(pilot_trial.get("haar","")==tried_hair[0] and pilot_preview.look.haar==tried_hair[0] and pilot_look().haar==worn_hair and hangar_pilot.look.haar==worn_hair,"A locked hairstyle shows on the pilot preview only")
+	assert(pilot_values.haar.lock.visible and pilot_values.haar.label.text.begins_with(tried_hair[1]) and pilot_unlocks.text.begins_with("Voorproefje"),"A tried look carries a padlock and says what it needs")
+	step_look("haar",1)
+	assert(not pilot_trial.has("haar") and pilot_look().haar==worn_hair and pilot_preview.look.haar==worn_hair and not pilot_values.haar.lock.visible,"Stepping back to an earned look ends the try-on")
+	step_look("haar",-1)
+	close_pilots()
+	open_pilots()
+	assert(pilot_trial.is_empty() and pilot_preview.look.haar==worn_hair,"Closing the pilot screen drops the try-on")
 	choose_pilot(pilots_before.pilot)
 	assert(pilot_name()==pilots_before.pilot and points()==int(pilots_before.points) and saved.look.hoofd==PilotFigure.DEFAULT_LOOK.hoofd,"Switching back restores points and look")
 	delete_pilot()
@@ -4495,6 +4713,28 @@ func capture_hangar() -> void:
 			await get_tree().process_frame
 		get_viewport().get_texture().get_image().save_png("res://build/preview-flight-"+id+".png")
 		return_menu()
+	# Locked items behind a padlock, one of them tried on the preview stage.
+	saved.points=120
+	saved.medals=[]
+	saved.garage=HangarCatalog.DEFAULT_GARAGE.duplicate(true)
+	open_paint_shop()
+	show_hangar_page("type")
+	choose_model("valk")
+	await get_tree().create_timer(.7).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-hangar-voorproefje.png")
+	show_hangar_page("kleuren")
+	choose_scheme(HangarCatalog.SCHEMES[-1])
+	await get_tree().create_timer(.5).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-hangar-voorproefje-kleur.png")
+	close_paint_shop()
+	saved.look=PilotFigure.DEFAULT_LOOK.duplicate()
+	open_pilots()
+	step_look("haar",-1)
+	step_look("hoofd",-1)
+	pilot_preview.rotation.y=PI
+	await get_tree().create_timer(.5).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-piloot-voorproefje.png")
+	close_pilots()
 	print("HANGAR CAPTURE PASSED")
 	get_tree().quit()
 
