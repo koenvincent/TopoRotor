@@ -28,11 +28,14 @@ const SOFT_MIN = .3
 static var _kit: Dictionary = {}
 
 static func scenery_kit() -> Dictionary:
-	if _kit.is_empty() and ResourceLoader.exists("res://assets/models/scenery.glb"):
-		var scene: Node = (load("res://assets/models/scenery.glb") as PackedScene).instantiate()
-		for node in scene.find_children("*","MeshInstance3D",true,false):
-			_kit[node.name]=(node as MeshInstance3D).mesh
-		scene.free()
+	if _kit.is_empty():
+		for file in ["res://assets/models/scenery.glb","res://assets/models/landmarks.glb"]:
+			if not ResourceLoader.exists(file):
+				continue
+			var scene: Node = (load(file) as PackedScene).instantiate()
+			for node in scene.find_children("*","MeshInstance3D",true,false):
+				_kit[node.name]=(node as MeshInstance3D).mesh
+			scene.free()
 	return _kit
 
 func _init(parent: Node3D) -> void:

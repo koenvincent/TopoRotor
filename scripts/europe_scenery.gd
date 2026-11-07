@@ -68,6 +68,12 @@ func _init(parent: Node3D) -> void:
 	drum.bottom_radius=.5
 	drum.height=1
 	drum.radial_segments=12
+	# Smoother Blender column and orb, same unit size.
+	var pieces: Dictionary=DutchScenery.scenery_kit()
+	if pieces.has("Column"):
+		drum=pieces.Column
+	if pieces.has("Orb"):
+		ball=pieces.Orb
 
 static func known(type: String) -> bool:
 	return EU_FOOTPRINTS.has(type) or LandmarkKit.FOOTPRINTS.has(type)

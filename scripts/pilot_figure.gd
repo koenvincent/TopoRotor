@@ -56,6 +56,55 @@ var sphere: SphereMesh
 var materials: Dictionary = {}
 var root: Node3D
 
+# Hair, hats and glasses modelled in Blender ("pilot_parts"), by name such as
+# haar_afro, hoofd_pet or bril_rond, each with the transform it had there.
+static var _parts: Dictionary = {}
+
+static func parts() -> Dictionary:
+	if _parts.is_empty() and ResourceLoader.exists("res://assets/models/pilot_parts.glb"):
+		var scene: Node3D=(load("res://assets/models/pilot_parts.glb") as PackedScene).instantiate()
+		for node in scene.find_children("*","MeshInstance3D",true,false):
+			var mesh_node=node as MeshInstance3D
+			var at: Transform3D=mesh_node.transform
+			var up=mesh_node.get_parent()
+			while up!=scene and up is Node3D:
+				at=(up as Node3D).transform*at
+				up=up.get_parent()
+			var key=String(mesh_node.name) if String(mesh_node.name).contains("_") else String(mesh_node.get_parent().name)
+			_parts[key]={"mesh":mesh_node.mesh,"at":at}
+		scene.free()
+	return _parts
+
+# Places a Blender part on the head: hair takes the hair colour, cloth the
+# outfit colour, x_<hex> a fixed colour and xg_<hex> a glossy one.
+func add_part(id: String) -> bool:
+	var part: Dictionary=parts().get(id,{})
+	if part.is_empty():
+		return false
+	var p=MeshInstance3D.new()
+	p.name=id
+	p.mesh=part.mesh
+	p.transform=part.at
+	for surface in p.mesh.get_surface_count():
+		var source=p.mesh.surface_get_material(surface)
+		var slot: String=source.resource_name if source!=null else "hair"
+		var paint: StandardMaterial3D
+		if slot=="hair":
+			paint=mat(look.haarkleur)
+		elif slot=="cloth":
+			paint=mat(look.kleur)
+		elif slot=="skin":
+			paint=mat(look.huid)
+		elif slot.begins_with("xg_"):
+			paint=mat(slot.substr(3),GLOSSY)
+		elif slot.begins_with("x_"):
+			paint=mat(slot.substr(2))
+		else:
+			paint=mat(look.haarkleur)
+		p.set_surface_override_material(surface,paint)
+	root.add_child(p)
+	return true
+
 static func options(attribute: String) -> Array:
 	for entry in ATTRIBUTES:
 		if entry[0]==attribute:
@@ -397,6 +446,8 @@ func build_face(skin: String,hair: String) -> void:
 func build_hair(hair: String,covered: bool) -> void:
 	if look.haar=="kaal":
 		return
+	if not covered and add_part("haar_"+look.haar):
+		return
 	# A mohawk has shaved sides: no cap of hair, only the crest.
 	if not covered and look.haar!="hanenkam":
 		ball(Vector3(0,2.04,.03),Vector3(.47,.3,.47),hair)
@@ -463,6 +514,11 @@ func build_hair(hair: String,covered: bool) -> void:
 					ball(Vector3(side*.2,1.8-i*.11,.08),Vector3(.09,.11,.09),hair)
 
 func build_headwear(cloth: String) -> void:
+	if look.hoofd!="propellerpet" and add_part("hoofd_"+look.hoofd):
+		return
+	if look.hoofd=="propellerpet" and add_part("hoofd_propellerpet"):
+		propeller()
+		return
 	match look.hoofd:
 		"pet":
 			ball(Vector3(0,2.08,.02),Vector3(.48,.25,.48),cloth)
@@ -504,18 +560,7 @@ func build_headwear(cloth: String) -> void:
 		"propellerpet":
 			ball(Vector3(0,2.08,.02),Vector3(.48,.25,.48),cloth)
 			box(Vector3(0,2.06,-.27),Vector3(.32,.03,.2),shade(cloth,.25))
-			cylinder(Vector3(0,2.24,.02),.015,.1,"3a3f47")
-			var prop=Node3D.new()
-			prop.position=Vector3(0,2.29,.02)
-			prop.name="Propeller"
-			root.add_child(prop)
-			var keep=root
-			root=prop
-			box(Vector3.ZERO,Vector3(.36,.012,.06),"e8453a")
-			box(Vector3.ZERO,Vector3(.06,.014,.36),"3b7dd8")
-			ball(Vector3.ZERO,Vector3(.04,.03,.04),"f4c51c")
-			root=keep
-			spinners.append(prop)
+			propeller()
 		"brandweer":
 			ball(Vector3(0,2.03,.02),Vector3(.52,.4,.52),"c8211d")
 			cylinder(Vector3(0,1.97,.05),.31,.03,"c8211d")
@@ -550,7 +595,24 @@ func build_headwear(cloth: String) -> void:
 			for i in 3:
 				ball(Vector3(-.08+i*.08,2.2,-.18+absf(i-1)*.02),Vector3(.04,.04,.02),["e8453a","3b7dd8","3fbf6a"][i])
 
+# The spinning propeller on the propeller cap (a spinner, so it turns).
+func propeller() -> void:
+	cylinder(Vector3(0,2.24,.02),.015,.1,"3a3f47")
+	var prop=Node3D.new()
+	prop.position=Vector3(0,2.29,.02)
+	prop.name="Propeller"
+	root.add_child(prop)
+	var keep=root
+	root=prop
+	box(Vector3.ZERO,Vector3(.36,.012,.06),"e8453a")
+	box(Vector3.ZERO,Vector3(.06,.014,.36),"3b7dd8")
+	ball(Vector3.ZERO,Vector3(.04,.03,.04),"f4c51c")
+	root=keep
+	spinners.append(prop)
+
 func build_glasses() -> void:
+	if add_part("bril_"+look.bril):
+		return
 	match look.bril:
 		"rond":
 			for side in [-1,1]:
