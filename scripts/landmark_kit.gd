@@ -29,6 +29,10 @@ func _init(scenery: DutchScenery) -> void:
 	taper.bottom_radius=.5
 	taper.height=1
 	taper.radial_segments=8
+	# Smoother Blender column with rounded rims, same unit size.
+	var pieces: Dictionary=DutchScenery.scenery_kit()
+	if pieces.has("Column"):
+		cyl=pieces.Column
 
 static func known(type: String) -> bool:
 	return type=="builtin" or FOOTPRINTS.has(type)
