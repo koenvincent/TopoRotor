@@ -17,7 +17,7 @@ Open de link op je Android-telefoon of -tablet en kies `TopoRotor.apk` bij de ge
 Installeer **Godot 4.5.1 Standard** (geen .NET nodig), importeer `project.godot` en druk F5. Alle kaartdata, 3D-graphics, fonts en geluiden zijn meegeleverd. Er zijn geen online kaarttegels of game-accounts nodig.
 
 - Kies Nederland of Europa, Leren, Oefenen of Records en start een vliegmissie.
-- Sturen: joystick, WASD of pijltjes. Links/rechts draait de helikopter; omhoog/W vliegt vooruit en omlaag/S achteruit. De camera draait soepel mee, de overzichtskaart blijft noordgericht. Antwoorden: ‘Hier is het!’ of spatie. M: overzicht.
+- Sturen: joystick, WASD of pijltjes. Links/rechts draait de helikopter; omhoog/W vliegt vooruit en omlaag/S achteruit. De camera hangt achter de heli en draait soepel mee; achteruit gaat langzamer. Het kompas bovenin toont je koers. De minikaart en de overzichtskaart blijven noordgericht; een pijl op de minikaart wijst de neus aan. Menu en HUD schalen mee met brede telefoons en 4:3-tablets zonder scrollbalk. Antwoorden: ‘Hier is het!’ of spatie. M: overzicht.
 - Je begint **laag en dichtbij**. Gebruik **Lager / Hoger**, het muiswiel of **Q / E** om tussen drie vlieghoogtes te wisselen. Lager toont meer detail; hoger geeft meer zicht op de omgeving. De overzichtskaart (M) blijft apart beschikbaar. Het spel controleert je positie; er is geen landingssimulatie.
 - ‘Pauze’, Escape of de Android-terugknop pauzeert de vlucht. Kies verder vliegen of stoppen naar de hangar. Naar de achtergrond schakelen pauzeert ook; hervatten doe je zelf. De terugknop sluit eerst een geopende foto.
 
