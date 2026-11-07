@@ -79,6 +79,14 @@ var higher_button: Button
 const FLIGHT_ZOOMS = [22.0,38.0,64.0]
 const FLIGHT_ALTITUDES = [9.0,14.0,23.0]
 const HEIGHT_NAMES = ["Laag","Midden","Hoog"]
+const TURN_RATE = 2.1 # rad/s at full stick
+const REVERSE_FACTOR = .45
+const CAMERA_FOLLOW = 7.0
+const CAMERA_TURN = 4.5
+const LOOK_AHEAD = .16
+var heading: float = 0.0
+var camera_yaw: float = 0.0
+var compass: FlightCompass
 var best_label: Label
 var custom_mission: bool = false
 var progress_readonly: bool = false
@@ -89,6 +97,12 @@ const SPAWN = Vector2(5.1214,52.0907) # Utrecht (lon, lat)
 const INK = Color("143740")
 const CREAM = Color("f5efdc")
 const GOLD = Color("ffc35c")
+const TEAL = Color("28505a")
+const MUTED = Color("9fc5bc")
+const PANEL = Color(.035,.115,.15,.94)
+const PANEL_SOLID = Color(.04,.13,.17,.98)
+const EDGE = Color(.55,.8,.78,.18)
+const PHOTO_SIZE = Vector2(1140,640)
 
 func _ready() -> void:
 	if not is_test_mode and not is_capture_mode:
@@ -142,7 +156,7 @@ func build_environment() -> void:
 	feedback_audio.volume_db=-12
 	add_child(feedback_audio)
 
-func style(color: Color,radius: int=18,border: Color=Color.TRANSPARENT) -> StyleBoxFlat:
+func style(color: Color,radius: int=18,border: Color=Color.TRANSPARENT,border_width: int=1) -> StyleBoxFlat:
 	var s=StyleBoxFlat.new()
 	s.bg_color=color
 	s.set_corner_radius_all(radius)
@@ -152,7 +166,44 @@ func style(color: Color,radius: int=18,border: Color=Color.TRANSPARENT) -> Style
 	s.content_margin_bottom=14
 	s.border_color=border
 	if border.a>0:
-		s.set_border_width_all(1)
+		s.set_border_width_all(border_width)
+	s.anti_aliasing=true
+	return s
+
+# Floating cards: dark glass with a soft drop shadow and an optional gold edge
+# on the left that marks the most important panel on screen.
+func card(color: Color=PANEL,radius: int=20,accent: bool=false) -> StyleBoxFlat:
+	var s=style(color,radius,EDGE)
+	s.shadow_color=Color(0,0,0,.38)
+	s.shadow_size=14
+	s.shadow_offset=Vector2(0,5)
+	if accent:
+		s.border_color=GOLD
+		s.border_width_left=5
+		s.border_width_top=0
+		s.border_width_right=0
+		s.border_width_bottom=0
+	return s
+
+# Raised button face: a darker bottom edge that flattens when pressed.
+func face(color: Color,edge: Color,pressed: bool=false,radius: int=14,margin: int=16) -> StyleBoxFlat:
+	var s=style(color,radius)
+	s.content_margin_left=margin
+	s.content_margin_right=margin
+	s.content_margin_top=8+(3 if pressed else 0)
+	s.content_margin_bottom=8+(0 if pressed else 3)
+	s.border_color=edge
+	s.border_width_bottom=0 if pressed else 4
+	s.border_width_top=3 if pressed else 0
+	return s
+
+func focus_ring(radius: int=14) -> StyleBoxFlat:
+	var s=style(Color.TRANSPARENT,radius,GOLD,2)
+	s.draw_center=false
+	s.expand_margin_left=3
+	s.expand_margin_right=3
+	s.expand_margin_top=3
+	s.expand_margin_bottom=3
 	return s
 
 func label(text: String,size_px: int=20,color: Color=CREAM) -> Label:
@@ -162,17 +213,17 @@ func label(text: String,size_px: int=20,color: Color=CREAM) -> Label:
 	l.add_theme_color_override("font_color",color)
 	return l
 
+func kicker(text: String) -> Label:
+	var l=label(text,13,MUTED)
+	l.add_theme_constant_override("line_spacing",0)
+	return l
+
 func button(text: String,action: Callable,gold: bool=false) -> Button:
 	var b=Button.new()
 	b.text=text
 	b.custom_minimum_size.y=52
 	b.add_theme_font_size_override("font_size",20)
-	b.add_theme_stylebox_override("normal",style(GOLD if gold else Color("28505a"),12))
-	b.add_theme_stylebox_override("hover",style(Color("ffda84") if gold else Color("376875"),12))
-	b.add_theme_stylebox_override("pressed",style(Color("d8a044") if gold else Color("14353e"),12))
-	b.add_theme_color_override("font_color",INK if gold else CREAM)
-	b.add_theme_color_override("font_hover_color",INK if gold else CREAM)
-	b.add_theme_color_override("font_pressed_color",INK if gold else CREAM)
+	style_button(b,gold)
 	b.pressed.connect(action)
 	# Only touch index 0 is emulated as mouse input; handle extra fingers (e.g. while steering) here.
 	b.gui_input.connect(func(event: InputEvent):
@@ -182,6 +233,137 @@ func button(text: String,action: Callable,gold: bool=false) -> Button:
 	)
 	return b
 
+func style_button(b: Control,gold: bool=false,radius: int=14,margin: int=16) -> void:
+	var base=GOLD if gold else TEAL
+	var edge=Color("c27f2b") if gold else Color("143a43")
+	b.add_theme_stylebox_override("normal",face(base,edge,false,radius,margin))
+	b.add_theme_stylebox_override("hover",face(Color("ffd47e") if gold else Color("357080"),edge,false,radius,margin))
+	b.add_theme_stylebox_override("pressed",face(Color("e6a548") if gold else Color("1b4651"),edge,true,radius,margin))
+	b.add_theme_stylebox_override("hover_pressed",face(Color("e6a548") if gold else Color("1b4651"),edge,true,radius,margin))
+	b.add_theme_stylebox_override("disabled",face(Color(.12,.25,.29,.75),Color(.06,.15,.18,.75),false,radius,margin))
+	b.add_theme_stylebox_override("focus",focus_ring(radius))
+	for key in ["font_color","font_hover_color","font_pressed_color","font_focus_color","font_hover_pressed_color"]:
+		b.add_theme_color_override(key,INK if gold else CREAM)
+	b.add_theme_color_override("font_disabled_color",Color(CREAM,.4))
+
+# One theme for every built-in control, so dropdowns, popups, text fields,
+# lists, scrollbars and dialogs match the cards instead of Godot's grey default.
+func build_theme() -> Theme:
+	var theme=Theme.new()
+	theme.default_font=load("res://assets/interface.ttf")
+	theme.default_font_size=18
+	theme.set_color("font_color","Label",CREAM)
+	for type in ["Button","OptionButton"]:
+		theme.set_stylebox("normal",type,face(TEAL,Color("143a43")))
+		theme.set_stylebox("hover",type,face(Color("357080"),Color("143a43")))
+		theme.set_stylebox("pressed",type,face(Color("1b4651"),Color("143a43"),true))
+		theme.set_stylebox("hover_pressed",type,face(Color("1b4651"),Color("143a43"),true))
+		theme.set_stylebox("disabled",type,face(Color(.12,.25,.29,.75),Color(.06,.15,.18,.75)))
+		theme.set_stylebox("focus",type,focus_ring())
+		for key in ["font_color","font_hover_color","font_pressed_color","font_focus_color","font_hover_pressed_color"]:
+			theme.set_color(key,type,CREAM)
+		theme.set_color("font_disabled_color",type,Color(CREAM,.4))
+	theme.set_color("icon_normal_color","OptionButton",GOLD)
+	theme.set_color("icon_hover_color","OptionButton",GOLD)
+	theme.set_constant("arrow_margin","OptionButton",14)
+	var popup=style(Color("0b232a"),14,EDGE)
+	popup.content_margin_top=8
+	popup.content_margin_bottom=8
+	popup.content_margin_left=8
+	popup.content_margin_right=8
+	popup.shadow_color=Color(0,0,0,.45)
+	popup.shadow_size=12
+	theme.set_stylebox("panel","PopupMenu",popup)
+	var popup_hover=style(Color("2f6874"),10)
+	popup_hover.content_margin_left=10
+	popup_hover.content_margin_right=10
+	theme.set_stylebox("hover","PopupMenu",popup_hover)
+	theme.set_color("font_color","PopupMenu",CREAM)
+	theme.set_color("font_hover_color","PopupMenu",GOLD)
+	theme.set_color("font_disabled_color","PopupMenu",Color(CREAM,.4))
+	theme.set_constant("v_separation","PopupMenu",14)
+	theme.set_constant("item_start_padding","PopupMenu",12)
+	theme.set_constant("item_end_padding","PopupMenu",12)
+	theme.set_font_size("font_size","PopupMenu",18)
+	for type in ["LineEdit","TextEdit"]:
+		var field=style(Color("0a2026"),10,Color("2a5660"))
+		field.content_margin_left=12
+		field.content_margin_right=12
+		field.content_margin_top=8
+		field.content_margin_bottom=8
+		theme.set_stylebox("normal",type,field)
+		var focused=field.duplicate()
+		focused.border_color=GOLD
+		theme.set_stylebox("focus",type,focused)
+		theme.set_stylebox("read_only",type,field)
+		theme.set_color("font_color",type,CREAM)
+		theme.set_color("font_placeholder_color",type,Color("7f9f98"))
+		theme.set_color("caret_color",type,GOLD)
+		theme.set_color("selection_color",type,Color(1,.76,.36,.35))
+	var list=style(Color("0a2026"),12,Color("2a5660"))
+	list.content_margin_left=6
+	list.content_margin_right=6
+	list.content_margin_top=6
+	list.content_margin_bottom=6
+	theme.set_stylebox("panel","ItemList",list)
+	theme.set_stylebox("focus","ItemList",StyleBoxEmpty.new())
+	var picked=style(Color(1,.76,.36,.22),8,GOLD)
+	theme.set_stylebox("selected","ItemList",picked)
+	theme.set_stylebox("selected_focus","ItemList",picked)
+	theme.set_stylebox("hovered","ItemList",style(Color(1,1,1,.06),8))
+	theme.set_color("font_color","ItemList",CREAM)
+	theme.set_color("font_selected_color","ItemList",GOLD)
+	theme.set_color("font_hovered_color","ItemList",CREAM)
+	theme.set_constant("v_separation","ItemList",10)
+	# Slim, rounded scrollbars that only show up where content really overflows.
+	for type in ["VScrollBar","HScrollBar"]:
+		var track=style(Color(1,1,1,.05),4)
+		for side in [SIDE_LEFT,SIDE_RIGHT,SIDE_TOP,SIDE_BOTTOM]:
+			track.set_content_margin(side,3)
+		theme.set_stylebox("scroll",type,track)
+		theme.set_stylebox("scroll_focus",type,track)
+		for state_name in ["grabber","grabber_highlight","grabber_pressed"]:
+			var grab=style(Color("4f8b92") if state_name=="grabber" else Color("6fb0b5") if state_name=="grabber_highlight" else GOLD,4)
+			for side in [SIDE_LEFT,SIDE_RIGHT,SIDE_TOP,SIDE_BOTTOM]:
+				grab.set_content_margin(side,3)
+			theme.set_stylebox(state_name,type,grab)
+	var window=card(Color("0d2930"),18)
+	window.expand_margin_top=36
+	window.content_margin_top=10
+	theme.set_stylebox("embedded_border","Window",window)
+	theme.set_stylebox("embedded_unfocused_border","Window",window)
+	theme.set_color("title_color","Window",GOLD)
+	theme.set_font_size("title_font_size","Window",18)
+	theme.set_constant("title_height","Window",36)
+	theme.set_stylebox("panel","AcceptDialog",StyleBoxEmpty.new())
+	theme.set_color("font_color","LinkButton",MUTED)
+	theme.set_color("font_hover_color","LinkButton",GOLD)
+	theme.set_color("font_pressed_color","LinkButton",GOLD)
+	theme.set_color("font_focus_color","LinkButton",GOLD)
+	var rule=StyleBoxLine.new()
+	rule.color=Color(1,1,1,.1)
+	rule.thickness=1
+	theme.set_stylebox("separator","HSeparator",rule)
+	theme.set_constant("separation","HSeparator",10)
+	return theme
+
+# Anchor a control and set its margins in one go, so layouts stay put when the
+# viewport is wider (phones) or taller (4:3 tablets) than the 1280x720 base.
+func pin(c: Control,anchors: Rect2,left: float,top: float,right: float,bottom: float) -> void:
+	c.anchor_left=anchors.position.x
+	c.anchor_top=anchors.position.y
+	c.anchor_right=anchors.position.x+anchors.size.x
+	c.anchor_bottom=anchors.position.y+anchors.size.y
+	c.offset_left=left
+	c.offset_top=top
+	c.offset_right=right
+	c.offset_bottom=bottom
+
+func center_panel(c: Control,panel_size: Vector2) -> void:
+	pin(c,Rect2(.5,.5,0,0),-panel_size.x*.5,-panel_size.y*.5,panel_size.x*.5,panel_size.y*.5)
+	c.grow_horizontal=Control.GROW_DIRECTION_BOTH
+	c.grow_vertical=Control.GROW_DIRECTION_BOTH
+
 func build_ui() -> void:
 	var canvas=CanvasLayer.new()
 	add_child(canvas)
@@ -189,168 +371,266 @@ func build_ui() -> void:
 	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	canvas.add_child(ui)
-	var theme=Theme.new()
-	theme.default_font=load("res://assets/interface.ttf")
-	theme.default_font_size=18
-	ui.theme=theme
-	menu=PanelContainer.new()
-	menu.position=Vector2(36,36)
-	menu.size=Vector2(450,648)
-	menu.add_theme_stylebox_override("panel",style(Color(.045,.13,.17,.96),24))
-	ui.add_child(menu)
-	var menu_scroll=ScrollContainer.new()
-	menu_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
-	menu.add_child(menu_scroll)
-	var col=VBoxContainer.new()
-	col.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-	col.add_theme_constant_override("separation",8)
-	menu_scroll.add_child(col)
-	col.add_child(label("TOPOGRAFIE · VLIEGAVONTUUR",14,Color("9fc5bc")))
-	col.add_child(label("TopoRotor",52,GOLD))
-	var intro=label("De wereld is je speelveld.\nVlieg je huiswerk tegemoet.",22)
-	col.add_child(intro)
-	col.add_child(HSeparator.new())
-	col.add_child(label("KIES JE VLUCHTGEBIED",13,Color("9fc5bc")))
-	region_select=OptionButton.new()
-	region_select.add_item("Nederland · steden en wateren")
-	region_select.add_item("Europa · landen en hoofdsteden")
-	region_select.custom_minimum_size.y=48
-	region_select.item_selected.connect(func(index): load_world("nl" if index==0 else "eu"))
-	col.add_child(region_select)
-	europe_route_select=OptionButton.new()
-	europe_route_select.add_item("Europa · kort rondje")
-	europe_route_select.add_item("Europa · hoofdsteden (43)")
-	europe_route_select.add_item("Europa · landen (50)")
-	europe_route_select.custom_minimum_size.y=44
-	europe_route_select.visible=false
-	europe_route_select.item_selected.connect(func(_index): update_best_label())
-	col.add_child(europe_route_select)
-	mode_select=OptionButton.new()
-	mode_select.add_item("Leren · alle aanwijzingen")
-	mode_select.add_item("Oefenen · hulp als je dichtbij bent")
-	mode_select.add_item("Records · zonder hints, op snelheid")
-	mode_select.item_selected.connect(func(_index): update_best_label())
-	mode_select.custom_minimum_size.y=48
-	col.add_child(mode_select)
-	col.add_child(button("Online missies",open_online_content))
-	col.add_child(button("Start vliegmissie  →",func(): start_mission(),true))
-	col.add_child(button("Foto / eigen topo-opdrachten",open_photo_dialog))
-	var hint=label("Foto toevoegen, locaties controleren en vliegen.\nJe kunt ook een eigen lijst typen.",14,Color("b1c9c1"))
-	col.add_child(hint)
-	mute_button=button("Geluid: uit" if saved.mute else "Geluid: aan",toggle_sound)
-	col.add_child(mute_button)
-	best_label=label("Klaar voor vertrek, piloot?",15,Color("b1c9c1"))
-	best_label.name="Best"
-	col.add_child(best_label)
-	var credits=LinkButton.new()
-	credits.text="Bronnen en licenties"
-	credits.add_theme_font_size_override("font_size",13)
-	credits.pressed.connect(show_credits)
-	col.add_child(credits)
-	hud=Control.new()
-	hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	hud.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	ui.add_child(hud)
-	var top=PanelContainer.new()
-	top.position=Vector2(24,20)
-	top.size=Vector2(470,112)
-	top.add_theme_stylebox_override("panel",style(Color(.035,.12,.16,.94),18))
-	hud.add_child(top)
-	var topcol=VBoxContainer.new()
-	top.add_child(topcol)
-	progress_label=label("MISSIE 01 / 12",13,Color("a8c8bf"))
-	topcol.add_child(progress_label)
-	title_label=label("Vlieg naar Utrecht",26,GOLD)
-	topcol.add_child(title_label)
-	detail_label=label("",15)
-	topcol.add_child(detail_label)
-	var pause=button("Pauze",pause_flight)
-	pause.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	pause.position=Vector2(-157,20)
-	pause.size=Vector2(133,52)
-	hud.add_child(pause)
-	minimap=FlightMinimap.new()
-	minimap.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	minimap.position=Vector2(-284,88)
-	minimap.size=Vector2(260,230)
-	minimap.mouse_filter=Control.MOUSE_FILTER_STOP
-	hud.add_child(minimap)
-	var height_panel=PanelContainer.new()
-	height_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	height_panel.position=Vector2(-234,330)
-	height_panel.size=Vector2(210,108)
-	height_panel.add_theme_stylebox_override("panel",style(Color(.035,.12,.16,.94),14))
-	hud.add_child(height_panel)
-	var height_col=VBoxContainer.new()
-	height_panel.add_child(height_col)
-	height_label=label("Vlieghoogte · Laag",15,GOLD)
-	height_col.add_child(height_label)
-	var height_row=HBoxContainer.new()
-	height_col.add_child(height_row)
-	lower_button=button("Lager −",func(): change_height(-1))
-	higher_button=button("Hoger +",func(): change_height(1))
-	for control in [lower_button,higher_button]:
-		control.custom_minimum_size=Vector2(82,42)
-		control.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-		control.add_theme_font_size_override("font_size",15)
-		for visual in ["normal","hover","pressed"]:
-			var compact=style(Color("28505a"),10)
-			compact.content_margin_left=8
-			compact.content_margin_right=8
-			compact.content_margin_top=8
-			compact.content_margin_bottom=8
-			control.add_theme_stylebox_override(visual,compact)
-		height_row.add_child(control)
-	update_height_controls()
-	joystick=FlightJoystick.new()
-	joystick.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	joystick.position=Vector2(28,-205)
-	joystick.size=Vector2(180,180)
-	hud.add_child(joystick)
-	var movement=label("STUREN",12,CREAM)
-	movement.position=Vector2(90,-26)
-	joystick.add_child(movement)
-	var actions=VBoxContainer.new()
-	actions.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	actions.position=Vector2(-270,-225)
-	actions.size=Vector2(246,200)
-	actions.add_theme_constant_override("separation",10)
-	hud.add_child(actions)
-	actions.add_child(button("Hier is het!  ✓",answer,true))
-	hint_button=button("Hint / kaartnamen",toggle_hint)
-	actions.add_child(hint_button)
-	actions.add_child(button("Overzichtskaart",toggle_overview))
-	var status_panel=PanelContainer.new()
-	status_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	status_panel.position=Vector2(235,-86)
-	status_panel.size=Vector2(485,64)
-	status_panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	status_panel.add_theme_stylebox_override("panel",style(Color(.035,.12,.16,.9),14))
-	hud.add_child(status_panel)
-	status_label=label("",16,CREAM)
-	status_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-	status_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	status_panel.add_child(status_label)
-	hud.hide()
+	ui.theme=build_theme()
+	build_menu()
+	build_hud()
 	pause_backdrop=ColorRect.new()
 	pause_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	pause_backdrop.color=Color(.015,.055,.07,.7)
 	ui.add_child(pause_backdrop)
 	pause_backdrop.hide()
 	pause_panel=PanelContainer.new()
-	pause_panel.position=Vector2(440,200)
-	pause_panel.size=Vector2(400,300)
-	pause_panel.add_theme_stylebox_override("panel",style(Color(.04,.13,.17,.97),24))
+	pause_panel.add_theme_stylebox_override("panel",card(PANEL_SOLID,24))
 	ui.add_child(pause_panel)
+	center_panel(pause_panel,Vector2(420,300))
 	var pausecol=VBoxContainer.new()
 	pausecol.add_theme_constant_override("separation",14)
 	pause_panel.add_child(pausecol)
-	pausecol.add_child(label("PAUZE",16,Color("a8c8bf")))
-	pausecol.add_child(label("Je missie staat stil.",26,GOLD))
+	pausecol.add_child(kicker("PAUZE"))
+	pausecol.add_child(title("Je missie staat stil.",30))
 	pausecol.add_child(button("Verder vliegen  →",resume_flight,true))
 	pausecol.add_child(button("Stoppen · terug naar de hangar",return_menu))
 	pause_panel.hide()
 	build_photo_dialog()
+
+func title(text: String,size_px: int) -> Label:
+	var l=label(text,size_px,GOLD)
+	l.add_theme_color_override("font_outline_color",Color("0a1d22"))
+	l.add_theme_constant_override("outline_size",max(4,size_px/6))
+	l.add_theme_color_override("font_shadow_color",Color(0,0,0,.45))
+	l.add_theme_constant_override("shadow_offset_y",3)
+	l.add_theme_constant_override("shadow_offset_x",0)
+	return l
+
+func build_menu() -> void:
+	menu=PanelContainer.new()
+	var menu_style=card(PANEL,26)
+	menu_style.content_margin_left=28
+	menu_style.content_margin_right=28
+	menu_style.content_margin_top=24
+	menu_style.content_margin_bottom=22
+	menu.add_theme_stylebox_override("panel",menu_style)
+	ui.add_child(menu)
+	# Sized by its content and vertically centred. With the "expand" stretch
+	# aspect the viewport is never shorter than 720 px, and the smoke test checks
+	# the tallest variant (Europe route picker visible) still fits, so no
+	# scrollbar is needed on phones, tablets or desktop.
+	pin(menu,Rect2(0,.5,0,0),32,-300,500,300)
+	menu.grow_vertical=Control.GROW_DIRECTION_BOTH
+	var col=VBoxContainer.new()
+	col.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	col.add_theme_constant_override("separation",8)
+	menu.add_child(col)
+	var brand=HBoxContainer.new()
+	brand.add_theme_constant_override("separation",12)
+	col.add_child(brand)
+	brand.add_child(title("TopoRotor",54))
+	var badge=label("VLIEGAVONTUUR",12,INK)
+	badge.add_theme_stylebox_override("normal",chip(GOLD))
+	badge.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+	brand.add_child(badge)
+	var intro=label("Vlieg je topografie-huiswerk tegemoet.",18,Color("d9e6df"))
+	intro.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(intro)
+	var bar=ColorRect.new()
+	bar.color=GOLD
+	bar.custom_minimum_size=Vector2(64,4)
+	bar.size_flags_horizontal=Control.SIZE_SHRINK_BEGIN
+	col.add_child(bar)
+	col.add_child(spacer(4))
+	col.add_child(kicker("VLUCHTGEBIED"))
+	region_select=OptionButton.new()
+	region_select.add_item("Nederland · steden en wateren")
+	region_select.add_item("Europa · landen en hoofdsteden")
+	region_select.custom_minimum_size.y=50
+	region_select.item_selected.connect(func(index): load_world("nl" if index==0 else "eu"))
+	col.add_child(region_select)
+	europe_route_select=OptionButton.new()
+	europe_route_select.add_item("Europa · kort rondje")
+	europe_route_select.add_item("Europa · hoofdsteden (43)")
+	europe_route_select.add_item("Europa · landen (50)")
+	europe_route_select.custom_minimum_size.y=46
+	europe_route_select.visible=false
+	europe_route_select.item_selected.connect(func(_index): update_best_label())
+	col.add_child(europe_route_select)
+	col.add_child(kicker("SPELMODUS"))
+	mode_select=OptionButton.new()
+	mode_select.add_item("Leren · alle aanwijzingen")
+	mode_select.add_item("Oefenen · hulp als je dichtbij bent")
+	mode_select.add_item("Records · zonder hints, op snelheid")
+	mode_select.item_selected.connect(func(_index): update_best_label())
+	mode_select.custom_minimum_size.y=50
+	col.add_child(mode_select)
+	col.add_child(spacer(4))
+	var start=button("START VLIEGMISSIE  →",func(): start_mission(),true)
+	start.custom_minimum_size.y=64
+	start.add_theme_font_size_override("font_size",23)
+	col.add_child(start)
+	var extras=HBoxContainer.new()
+	extras.add_theme_constant_override("separation",10)
+	col.add_child(extras)
+	for entry in [["Online missies",open_online_content],["Foto / eigen lijst",open_photo_dialog]]:
+		var b=button(entry[0],entry[1])
+		b.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		b.size_flags_stretch_ratio=1.0
+		b.custom_minimum_size=Vector2(0,48)
+		b.add_theme_font_size_override("font_size",17)
+		b.clip_text=true
+		extras.add_child(b)
+	var hint=label("Fotografeer je werkblad of typ zelf een lijst plaatsen.",14,MUTED)
+	hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(hint)
+	var stats=PanelContainer.new()
+	var stats_style=style(Color(.08,.21,.25,.85),14,EDGE)
+	stats_style.content_margin_top=10
+	stats_style.content_margin_bottom=10
+	stats_style.content_margin_left=16
+	stats_style.content_margin_right=16
+	stats.add_theme_stylebox_override("panel",stats_style)
+	col.add_child(stats)
+	best_label=label("Klaar voor vertrek, piloot?",16,CREAM)
+	best_label.name="Best"
+	best_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	stats.add_child(best_label)
+	var footer=HBoxContainer.new()
+	footer.add_theme_constant_override("separation",12)
+	col.add_child(footer)
+	mute_button=button("Geluid: uit" if saved.mute else "Geluid: aan",toggle_sound)
+	mute_button.custom_minimum_size=Vector2(150,40)
+	mute_button.add_theme_font_size_override("font_size",15)
+	style_button(mute_button,false,12,12)
+	footer.add_child(mute_button)
+	var credits=LinkButton.new()
+	credits.text="Bronnen en licenties"
+	credits.add_theme_font_size_override("font_size",14)
+	credits.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	credits.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+	credits.pressed.connect(show_credits)
+	footer.add_child(credits)
+
+func chip(color: Color) -> StyleBoxFlat:
+	var s=style(color,8)
+	s.content_margin_left=8
+	s.content_margin_right=8
+	s.content_margin_top=3
+	s.content_margin_bottom=3
+	return s
+
+func spacer(height: float) -> Control:
+	var c=Control.new()
+	c.custom_minimum_size.y=height
+	c.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	return c
+
+func build_hud() -> void:
+	hud=Control.new()
+	hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hud.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	ui.add_child(hud)
+	var top_left=Rect2(0,0,0,0)
+	var top_right=Rect2(1,0,0,0)
+	var bottom_left=Rect2(0,1,0,0)
+	var bottom_right=Rect2(1,1,0,0)
+	var top=PanelContainer.new()
+	var top_style=card(PANEL,18,true)
+	top_style.content_margin_left=20
+	top_style.content_margin_top=12
+	top_style.content_margin_bottom=12
+	top.add_theme_stylebox_override("panel",top_style)
+	top.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	hud.add_child(top)
+	pin(top,top_left,24,20,464,120)
+	var topcol=VBoxContainer.new()
+	topcol.add_theme_constant_override("separation",2)
+	top.add_child(topcol)
+	progress_label=kicker("MISSIE 01 / 12")
+	topcol.add_child(progress_label)
+	title_label=title("Vlieg naar Utrecht",27)
+	title_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
+	title_label.clip_text=true
+	topcol.add_child(title_label)
+	detail_label=label("",15,Color("d9e6df"))
+	detail_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
+	detail_label.clip_text=true
+	topcol.add_child(detail_label)
+	compass=FlightCompass.new()
+	hud.add_child(compass)
+	pin(compass,Rect2(.5,0,0,0),-150,20,150,66)
+	compass.grow_horizontal=Control.GROW_DIRECTION_BOTH
+	var pause=button("Pauze",pause_flight)
+	pause.add_theme_font_size_override("font_size",17)
+	hud.add_child(pause)
+	pin(pause,top_right,-157,20,-24,70)
+	minimap=FlightMinimap.new()
+	hud.add_child(minimap)
+	pin(minimap,top_right,-284,84,-24,314)
+	minimap.mouse_filter=Control.MOUSE_FILTER_STOP
+	var height_panel=PanelContainer.new()
+	height_panel.add_theme_stylebox_override("panel",compact_card())
+	hud.add_child(height_panel)
+	pin(height_panel,top_right,-284,326,-24,426)
+	var height_col=VBoxContainer.new()
+	height_col.add_theme_constant_override("separation",8)
+	height_panel.add_child(height_col)
+	height_label=label("Vlieghoogte · Laag",15,GOLD)
+	height_col.add_child(height_label)
+	var height_row=HBoxContainer.new()
+	height_row.add_theme_constant_override("separation",8)
+	height_col.add_child(height_row)
+	lower_button=button("Lager −",func(): change_height(-1))
+	higher_button=button("Hoger +",func(): change_height(1))
+	for control in [lower_button,higher_button]:
+		control.custom_minimum_size=Vector2(0,42)
+		control.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		control.add_theme_font_size_override("font_size",15)
+		style_button(control,false,10,8)
+		height_row.add_child(control)
+	update_height_controls()
+	joystick=FlightJoystick.new()
+	hud.add_child(joystick)
+	pin(joystick,bottom_left,28,-210,208,-30)
+	var movement=label("↑ VOORUIT   ← → DRAAIEN",11,CREAM)
+	movement.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	movement.add_theme_color_override("font_outline_color",Color("0a1d22"))
+	movement.add_theme_constant_override("outline_size",4)
+	movement.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	joystick.add_child(movement)
+	pin(movement,Rect2(0,0,1,0),-20,-22,20,-4)
+	var actions=VBoxContainer.new()
+	actions.add_theme_constant_override("separation",10)
+	actions.alignment=BoxContainer.ALIGNMENT_END
+	hud.add_child(actions)
+	pin(actions,bottom_right,-284,-236,-24,-24)
+	var found=button("Hier is het!  ✓",answer,true)
+	found.custom_minimum_size.y=60
+	found.add_theme_font_size_override("font_size",22)
+	actions.add_child(found)
+	hint_button=button("Hint / kaartnamen",toggle_hint)
+	actions.add_child(hint_button)
+	actions.add_child(button("Overzichtskaart",toggle_overview))
+	var status_panel=PanelContainer.new()
+	status_panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	var status_style=card(Color(.03,.1,.13,.88),14)
+	status_style.content_margin_top=10
+	status_style.content_margin_bottom=10
+	status_panel.add_theme_stylebox_override("panel",status_style)
+	hud.add_child(status_panel)
+	pin(status_panel,Rect2(0,1,1,0),232,-84,-308,-24)
+	status_panel.grow_vertical=Control.GROW_DIRECTION_BEGIN
+	status_label=label("",16,CREAM)
+	status_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	status_label.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
+	status_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	status_panel.add_child(status_label)
+	hud.hide()
+
+func compact_card() -> StyleBoxFlat:
+	var s=card(PANEL,14)
+	s.content_margin_left=12
+	s.content_margin_right=12
+	s.content_margin_top=10
+	s.content_margin_bottom=12
+	return s
 
 func show_credits() -> AcceptDialog:
 	var dialog=AcceptDialog.new()
@@ -387,8 +667,8 @@ func update_best_label() -> void:
 	var best=float(saved.get("records",{}).get(record_key(selected_presets()),0.0))
 	var practice=clampi(int(saved.best.get(region+"_oefenen",0)),0,3)
 	var records=clampi(int(saved.best.get(region+"_test",0)),0,3)
-	best_label.text="Oefenen: %s · Records: %s\n" % ["★".repeat(practice)+"☆".repeat(3-practice),"★".repeat(records)+"☆".repeat(3-records)]
-	best_label.text+="Beste gekozen route: %.1f sec" % best if best>0 else "Zet je eerste recordtijd neer!"
+	best_label.text="Oefenen %s   ·   Records %s\n" % ["★".repeat(practice)+"☆".repeat(3-practice),"★".repeat(records)+"☆".repeat(3-records)]
+	best_label.text+="Beste tijd gekozen route: %.1f sec" % best if best>0 else "Zet je eerste recordtijd neer!"
 
 func record_key(places: Array) -> String:
 	var route: Array=[]
@@ -430,9 +710,14 @@ func start_mission(custom: Array = [],as_custom: bool = true) -> void:
 	velocity=Vector2.ZERO
 	joystick.reset()
 	helicopter.position=world.project(SPAWN.x,SPAWN.y)+Vector3(0,flight_altitude(),0)
+	heading=0.0
+	helicopter.rotation.y=heading
 	if not saved.mute:
 		rotor_audio.play()
 	camera.size=flight_zoom()
+	update_flight_camera(0.0,true)
+	compass.heading=heading
+	minimap.heading=heading
 	update_goal()
 
 func update_goal() -> void:
@@ -446,6 +731,8 @@ func update_goal() -> void:
 	progress_label.text="%s  ·  MISSIE %02d / %02d" % [MODE_NAMES[game_mode],mission_index+1,mission.size()]
 	title_label.text=("Vlieg boven " if p.kind=="land" else "Vlieg naar ")+p.name
 	status_label.text="Zoek %s. Druk op ‘Hier is het!’ als je er bent." % p.name
+	if mission_index==0:
+		status_label.text+=" Omhoog vliegt vooruit, links/rechts draait de heli."
 	goal_mistakes=0
 	answer_cooldown=0.0
 
@@ -455,25 +742,12 @@ func _process(delta: float) -> void:
 	flight_time+=delta
 	answer_cooldown=max(0,answer_cooldown-delta)
 	keyboard=Vector2(float(Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT))-float(Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT)),float(Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN))-float(Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP)))
-	var direction=(keyboard+joystick.value).limit_length()
-	var speed=10.0 if region=="nl" else 42.0
-	# Exponential smoothing keeps steering consistent across frame rates.
-	var response=9.0 if direction.is_zero_approx() else 6.0
-	velocity=velocity.lerp(direction*speed,1.0-exp(-response*delta))
-	helicopter.position.x=clamp(helicopter.position.x+velocity.x*delta,world.bounds.position.x+1,world.bounds.end.x-1)
-	helicopter.position.z=clamp(helicopter.position.z+velocity.y*delta,world.bounds.position.y+1,world.bounds.end.y-1)
-	if velocity.length()>1:
-		helicopter.rotation.y=lerp_angle(helicopter.rotation.y,atan2(-velocity.x,-velocity.y),1.0-exp(-8.0*delta))
-	helicopter.lean(direction,delta)
-	helicopter.position.y=lerp(helicopter.position.y,flight_altitude(),min(delta*2.5,1.0))
-	var cam_goal=helicopter.position+(Vector3(0,38,44) if region=="nl" else Vector3(0,95,72))
-	if show_overview:
-		cam_goal=Vector3(world.bounds.get_center().x,600,world.bounds.get_center().y+400)
-	camera.position=camera.position.lerp(cam_goal,min(delta*3,1.0))
-	camera.look_at(Vector3(world.bounds.get_center().x,0,world.bounds.get_center().y) if show_overview else helicopter.position,Vector3.UP)
-	camera.size=lerp(camera.size,(max(world.bounds.size.x,world.bounds.size.y)*1.03 if show_overview else flight_zoom()),min(delta*3,1.0))
+	steer((keyboard+joystick.value).limit_length(),delta)
+	update_flight_camera(delta)
 	refresh_mode_hints()
 	minimap.aircraft=helicopter.position
+	minimap.heading=heading
+	compass.heading=heading
 	minimap.refresh_navigation()
 	world.refresh_labels(helicopter.position,show_overview,camera.size)
 	world.set_boundary_detail(camera.size)
@@ -482,6 +756,47 @@ func _process(delta: float) -> void:
 		var km=distance_km(p)
 		var nav="Afstand: %d km" % km if game_mode==GameMode.LEARN else "Je bent dichtbij!" if show_hints else "Zoek zelf de juiste plek."
 		detail_label.text="%s  ·  %s %.1f sec  ·  %d gevonden" % [nav,"Recordtijd" if exam else "Vliegtijd",flight_time+mistakes*10.0 if exam else flight_time,completed.size()]
+
+# Pilot-relative controls: x turns the helicopter, -y flies along the nose.
+# Reversing is slower so the chase camera never has to swing round.
+func steer(direction: Vector2,delta: float) -> void:
+	var turn=direction.x
+	var throttle=-direction.y
+	heading=wrapf(heading-turn*TURN_RATE*delta,-PI,PI)
+	helicopter.rotation.y=heading
+	var thrust=throttle if throttle>0 else throttle*REVERSE_FACTOR
+	var speed=10.0 if region=="nl" else 42.0
+	# Exponential smoothing keeps steering consistent across frame rates.
+	var response=9.0 if is_zero_approx(throttle) else 6.0
+	velocity=velocity.lerp(nose_direction(heading)*thrust*speed,1.0-exp(-response*delta))
+	helicopter.position.x=clamp(helicopter.position.x+velocity.x*delta,world.bounds.position.x+1,world.bounds.end.x-1)
+	helicopter.position.z=clamp(helicopter.position.z+velocity.y*delta,world.bounds.position.y+1,world.bounds.end.y-1)
+	helicopter.lean(Vector2(turn,throttle),delta)
+	helicopter.position.y=lerp(helicopter.position.y,flight_altitude(),min(delta*2.5,1.0))
+
+# World (x,z) direction of the nose. rotation.y 0 points north (-z).
+static func nose_direction(yaw: float) -> Vector2:
+	return Vector2(-sin(yaw),-cos(yaw))
+
+# Chase view: behind and above the helicopter, turning with it. The overview
+# stays north-up so the whole map keeps its familiar orientation.
+func update_flight_camera(delta: float,snap: bool=false) -> void:
+	var blend=1.0 if snap else 1.0-exp(-CAMERA_FOLLOW*delta)
+	if show_overview:
+		var center=world.bounds.get_center()
+		camera.position=camera.position.lerp(Vector3(center.x,600,center.y+400),1.0 if snap else min(delta*3,1.0))
+		camera.look_at(Vector3(center.x,0,center.y),Vector3.UP)
+		camera.size=lerp(camera.size,max(world.bounds.size.x,world.bounds.size.y)*1.03,1.0 if snap else min(delta*3,1.0))
+		return
+	camera_yaw=lerp_angle(camera_yaw,heading,1.0 if snap else 1.0-exp(-CAMERA_TURN*delta))
+	var nose=nose_direction(camera_yaw)
+	var ahead=Vector3(nose.x,0,nose.y)
+	var height=38.0 if region=="nl" else 95.0
+	var back=44.0 if region=="nl" else 72.0
+	camera.position=camera.position.lerp(helicopter.position+Vector3(0,height,0)-ahead*back,blend)
+	camera.size=lerp(camera.size,flight_zoom(),1.0 if snap else min(delta*3,1.0))
+	# Aim slightly ahead so more of the route is visible than what lies behind.
+	camera.look_at(helicopter.position+ahead*camera.size*LOOK_AHEAD,Vector3.UP)
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -639,16 +954,20 @@ func finish_mission() -> void:
 		else:
 			record_result="Tijd %.1f sec · record %.1f sec" % [score,previous]
 	summary=PanelContainer.new()
-	summary.position=Vector2(340,110)
-	summary.size=Vector2(600,500)
-	summary.add_theme_stylebox_override("panel",style(Color(.04,.13,.17,.97),24))
+	var summary_style=card(PANEL_SOLID,26)
+	summary_style.content_margin_left=32
+	summary_style.content_margin_right=32
+	summary_style.content_margin_top=26
+	summary_style.content_margin_bottom=26
+	summary.add_theme_stylebox_override("panel",summary_style)
 	ui.add_child(summary)
+	center_panel(summary,Vector2(600,0))
 	var col=VBoxContainer.new()
-	col.add_theme_constant_override("separation",18)
+	col.add_theme_constant_override("separation",14)
 	summary.add_child(col)
-	col.add_child(label("MISSIE VOLTOOID",16,Color("a8c8bf")))
-	col.add_child(label("Goed gevlogen, piloot!",32,GOLD))
-	col.add_child(label("★".repeat(stars)+"☆".repeat(3-stars),52,GOLD))
+	col.add_child(kicker("MISSIE VOLTOOID"))
+	col.add_child(title("Goed gevlogen, piloot!",34))
+	col.add_child(title("★".repeat(stars)+"☆".repeat(3-stars),52))
 	col.add_child(label("%d locaties gevonden · %d pogingen mis\nVliegtijd %02d:%02d" % [completed.size(),mistakes,int(flight_time)/60,int(flight_time)%60],21))
 	if not missed.is_empty():
 		var shown=PackedStringArray()
@@ -757,10 +1076,9 @@ func build_photo_dialog() -> void:
 	ui.add_child(photo_backdrop)
 	photo_backdrop.hide()
 	photo_dialog=PanelContainer.new()
-	photo_dialog.position=Vector2(70,40)
-	photo_dialog.size=Vector2(1140,640)
-	photo_dialog.add_theme_stylebox_override("panel",style(Color("102c36"),22))
+	photo_dialog.add_theme_stylebox_override("panel",card(Color("0f2a33"),24))
 	ui.add_child(photo_dialog)
+	center_panel(photo_dialog,PHOTO_SIZE)
 	photo_dialog.hide()
 	var layout=VBoxContainer.new()
 	layout.add_theme_constant_override("separation",8)
@@ -797,7 +1115,9 @@ func build_photo_dialog() -> void:
 	right.add_child(mission_text)
 	mission_text.text_changed.connect(validate_custom)
 	import_status=label("Voer eerst de locaties in.",14,GOLD)
-	import_status.clip_text=true
+	# clip_text plus autowrap collapses a Label to zero height, which hid this
+	# status line entirely; reserve two lines instead.
+	import_status.custom_minimum_size.y=44
 	import_status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	import_status.max_lines_visible=2
 	import_status.mouse_filter=Control.MOUSE_FILTER_PASS
@@ -863,7 +1183,7 @@ func open_photo_dialog() -> void:
 			photo_bytes=img.save_png_to_buffer()
 			photo_preview.texture=ImageTexture.create_from_image(img)
 	validate_custom()
-	photo_dialog.size=Vector2(1140,640)
+	center_panel(photo_dialog,PHOTO_SIZE)
 	photo_backdrop.show()
 	photo_dialog.show()
 	call_deferred("fit_photo_panel")
@@ -871,8 +1191,7 @@ func open_photo_dialog() -> void:
 func fit_photo_panel() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
-	photo_dialog.size=Vector2(1140,640)
-	photo_dialog.position=Vector2(70,40)
+	center_panel(photo_dialog,PHOTO_SIZE)
 
 func import_photo(path: String) -> void:
 	var file=FileAccess.open(path,FileAccess.READ)
@@ -905,7 +1224,6 @@ func import_photo(path: String) -> void:
 	if not is_test_mode and not is_capture_mode and img.save_png("user://worksheet.png")!=OK:
 		push_warning("De foto is geladen, maar kon niet lokaal worden bewaard.")
 	photo_preview.texture=ImageTexture.create_from_image(img)
-	photo_dialog.size=Vector2(1140,640)
 	call_deferred("fit_photo_panel")
 	import_status.text="Foto toegevoegd. Typ de namen over of gebruik tekstherkenning."
 
@@ -1233,6 +1551,29 @@ func smoke_test() -> void:
 	assert(world.mat(Color.WHITE)==world.mat(Color.WHITE),"Materials are reused")
 	assert(world.mat(Color.WHITE)!=world.mat(Color.WHITE,false,true),"Cull variants stay separate")
 	assert(not world.mat(Color.WHITE).vertex_color_use_as_albedo,"Field vertex colors do not leak into shared materials")
+	# Chase camera: pilot-relative steering and a view that turns with the nose.
+	assert(is_zero_approx(heading) and camera.position.z>helicopter.position.z,"Mission starts nose north with the camera behind")
+	var steer_start=helicopter.position
+	for i in 30:
+		steer(Vector2(0,-1),1.0/30.0)
+	assert(helicopter.position.z<steer_start.z-1.0 and absf(helicopter.position.x-steer_start.x)<.01,"Forward flies along the nose (north)")
+	for i in 60:
+		steer(Vector2(1,0),1.0/60.0)
+	assert(heading<-1.5 and heading>-2.6,"Right stick turns clockwise seen from above")
+	assert(FlightCompass.bearing(heading)>85 and FlightCompass.bearing(heading)<150,"Compass reads an easterly bearing after turning right")
+	velocity=Vector2.ZERO
+	var turn_start=helicopter.position
+	for i in 30:
+		steer(Vector2(0,-1),1.0/30.0)
+	assert(helicopter.position.x>turn_start.x+1.0,"After turning right, forward flies east")
+	update_flight_camera(0.0,true)
+	var behind=Vector2(camera.position.x-helicopter.position.x,camera.position.z-helicopter.position.z).normalized()
+	assert(behind.dot(-nose_direction(heading))>.99,"Camera sits behind the nose after a turn")
+	for i in 30:
+		steer(Vector2(0,1),1.0/30.0)
+	assert(velocity.length()<(10.0 if region=="nl" else 42.0)*REVERSE_FACTOR+.01,"Reversing is slower than forward flight")
+	start_mission([catalog.lookup.arnhem])
+	assert(is_zero_approx(heading),"New mission resets the heading")
 	var flight_start=helicopter.position
 	var close_zoom=flight_zoom()
 	var low_altitude=flight_altitude()
@@ -1440,6 +1781,13 @@ func smoke_test() -> void:
 	assert(state=="summary","Vatican fallback accepts its reference point")
 	mode_select.select(GameMode.LEARN)
 	return_menu()
+	# Layout must fit the base viewport without a scrollbar in the hangar menu.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert(europe_route_select.visible,"Layout check covers the tallest menu variant")
+	var screen=get_viewport().get_visible_rect()
+	assert(screen.encloses(menu.get_global_rect()),"Hangar menu fits on screen without scrolling")
+	assert(menu.get_global_rect().size.y<=screen.size.y-32,"Hangar menu keeps a margin")
 	print("SMOKE TEST PASSED: parsing, coordinates, land boundaries, flight scoring, custom missions")
 	await get_tree().process_frame
 	get_tree().quit()
