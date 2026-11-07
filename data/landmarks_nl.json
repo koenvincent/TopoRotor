@@ -202,6 +202,56 @@
     "Heerlen": [
       {"name": "Schachtbok Oranje-Nassaumijn", "type": "headframe", "at": [-3.0, 2.6]},
       {"name": "Glaspaleis", "type": "skyscraper", "at": [2.6, -2.4], "height": 2.6, "width": 2.2, "color": "a9d6dc", "glass": true}
+    ],
+    "Enkhuizen": [
+      {"name": "Drommedaris", "type": "harbour_tower", "at": [1.4, -1.2], "round": true},
+      {"name": "Westerkerk", "type": "church", "at": [-1.6, 0.8], "color": "c2a37c", "height": 4.6, "top": "lantern", "length": 2.6}
+    ],
+    "Purmerend": [
+      {"name": "Koemarkt en Koepelkerk", "type": "church", "at": [1.2, 1.0], "color": "b58f6a", "height": 3.4, "top": "lantern", "length": 2.4}
+    ],
+    "Zaandam": [
+      {"name": "Molens van de Zaanse Schans", "type": "windmill", "at": [1.6, -1.8], "height": 4.0},
+      {"name": "Verkade-molen De Bleeke Dood", "type": "windmill", "at": [-1.6, 1.0], "height": 3.4}
+    ],
+    "Amstelveen": [
+      {"name": "Cobra Museum", "type": "museum", "at": [1.0, 1.0], "color": "d9d4c7", "towers": 0, "length": 3.0}
+    ],
+    "Hilversum": [
+      {"name": "Raadhuis van Dudok", "type": "museum", "at": [1.4, 1.2], "color": "c9b79a", "towers": 1, "length": 3.4}
+    ],
+    "Alphen aan den Rijn": [
+      {"name": "Molen De Eendracht", "type": "windmill", "at": [1.4, -1.2], "height": 3.8}
+    ],
+    "Zoetermeer": [
+      {"name": "SnowWorld-skihal", "type": "hall", "at": [1.4, -1.4], "length": 4.0, "color": "dfe7ea"}
+    ],
+    "Delfzijl": [
+      {"name": "Molen Adam", "type": "windmill", "at": [-1.2, 1.0], "height": 4.2},
+      {"name": "Zeesluis Farmsum", "type": "lock", "at": [1.6, -1.6]}
+    ],
+    "Veendam": [
+      {"name": "Veenkoloniaal Museum", "type": "museum", "at": [1.2, 1.0], "color": "b07155", "towers": 0, "length": 2.8}
+    ],
+    "Hoogeveen": [
+      {"name": "Grote Kerk", "type": "church", "at": [1.2, -1.0], "color": "c4ac86", "height": 4.4, "top": "spire", "length": 2.6}
+    ],
+    "Meppel": [
+      {"name": "Grote of Mariakerk", "type": "church", "at": [-1.2, -1.0], "color": "b48d6a", "height": 4.8, "top": "lantern", "length": 2.8}
+    ],
+    "Emmeloord": [
+      {"name": "Poldertoren", "type": "spire", "at": [1.0, 1.0], "color": "b07a55", "height": 5.6}
+    ],
+    "Kampen": [
+      {"name": "Koornmarktspoort", "type": "gate", "at": [1.6, 1.2], "color": "a8694c", "pointed": true},
+      {"name": "Kamper Kogge", "type": "ship", "at": [-1.6, 1.4], "color": "6b4a32", "masts": 1},
+      {"name": "Nieuwe Toren", "type": "spire", "at": [0.4, -1.6], "color": "bca783", "height": 5.2}
+    ],
+    "Almelo": [
+      {"name": "Huize Almelo", "type": "castle", "at": [1.4, -1.4], "moat": true}
+    ],
+    "Roosendaal": [
+      {"name": "Sint-Janskerk", "type": "church", "at": [1.2, 1.0], "color": "b89c76", "height": 4.8, "top": "spire", "length": 2.8}
     ]
   }
 }

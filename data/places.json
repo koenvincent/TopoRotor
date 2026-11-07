@@ -35,7 +35,9 @@
     "lon": 5.1214,
     "region": "nl",
     "kind": "stad",
-    "aliases": [],
+    "aliases": [
+      "Utrecht (stad)"
+    ],
     "code": ""
   },
   {
@@ -80,7 +82,9 @@
     "lon": 6.5665,
     "region": "nl",
     "kind": "stad",
-    "aliases": [],
+    "aliases": [
+      "Groningen (stad)"
+    ],
     "code": ""
   },
   {
@@ -456,6 +460,141 @@
     "code": ""
   },
   {
+    "name": "Enkhuizen",
+    "lat": 52.7034,
+    "lon": 5.2915,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Purmerend",
+    "lat": 52.505,
+    "lon": 4.9597,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Zaandam",
+    "lat": 52.442,
+    "lon": 4.8292,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Amstelveen",
+    "lat": 52.3114,
+    "lon": 4.8701,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Hilversum",
+    "lat": 52.2292,
+    "lon": 5.1669,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Alphen aan den Rijn",
+    "lat": 52.1291,
+    "lon": 4.6556,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Zoetermeer",
+    "lat": 52.0607,
+    "lon": 4.494,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Delfzijl",
+    "lat": 53.33,
+    "lon": 6.918,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Veendam",
+    "lat": 53.1067,
+    "lon": 6.8792,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Hoogeveen",
+    "lat": 52.7225,
+    "lon": 6.4764,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Meppel",
+    "lat": 52.6956,
+    "lon": 6.1944,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Emmeloord",
+    "lat": 52.7108,
+    "lon": 5.7486,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Kampen",
+    "lat": 52.555,
+    "lon": 5.9111,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Almelo",
+    "lat": 52.3567,
+    "lon": 6.6625,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Roosendaal",
+    "lat": 51.5308,
+    "lon": 4.4653,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
     "name": "Noord-Holland",
     "lat": 52.65,
     "lon": 4.88,
@@ -479,7 +618,9 @@
     "lon": 5.28,
     "region": "nl",
     "kind": "provincie",
-    "aliases": [],
+    "aliases": [
+      "Utrecht (provincie)"
+    ],
     "code": ""
   },
   {
@@ -497,7 +638,11 @@
     "lon": 5.85,
     "region": "nl",
     "kind": "provincie",
-    "aliases": [],
+    "aliases": [
+      "Fryslân",
+      "Friesland (Fryslân)",
+      "Fryslân (Friesland)"
+    ],
     "code": ""
   },
   {
@@ -506,7 +651,9 @@
     "lon": 6.75,
     "region": "nl",
     "kind": "provincie",
-    "aliases": [],
+    "aliases": [
+      "Groningen (provincie)"
+    ],
     "code": ""
   },
   {
@@ -654,6 +801,58 @@
     "code": ""
   },
   {
+    "name": "Neder-Rijn",
+    "lat": 51.97,
+    "lon": 5.76,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": "",
+    "radius_km": 10
+  },
+  {
+    "name": "Lek",
+    "lat": 51.96,
+    "lon": 4.95,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": "",
+    "radius_km": 10
+  },
+  {
+    "name": "Noordzeekanaal",
+    "lat": 52.43,
+    "lon": 4.7,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": "",
+    "radius_km": 8
+  },
+  {
+    "name": "Nieuwe Waterweg",
+    "lat": 51.93,
+    "lon": 4.2,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": "",
+    "radius_km": 8
+  },
+  {
+    "name": "Amsterdam-Rijnkanaal",
+    "lat": 52.19,
+    "lon": 5.02,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [
+      "Amsterdam Rijnkanaal"
+    ],
+    "code": "",
+    "radius_km": 8
+  },
+  {
     "name": "Texel",
     "lat": 53.05,
     "lon": 4.8,
@@ -697,6 +896,110 @@
     "kind": "eiland",
     "aliases": [],
     "code": ""
+  },
+  {
+    "name": "Randstad",
+    "lat": 52.1,
+    "lon": 4.75,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [],
+    "code": "",
+    "radius_km": 30
+  },
+  {
+    "name": "Rijnmond",
+    "lat": 51.9,
+    "lon": 4.25,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [],
+    "code": "",
+    "radius_km": 12
+  },
+  {
+    "name": "Haarlemmermeer",
+    "lat": 52.3,
+    "lon": 4.69,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [],
+    "code": "",
+    "radius_km": 7
+  },
+  {
+    "name": "Zeeuws-Vlaanderen",
+    "lat": 51.3,
+    "lon": 3.85,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [],
+    "code": "",
+    "radius_km": 15
+  },
+  {
+    "name": "Twente",
+    "lat": 52.3,
+    "lon": 6.75,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [],
+    "code": "",
+    "radius_km": 18
+  },
+  {
+    "name": "Veluwe",
+    "lat": 52.2,
+    "lon": 5.85,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [],
+    "code": "",
+    "radius_km": 18
+  },
+  {
+    "name": "Biesbos",
+    "lat": 51.75,
+    "lon": 4.8,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [
+      "Biesbosch"
+    ],
+    "code": "",
+    "radius_km": 7
+  },
+  {
+    "name": "Schiphol",
+    "lat": 52.3105,
+    "lon": 4.7683,
+    "region": "nl",
+    "kind": "plek",
+    "aliases": [
+      "Luchthaven Schiphol"
+    ],
+    "code": "",
+    "radius_km": 4
+  },
+  {
+    "name": "Afsluitdijk",
+    "lat": 53.04,
+    "lon": 5.18,
+    "region": "nl",
+    "kind": "plek",
+    "aliases": [],
+    "code": "",
+    "radius_km": 8
+  },
+  {
+    "name": "Vaalserberg",
+    "lat": 50.7546,
+    "lon": 6.0208,
+    "region": "nl",
+    "kind": "plek",
+    "aliases": [],
+    "code": "",
+    "radius_km": 4
   },
   {
     "name": "Londen",
