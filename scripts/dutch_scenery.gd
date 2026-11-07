@@ -13,9 +13,12 @@ var leaf = SphereMesh.new()
 var cone = CylinderMesh.new()
 var trunk = CylinderMesh.new()
 var landmarks: Dictionary = {}
+var city_plans: Dictionary = {}
+var city_stats: Dictionary = {}
 
 func _init(parent: Node3D) -> void:
 	world=parent
+	city_plans=JSON.parse_string(FileAccess.get_file_as_string("res://data/city_plans_nl.json")).cities
 	rng.seed=1206
 	leaf.radial_segments=5
 	leaf.rings=2
@@ -57,17 +60,37 @@ func beam(a: Vector3,b: Vector3,width: float,color: String) -> void:
 	var basis=Basis.looking_at(direction.normalized(),up) * Basis.from_scale(Vector3(width,width,direction.length()))
 	surfaces[color].append_from(box,0,Transform3D(basis,(a+b)*.5))
 
-func house(pos: Vector3, size: Vector3, color: String, roof_color: String="b76b3e", angle: float=0) -> void:
+func ribbon(a: Vector3,b: Vector3,width: float,color: String) -> void:
+	var delta=b-a
+	if delta.length()<.001:
+		return
+	var angle=atan2(delta.x,delta.z)
+	block((a+b)*.5,Vector3(width,.025,delta.length()),color,angle)
+
+func house(pos: Vector3, size: Vector3, color: String, roof_color: String="b76b3e", angle: float=0, roof_style: int=-1) -> void:
+	if roof_style<0:
+		roof_style=rng.randi_range(0,3)
 	block(pos+Vector3(0,size.y*.5,0),size,color,angle)
-	piece(roof,pos+Vector3(0,size.y+.3,0),Vector3(size.x*1.12,.7,size.z*1.12),roof_color,angle)
-	# Windows and doors are geometry, so the exported game needs no textures.
 	var front=Vector3(sin(angle),0,cos(angle))
 	var right=Vector3(cos(angle),0,-sin(angle))
-	for side in [-1,1]:
-		var window=pos+front*(size.z*.5+.02)+right*(size.x*.26*side)+Vector3(0,size.y*.65,0)
-		block(window,Vector3(.21,.3,.035),"35535a",angle)
-	block(pos+front*(size.z*.5+.035)+Vector3(0,.3,0),Vector3(.22,.6,.045),"60483a",angle)
-	block(pos+Vector3(size.x*.25,size.y+.7,0),Vector3(.22,.65,.25),"d8bf93",angle)
+	if roof_style==2:
+		# Flat roofs distinguish post-war housing, offices and warehouses.
+		block(pos+Vector3(0,size.y+.06,0),Vector3(size.x*1.04,.12,size.z*1.04),roof_color,angle)
+		block(pos+Vector3(0,size.y+.22,0),Vector3(size.x*.35,.25,size.z*.3),"86918b",angle)
+	else:
+		piece(roof,pos+Vector3(0,size.y+.3,0),Vector3(size.x*1.10,.7,size.z*1.08),roof_color,angle)
+		if roof_style==1:
+			for level in 3:
+				block(pos+front*(size.z*.5+.02)+Vector3(0,size.y+.12+level*.18,0),Vector3(size.x*(.85-level*.23),.18,.1),color,angle)
+		elif roof_style==3:
+			block(pos+Vector3(0,size.y+.28,0)+front*size.z*.28,Vector3(size.x*.38,.4,.35),color,angle)
+		block(pos+right*size.x*.28+Vector3(0,size.y+.65,0),Vector3(.14,.45,.18),"a98b71",angle)
+	var floors=maxi(1,int(size.y/.75))
+	for floor_index in floors:
+		for side in [-1,1]:
+			var window=pos+front*(size.z*.5+.025)+right*(size.x*.25*side)+Vector3(0,.48+floor_index*.7,0)
+			block(window,Vector3(size.x*.19,.24,.035),"35535a",angle)
+	block(pos+front*(size.z*.5+.035)+Vector3(0,.22,0),Vector3(size.x*.24,.44,.045),"60483a",angle)
 
 func tree(pos: Vector3, scale_value: float=1) -> void:
 	piece(trunk,pos+Vector3(0,.65*scale_value,0),Vector3(scale_value,1.3*scale_value,scale_value),"67543c")
@@ -89,34 +112,190 @@ func forest(points: Array) -> void:
 				tree(pos,rng.randf_range(.7,1.3))
 
 func town(pos: Vector3,name: String) -> void:
-	if name=="Amsterdam":
-		amsterdam(pos)
-	elif name=="Rotterdam":
-		rotterdam(pos)
-	elif name=="Utrecht":
-		utrecht(pos)
-	else:
-		var walls=["d4bc8c","eddbac","b88861","e2d0a0"]
-		for i in 12:
-			var x=float(i%4-2)*1.25
-			var z=float(i/4-1)*1.9
-			if name=="Arnhem" or name=="Nijmegen":
-				z+=2.0
-			house(pos+Vector3(x,0,z),Vector3(.95,rng.randf_range(.85,1.65),1.25),walls[i%4],"a76142" if i%3 else "53666b")
-		block(pos+Vector3(-.6,.055,0),Vector3(6,.05,.5),"c6b58d")
-		if name=="Den Haag":
-			palace(pos+Vector3(0,0,-4))
-		elif name=="Groningen":
-			tower(pos+Vector3(0,0,-3),"b69770",5.5)
-		elif name=="Arnhem" or name=="Nijmegen":
-			bridge(pos+Vector3(0,0,-1),false)
-		elif name=="Maastricht":
-			bridge(pos+Vector3(0,0,-1),false)
-		elif name=="Leeuwarden" or name=="Delft" or name=="Middelburg":
-			tower(pos+Vector3(0,0,-3),"d4bc8c",4)
-		for i in 4:
-			tree(pos+Vector3(-4.1+i*2.2,0,3.3),.55)
+	var plan: Dictionary=city_plans.get(name,{})
+	rng.seed=int(plan.get("seed",1206))
+	neighbourhood(pos,plan)
+	match name:
+		"Amsterdam": amsterdam(pos)
+		"Rotterdam": rotterdam(pos)
+		"Utrecht": utrecht(pos)
+		"Den Haag": hague(pos)
+		"Groningen": groningen(pos)
+		"Arnhem": arch_bridge(pos,false)
+		"Nijmegen": arch_bridge(pos,true)
+		"Maastricht": maastricht(pos)
+		"Almere": modern_centre(pos,false)
+		"Lelystad": modern_centre(pos,true)
+		"Leeuwarden": leaning_tower(pos)
+		"Zwolle": star_centre(pos)
+		"Den Bosch": basilica(pos,"c0a77c",true)
+		"Breda": basilica(pos,"d6c8aa",false)
+		"Delft": tower(pos+Vector3(0,0,-.3),"c3aa86",5.5)
+		"Middelburg": town_hall(pos)
+		"Sneek": water_gate(pos)
+		"Eindhoven": factory(pos)
+		_:
+			if plan.get("kind")=="port":
+				small_harbour(pos)
+			elif plan.get("kind")=="green":
+				for i in 5:
+					tree(pos+Vector3(cos(i*1.25)*1.0,0,sin(i*1.25)*1.0),.65)
+			else:
+				town_square(pos,plan)
 	landmarks[name]=true
+	city_stats[name]={"plots":plan.get("plots",[]).size(),"layout":hash(JSON.stringify(plan.get("plots",[]))),"kind":plan.get("kind","")}
+
+func neighbourhood(pos: Vector3,plan: Dictionary) -> void:
+	var ground_color="b8b6a0" if plan.get("kind") in ["modern","industrial","port"] else "c4b899"
+	if not surfaces.has(ground_color):
+		var ground=SurfaceTool.new()
+		ground.begin(Mesh.PRIMITIVE_TRIANGLES)
+		surfaces[ground_color]=ground
+	var ground: SurfaceTool=surfaces[ground_color]
+	for polygon in plan.get("blocks",[]):
+		var points=PackedVector2Array()
+		for point in polygon:
+			points.append(Vector2(point[0],point[1]))
+		var indices=Geometry2D.triangulate_polygon(points)
+		for index in range(0,indices.size(),3):
+			var a=points[indices[index]]
+			var b=points[indices[index+1]]
+			var c=points[indices[index+2]]
+			for point in ([a,c,b] if (b-a).cross(c-a)>0 else [a,b,c]):
+				ground.set_normal(Vector3.UP)
+				ground.add_vertex(pos+Vector3(point.x,.055,point.y))
+	for street in plan.get("streets",[]):
+		for i in range(street.size()-1):
+			var a=pos+Vector3(street[i][0],.09,street[i][1])
+			var b=pos+Vector3(street[i+1][0],.09,street[i+1][1])
+			ribbon(a,b,.12,"9d9f91")
+	var historic=["a27054","d7c6a0","c39770","e0d3b4","9d735d"]
+	var modern=["9dada9","c8c4b5","ab795b","d9d4ba","758a8d"]
+	var colors=modern if plan.get("kind") in ["modern","industrial","port"] else historic
+	var plot_index=0
+	for plot in plan.get("plots",[]):
+		var at=pos+Vector3(plot[0],.06,plot[1])
+		var roof_color="687575" if int(plot[6])==2 else ["a95f3e","746550","594f4c"][plot_index%3]
+		house(at,Vector3(plot[2],plot[4],plot[3]),colors[plot_index%colors.size()],roof_color,plot[5],int(plot[6]))
+		if plot_index%7==0:
+			tree(at+Vector3(.6,0,.6),.4)
+		plot_index+=1
+
+func town_square(pos: Vector3,plan: Dictionary) -> void:
+	var angle=float(plan.get("angle",0))
+	block(pos+Vector3(0,.06,0),Vector3(1.8,.05,1.4),"cbbb9b",angle)
+	house(pos+Vector3(0,0,-.7),Vector3(1.25,1.35,.7),"d3b992","766654",angle,1)
+	for x in [-1.0,1.0]:
+		tree(pos+Vector3(x,0,.7),.45)
+
+func hague(pos: Vector3) -> void:
+	# Hofvijver and courtyard contrast with a small modern skyline.
+	block(pos+Vector3(0,.11,-1.8),Vector3(5.5,.12,2.2),"318c9a")
+	for x in [-1.8,0,1.8]:
+		house(pos+Vector3(x,0,.2),Vector3(1.5,1.45,1.1),"bc9c75","64594c",0,0)
+	for x in [-2.4,2.4]:
+		house(pos+Vector3(x,0,1.5),Vector3(.8,1.2,2.6),"c5ab85","64594c",0,0)
+	for i in 3:
+		var at=pos+Vector3(2.5+i*.8,0,3.2)
+		var h=2.6+i*.55
+		house(at,Vector3(.65,h,.7),["8a8980","a97f62","7c9394"][i],"576a6f",0,2)
+
+func groningen(pos: Vector3) -> void:
+	block(pos+Vector3(-.6,.07,.4),Vector3(3.4,.08,2.6),"c6b58e")
+	tower(pos+Vector3(.7,0,-.8),"ba9b72",5.5)
+	house(pos+Vector3(-1,0,-1.2),Vector3(1.3,1.7,1.1),"d9c8aa","65706b",0,1)
+	for i in 3:
+		house(pos+Vector3(-1.7+i*.9,0,1.9),Vector3(.65,1.2+i*.2,.8),"b88763","a45d41",0,1)
+
+func arch_bridge(pos: Vector3,double_span: bool) -> void:
+	# Distinct miniature steel arch silhouettes for Arnhem and Nijmegen.
+	var length=7.5 if double_span else 5.6
+	block(pos+Vector3(0,.1,0),Vector3(1.7,.12,length+2),"318c9a")
+	block(pos+Vector3(0,.6,0),Vector3(length,.25,.8),"9baca8")
+	var spans=2 if double_span else 1
+	var span_length=length/spans
+	for span in spans:
+		for z in [-.43,.43]:
+			var previous=Vector3.ZERO
+			for i in 13:
+				var t=float(i)/12
+				var at=pos+Vector3(-length*.5+span*span_length+t*span_length,.8+sin(t*PI)*(1.55 if double_span else 1.7),z)
+				if i>0:
+					beam(previous,at,.11,"c8d1c0")
+				if i%2==0:
+					beam(at,Vector3(at.x,.7,at.z),.055,"91a6a0")
+				previous=at
+
+func maastricht(pos: Vector3) -> void:
+	block(pos+Vector3(0,.1,0),Vector3(1.2,.12,7),"318c9a")
+	block(pos+Vector3(0,.8,0),Vector3(5.5,.24,.8),"c4b18f")
+	for x in [-2.3,-1.5,-.7,.1,.9,1.7,2.5]:
+		block(pos+Vector3(x,.4,0),Vector3(.22,.8,.65),"b5a17e")
+	basilica(pos+Vector3(-2.3,0,-1.5),"b79c7c",true)
+	for i in 4:
+		house(pos+Vector3(1.5+i*.6,0,1.5),Vector3(.5,1.0+i*.15,.8),"c5ac8b","a76142",0,0)
+
+func modern_centre(pos: Vector3,harbour: bool) -> void:
+	block(pos+Vector3(0,.07,0),Vector3(4,.08,3),"c3c0ad")
+	for i in 5:
+		var at=pos+Vector3(-1.6+(i%3)*1.3,0,-1+(i/3)*1.7)
+		house(at,Vector3(.8,1.2+(i%3)*.8,1.0),["adb9b1","b48866","829c9d"][i%3],"5b7274",.15 if i%2 else 0,2)
+	if harbour:
+		small_harbour(pos+Vector3(-2,0,2))
+	else:
+		block(pos+Vector3(0,.1,2.2),Vector3(5,.1,.6),"318c9a")
+
+func leaning_tower(pos: Vector3) -> void:
+	# Oldehove: broad, unfinished and visibly leaning rather than a generic spire.
+	var basis=Basis(Vector3.FORWARD,.075)
+	var transform_value=Transform3D(basis,pos+Vector3(0,1.9,0))
+	var color="b69b7c"
+	if not surfaces.has(color):
+		var surface=SurfaceTool.new()
+		surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+		surfaces[color]=surface
+	surfaces[color].append_from(box,0,transform_value*Transform3D(Basis.from_scale(Vector3(1.5,3.8,1.4)),Vector3.ZERO))
+	block(pos+Vector3(.14,3.9,0),Vector3(1.6,.18,1.5),"8b806c")
+
+func star_centre(pos: Vector3) -> void:
+	var previous=Vector3.ZERO
+	for i in 17:
+		var a=TAU*float(i)/16
+		var radius=2.3 if i%2==0 else 1.7
+		var at=pos+Vector3(cos(a)*radius,.12,sin(a)*radius)
+		if i>0:
+			beam(previous,at,.3,"318c9a")
+		previous=at
+	tower(pos,"c4ad86",4.3)
+
+func basilica(pos: Vector3,color: String,twin: bool) -> void:
+	house(pos+Vector3(0,0,-.6),Vector3(1.5,1.6,2.8),color,"59665f",0,0)
+	for x in ([-.65,.65] if twin else [0.0]):
+		tower(pos+Vector3(x,0,.9),color,3.4 if twin else 5.1)
+
+func town_hall(pos: Vector3) -> void:
+	house(pos,Vector3(2.5,1.6,1.4),"c9b391","a65f42",0,1)
+	for x in [-1.1,0.0,1.1]:
+		tower(pos+Vector3(x,0,-.1),"c9b391",2.4 if x else 4.1)
+
+func water_gate(pos: Vector3) -> void:
+	block(pos+Vector3(0,.11,0),Vector3(.7,.12,6),"318c9a")
+	for x in [-.8,.8]:
+		tower(pos+Vector3(x,0,0),"ae8f6b",2.4)
+	beam(pos+Vector3(-.8,1.2,0),pos+Vector3(.8,1.2,0),.6,"c6ad84")
+
+func factory(pos: Vector3) -> void:
+	house(pos+Vector3(0,0,-.4),Vector3(3.2,1.15,1.7),"ac775b","637676",0,2)
+	for x in [-1.3,-.5,.3,1.1]:
+		block(pos+Vector3(x,1.1,.48),Vector3(.45,.55,.03),"71979b")
+	piece(trunk,pos+Vector3(1.8,1.8,-.8),Vector3(1.7,3.6,1.7),"a5765c")
+
+func small_harbour(pos: Vector3) -> void:
+	block(pos+Vector3(0,.1,.8),Vector3(3.5,.1,1.3),"318c9a")
+	block(pos+Vector3(-.7,.32,.8),Vector3(2,.45,.5),"405d65")
+	block(pos+Vector3(-1.2,.65,.8),Vector3(.4,.4,.45),"e0d0aa")
+	beam(pos+Vector3(1.5,0,-.2),pos+Vector3(1.5,2.4,-.2),.13,"c3a35d")
+	beam(pos+Vector3(1.5,2.4,-.2),pos+Vector3(1.5,2.4,1.7),.12,"c3a35d")
 
 func tower(pos: Vector3,color: String,height: float) -> void:
 	block(pos+Vector3(0,height*.28,0),Vector3(1.35,height*.56,1.35),color)
@@ -135,7 +314,7 @@ func amsterdam(pos: Vector3) -> void:
 		for i in range(1,17):
 			var a=PI+float(i)/16.0*PI
 			var next=pos+Vector3(cos(a)*radius,.09,-sin(a)*radius*.65)
-			beam(last,next,.55,"318c9a")
+			ribbon(last,next,.5,"318c9a")
 			last=next
 	for row in 2:
 		for i in 9:
