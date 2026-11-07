@@ -1,6 +1,6 @@
 # TopoRotor
 
-Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland en Europa vliegt om opdrachten van school te oefenen. Met 152 locaties, foto-import, eigen missielijsten, een oefen- en testmodus, hints en lokaal bewaarde scores.
+Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland en Europa vliegt om opdrachten van school te oefenen. Met 152 locaties, foto-import, eigen missielijsten, een leer-, oefen- en recordmodus, hints en lokaal bewaarde scores.
 
 **Status: gereviewd prototype, broncodeversie 0.4.0.** De eerdere Android-APK 0.1.0 bevat de onderstaande reparaties niet. Deze repository bevat broncode en graphics; er is nog geen nieuwe 0.4-APK gebouwd of op een Android-toestel getest.
 
@@ -10,8 +10,8 @@ Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland 
 
 Installeer **Godot 4.5.1 Standard** (geen .NET nodig), importeer `project.godot` en druk F5. Alle kaartdata, 3D-graphics, fonts en geluiden zijn meegeleverd. Er zijn geen online kaarttegels of game-accounts nodig.
 
-- Kies Nederland of Europa, oefenen of testvlucht en start een vliegmissie.
-- Sturen: joystick, WASD of pijltjes. Antwoorden: ‘Hier is het!’ of spatie. H: hints. M: overzicht.
+- Kies Nederland of Europa, Leren, Oefenen of Records en start een vliegmissie.
+- Sturen: joystick, WASD of pijltjes. Antwoorden: ‘Hier is het!’ of spatie. M: overzicht.
 - Je begint **laag en dichtbij**. Gebruik **Lager / Hoger**, het muiswiel of **Q / E** om tussen drie vlieghoogtes te wisselen. Lager toont meer detail; hoger geeft meer zicht op de omgeving. De overzichtskaart (M) blijft apart beschikbaar. Het spel controleert je positie; er is geen landingssimulatie.
 - ‘Hangar’ beëindigt een vlucht. Naar de achtergrond schakelen pauzeert de vlucht; bij terugkeer gaat hij verder. De Android-terugknop sluit eerst de foto of vlucht.
 
@@ -64,7 +64,7 @@ De ouder controleert altijd de herkende locaties. Een kopje zoals ‘Nederland�
 - Andere vragen controleren een referentiepunt met 6 km tolerantie in Nederland en 25 km in Europa. Provincies, rivieren, eilanden en meren hebben **geen volledige gebieds-/rivierdetectie**. De getekende provinciegrens verandert deze antwoordcontrole niet.
 - Natural Earth-contouren zijn grof, vooral rond delta's en kleine eilanden. Europa loopt circa 25°W–45°O en 34°–72°N.
 - Velden, bomen, gebouwen en bergen zijn gestileerde decoratie; geen echte hoogte- of landgebruiksdatabase.
-- Drie sterren: een foutloze testvlucht zonder hints; twee bij maximaal twee fouten; anders één. Er is nog geen adaptief herhalen of langdurige voortgang per locatie.
+- Drie sterren: een foutloze Records-vlucht; twee bij maximaal twee fouten; anders één. Records bewaart daarnaast de beste tijd per route. Er is nog geen adaptief herhalen of langdurige voortgang per locatie.
 - Nederland heeft een kleurrijke miniatuurwereld met grachtenpanden in Amsterdam, de Domtoren, een Rotterdamse haven met vereenvoudigde Erasmusbrug, duinen en gemengd bos. Steden staan op hun cataloguscoördinaten; gebouwen en landschapselementen zijn uitvergroot en symbolisch. Dit is geen nauwkeurige stratenkaart. Europa behoudt de eenvoudigere decoratie.
 - Het IJsselmeer/Markermeer is opnieuw uitgesneden met gedetailleerdere meergeometrie; Flevoland, Almere en Lelystad blijven op land.
 - Vliegen in Nederland is rustiger gemaakt zodat je tijd hebt om te zoeken. Kindertests en prestaties op echte Android-toestellen blijven nodig.
@@ -117,14 +117,23 @@ De repository bevat geen signing key, tokens of APK's. Android installeert een u
 
 Eigen code en graphics: MIT. Zie [LICENSE](LICENSE), [THIRD-PARTY.md](THIRD-PARTY.md) en de font- en enginelicenties in `assets/`.
 
-## Nieuw: sneller vliegen, tijdrit en online missies
+## Sneller vliegen en drie spelmodi
 
-Nederland vliegt nu met 10 in plaats van 4,5 wereldeenheden per seconde;
-Europa met 42 in plaats van 24. Besturing en bochten reageren vloeiend,
-en loslaten remt sneller af. Kies in de hangar **Vrij vliegen** of **Tijdrit**.
-Een tijdrit geeft 90 seconden per locatie voor de hele missie. Tijd pauzeert
-wanneer de app naar de achtergrond gaat. Bij nul eindigt de vlucht met het
-aantal gevonden locaties; een onvoltooide missie levert geen sterren op.
+Nederland vliegt met 10 wereldeenheden per seconde, Europa met 42.
+Besturing en bochten reageren vloeiend; loslaten remt sneller af.
+
+- **Leren:** doelmarker op de wereld en minimap, kaartnamen en afstand zichtbaar.
+- **Oefenen:** geen doelmarker of afstand op grote afstand. Het doel verschijnt
+  pas binnen 18 km in Nederland of 75 km in Europa, en verdwijnt weer buiten
+  die afstand. Bij landvragen verschijnt het doel zodra je boven het juiste
+  land vliegt. Kaartnamen blijven verborgen.
+- **Records:** geen doelmarker, kaartnamen of afstandshints. Een stopwatch meet
+  je tijd; elk fout antwoord telt als 10 seconden straftijd. Beste tijden worden
+  lokaal per route bewaard. Dezelfde route heeft een vaste volgorde voor eerlijke
+  herhalingen; andere missies hebben hun eigen record. Er is geen tijdslimiet.
+
+De H-toets kan de regels van Oefenen en Records niet omzeilen.
+De stopwatch pauzeert als de app naar de achtergrond gaat.
 
 Met **Online missies** kun je lespakketten laden en offline bewaren zonder een
 nieuwe APK. Zie [online missies](docs/ONLINE-MISSIES.md) voor het JSON-formaat.
