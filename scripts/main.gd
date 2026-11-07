@@ -52,7 +52,7 @@ var ocr_input_snapshot: String = ""
 var ocr_retry_after_msec: int = 0
 # Test/capture harness is only reachable from debug (editor/CI) builds, never from release exports.
 var is_test_mode: bool = OS.is_debug_build() and OS.get_cmdline_user_args().has("--smoke-test")
-var is_capture_mode: bool = OS.is_debug_build() and (OS.get_cmdline_user_args().has("--capture") or OS.get_cmdline_user_args().has("--capture-fx") or OS.get_cmdline_user_args().has("--capture-learn") or OS.get_cmdline_user_args().has("--capture-ui"))
+var is_capture_mode: bool = OS.is_debug_build() and (OS.get_cmdline_user_args().has("--capture") or OS.get_cmdline_user_args().has("--capture-fx") or OS.get_cmdline_user_args().has("--capture-learn") or OS.get_cmdline_user_args().has("--capture-ui") or OS.get_cmdline_user_args().has("--capture-hangar"))
 # Smoke tests exercise the real save path against a separate file, never the player's profile.
 var save_path: String = "user://smoke-progress.json" if is_test_mode else "user://progress.json"
 var http: HTTPRequest
@@ -138,6 +138,7 @@ var pilot_new: LineEdit
 var pilot_status: Label
 var pilot_delete: Button
 var pilot_delete_armed: bool = false
+var pilot_unlocks: Label
 var pilot_values: Dictionary = {}
 var pilot_preview: PilotFigure
 var hangar_pilot: PilotFigure
@@ -148,6 +149,13 @@ var themes_backdrop: ColorRect
 var themes_open: bool = false
 var themes_grid: GridContainer
 var themes_mode: Label
+var homework_panel: PanelContainer
+var homework_backdrop: ColorRect
+var homework_open: bool = false
+var homework_grid: GridContainer
+var homework_status: Label
+var homework_start: Button
+var homework_selected: Array = []
 var board_button: Button
 var last_board_key: String = ""
 var last_board_place: int = 0
@@ -206,7 +214,7 @@ func _ready() -> void:
 		call_deferred("smoke_test")
 	if is_capture_mode:
 		var args=OS.get_cmdline_user_args()
-		call_deferred("capture_effects_only" if args.has("--capture-fx") else "capture_learning_only" if args.has("--capture-learn") else "capture_ui" if args.has("--capture-ui") else "capture_preview")
+		call_deferred("capture_effects_only" if args.has("--capture-fx") else "capture_learning_only" if args.has("--capture-learn") else "capture_ui" if args.has("--capture-ui") else "capture_hangar" if args.has("--capture-hangar") else "capture_preview")
 
 func build_environment() -> void:
 	var env = WorldEnvironment.new()
@@ -602,6 +610,7 @@ func build_ui() -> void:
 	build_paint_shop()
 	build_leaderboard()
 	build_themes()
+	build_homework()
 	build_pilots()
 
 # Big game titles: Lilita One with a thick outline and an extruded, warm
@@ -787,7 +796,7 @@ func build_menu() -> void:
 	extras.add_theme_constant_override("separation",10)
 	col.add_child(extras)
 	# Thema's: provinces, rivers, areas and islands as their own practice.
-	for entry in [["Thema's",open_themes,"Themes"],["Online missies",open_online_content,"Online"],["Foto / eigen lijst",open_photo_dialog,"Photo"]]:
+	for entry in [["Huiswerk",open_homework,"Homework"],["Thema's",open_themes,"Themes"],["Online",open_online_content,"Online"],["Foto / lijst",open_photo_dialog,"Photo"]]:
 		var b=button(entry[0],entry[1])
 		b.name=entry[2]
 		b.size_flags_horizontal=Control.SIZE_EXPAND_FILL
@@ -798,6 +807,13 @@ func build_menu() -> void:
 		if entry[2]=="Themes":
 			b.tooltip_text="Oefen alleen provincies, rivieren en water, gebieden of eilanden."
 			tone_button(b,"teal",14,16)
+		elif entry[2]=="Homework":
+			b.tooltip_text="De opdrachten uit je werkbladen: kies er één of meer tegelijk."
+			tone_button(b,"teal",14,16)
+		elif entry[2]=="Online":
+			b.tooltip_text="Online missies"
+		elif entry[2]=="Photo":
+			b.tooltip_text="Foto of eigen lijst"
 		extras.add_child(b)
 	var stats=PanelContainer.new()
 	var stats_style=style(Color(0,0,0,.28),14,Color(GOLD,.35),2)
@@ -1192,7 +1208,7 @@ func update_goal() -> void:
 	title_label.text="Vlieg boven de provincie "+LocatorCard.display_name(p) if p.kind=="provincie" else ("Vlieg boven " if area else "Vlieg naar ")+p.name
 	status_label.text="Zoek %s. Druk op ‘Hier is het!’ als je er bent." % p.name
 	if mission_index==0:
-		status_label.text+=" Omhoog vliegt vooruit, links/rechts draait de heli."
+		status_label.text+=" Omhoog vliegt vooruit, links/rechts draait %s." % ["de heli","het vliegtuig","de straaljager"][["heli","vliegtuig","jet"].find(helicopter.kind)]
 	goal_mistakes=0
 	answer_cooldown=0.0
 
@@ -1288,7 +1304,7 @@ func update_effects(delta: float) -> void:
 	fx.view_scale=camera.size/FX_REFERENCE_ZOOM if not show_overview else 1.0
 	var speed_fraction=clampf(velocity.length()/flight_speed(),0.0,1.0)
 	fx.update_downwash(helicopter.position,camera_level,speed_fraction,not show_overview)
-	rotor_audio.pitch_scale=.94+speed_fraction*.22
+	rotor_audio.pitch_scale=(.94+speed_fraction*.22)*helicopter.sound_pitch()
 	shake=move_toward(shake,0.0,delta*2.6)
 	var now_inside=false
 	if mission_index<mission.size() and world.target.visible:
@@ -1380,6 +1396,8 @@ func go_back(allow_quit: bool) -> void:
 		close_pilots()
 	elif themes_open:
 		close_themes()
+	elif homework_open:
+		close_homework()
 	elif paint_open:
 		close_paint_shop()
 	elif photo_open:
@@ -1605,6 +1623,7 @@ func finish_mission() -> void:
 		award_medal("foutloos")
 	if region=="eu":
 		award_medal("europa")
+	var homework_done=record_homework(mission)
 	var fresh=HangarCatalog.newly_unlocked(points_before,medals_before,points(),saved.medals)
 	last_board_key=Leaderboard.key(record_key(mission),game_mode)
 	last_board_place=Leaderboard.add(saved.boards,last_board_key,{"pilot":pilot_name(),"points":earned,"time":snappedf(score if exam else flight_time,.1),"mistakes":mistakes,"date":Time.get_date_string_from_system()})
@@ -1664,6 +1683,12 @@ func finish_mission() -> void:
 		missed_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 		missed_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 		col.add_child(missed_label)
+	if not homework_done.is_empty():
+		var done_label=label("Huiswerk gevlogen: "+", ".join(homework_done),16,Color("5cff8f"))
+		done_label.name="HomeworkDone"
+		done_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+		done_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(done_label)
 	var tip=label(record_result if exam else "Drie sterren: foutloze Records-vlucht. Twee: minstens 80% in één keer goed.",15,GOLD if exam else MUTED)
 	tip.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	tip.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
@@ -1854,7 +1879,7 @@ func build_paint_shop() -> void:
 	col.add_theme_constant_override("separation",10)
 	paint_panel.add_child(col)
 	col.add_child(kicker("HANGAR · TYPE, KLEUR, ACCESSOIRES EN UPGRADES"))
-	col.add_child(title("Jouw helikopter",32))
+	col.add_child(title("Jouw toestel",32))
 	var row=HBoxContainer.new()
 	row.add_theme_constant_override("separation",22)
 	col.add_child(row)
@@ -1978,15 +2003,28 @@ func hangar_grid(columns: int) -> GridContainer:
 	grid.add_theme_constant_override("v_separation",8)
 	return grid
 
+# Helicopters, aeroplanes and jets, each under its own heading in one
+# scrolling list so the page keeps the hangar's height.
 func build_type_page(page: VBoxContainer) -> void:
-	page.add_child(kicker("KIES JE HELIKOPTER"))
-	var grid=hangar_grid(2)
-	page.add_child(grid)
-	for model in HangarCatalog.MODELS:
-		var b=hangar_button(model.name,func(): choose_model(model.id),66,15)
-		b.name="Model_"+model.id
-		grid.add_child(b)
-		model_buttons[model.id]=b
+	var scroll=ScrollContainer.new()
+	scroll.name="TypeScroll"
+	scroll.custom_minimum_size.y=366
+	scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	page.add_child(scroll)
+	var list=VBoxContainer.new()
+	list.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation",8)
+	scroll.add_child(list)
+	for entry in HangarCatalog.KINDS:
+		list.add_child(kicker(entry[1]))
+		var grid=hangar_grid(2)
+		grid.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		list.add_child(grid)
+		for model in HangarCatalog.models_of(entry[0]):
+			var b=hangar_button(model.name,func(): choose_model(model.id),62,15)
+			b.name="Model_"+model.id
+			grid.add_child(b)
+			model_buttons[model.id]=b
 
 func build_colour_page(page: VBoxContainer) -> void:
 	page.add_child(kicker("KLEURSCHEMA'S"))
@@ -2047,10 +2085,16 @@ func build_accessory_page(page: VBoxContainer) -> void:
 	var hint=label("Tik om aan of uit te zetten. Ze krijgen de kleur ‘Accessoires’ uit Kleuren.",14,MUTED)
 	hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	page.add_child(hint)
-	var grid=hangar_grid(2)
-	page.add_child(grid)
+	var scroll=ScrollContainer.new()
+	scroll.name="AccessoryScroll"
+	scroll.custom_minimum_size.y=318
+	scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	page.add_child(scroll)
+	var grid=hangar_grid(3)
+	grid.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	scroll.add_child(grid)
 	for item in HangarCatalog.ACCESSORIES:
-		var b=hangar_button(item.name,func(): toggle_accessory(item.id),60,15)
+		var b=hangar_button(item.name,func(): toggle_accessory(item.id),56,14)
 		b.name="Accessory_"+item.id
 		grid.add_child(b)
 		accessory_buttons[item.id]=b
@@ -2102,7 +2146,7 @@ func sync_profile() -> void:
 	saved.profiles[pilot_name()]=ProgressStore.snapshot(saved)
 
 func pilot_look() -> Dictionary:
-	return PilotFigure.clean(saved.get("look",{}))
+	return PilotFigure.effective(saved.get("look",{}),points(),medals())
 
 func is_unlocked(item: Dictionary) -> bool:
 	return HangarCatalog.unlocked(item,points(),medals())
@@ -2116,8 +2160,8 @@ func apply_garage() -> void:
 	helicopter.configure(garage)
 	if is_instance_valid(preview_heli):
 		preview_heli.configure(garage)
-		# The long tandem needs a step back to fit the preview stage.
-		preview_heli.scale=Vector3.ONE*(.72 if garage.model=="tandem" else 1.0)
+		# Long and wide types need a step back to fit the preview stage.
+		preview_heli.scale=Vector3.ONE*float(HangarCatalog.find(HangarCatalog.MODELS,garage.model).get("preview",1.0))
 	refresh_hangar()
 
 func choose_model(id: String) -> void:
@@ -2212,7 +2256,7 @@ func set_paint(paint: Dictionary,sync_pickers: bool=true) -> void:
 			paint_pickers[part].color=Color(saved.paint[part])
 
 func open_paint_shop() -> void:
-	if state!="menu" or pilots_open or themes_open or board_open:
+	if state!="menu" or pilots_open or themes_open or board_open or homework_open:
 		return
 	paint_open=true
 	apply_garage()
@@ -2304,11 +2348,15 @@ func board_route() -> Array:
 func board_route_title() -> String:
 	if state=="summary" and custom_mission:
 		return "Eigen missie · %d plekken" % mission.size()
+	if state=="summary":
+		var combined=homework_title(mission)
+		if not combined.is_empty():
+			return combined
 	var picker: OptionButton=europe_route_select if region=="eu" else nl_route_select
 	return picker.get_item_text(maxi(picker.selected,0))
 
 func open_leaderboard() -> void:
-	if state not in ["menu","summary"] or paint_open or pilots_open or themes_open:
+	if state not in ["menu","summary"] or paint_open or pilots_open or themes_open or homework_open:
 		return
 	board_open=true
 	board_pilot.text="Je vliegt als %s. Alle piloten op dit apparaat staan op dezelfde lijst." % pilot_name()
@@ -2413,7 +2461,7 @@ func build_themes() -> void:
 	col.add_child(button("Sluiten",close_themes))
 
 func open_themes() -> void:
-	if state!="menu" or paint_open or board_open or pilots_open:
+	if state!="menu" or paint_open or board_open or pilots_open or homework_open:
 		return
 	themes_open=true
 	for child in themes_grid.get_children():
@@ -2445,6 +2493,155 @@ func start_theme(index: int) -> void:
 	close_themes()
 	sfx.play("whoosh",1.2)
 	start_mission()
+
+# Huiswerk: the assignments from the worksheet photos, one tile each. Tap
+# several to fly them in one mission; every place comes once.
+func build_homework() -> void:
+	var parts=overlay_panel(760)
+	homework_backdrop=parts[0]
+	homework_panel=parts[1]
+	var col: VBoxContainer=parts[2]
+	col.add_child(kicker("HUISWERK · DE OPDRACHTEN UIT JE WERKBLADEN"))
+	col.add_child(title("Wat moet je leren?",30))
+	var hint=label("Tik op één opdracht of op meer tegelijk. Een ✓ betekent dat je hem al hebt gevlogen.",15,MUTED)
+	hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(hint)
+	homework_grid=hangar_grid(2)
+	col.add_child(homework_grid)
+	homework_status=label("",15,CREAM)
+	homework_status.name="HomeworkStatus"
+	homework_status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(homework_status)
+	var row=HBoxContainer.new()
+	row.add_theme_constant_override("separation",10)
+	col.add_child(row)
+	var all=button("Alles kiezen",func(): select_all_homework(true))
+	all.name="HomeworkAll"
+	all.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	row.add_child(all)
+	var none=button("Niets",func(): select_all_homework(false))
+	none.name="HomeworkNone"
+	none.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	row.add_child(none)
+	var close=button("Sluiten",close_homework)
+	close.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	row.add_child(close)
+	homework_start=button("START HUISWERK  ▶",start_homework,true)
+	homework_start.name="HomeworkStart"
+	homework_start.custom_minimum_size.y=56
+	homework_start.add_theme_font_size_override("font_size",21)
+	tone_button(homework_start,"gold",16,16,.14)
+	col.add_child(homework_start)
+
+# Homework is Dutch topography: from the Europe map it switches to Nederland.
+func open_homework() -> void:
+	if state!="menu" or paint_open or board_open or pilots_open or themes_open:
+		return
+	if region!="nl":
+		region_select.select(0)
+		load_world("nl")
+	homework_open=true
+	for child in homework_grid.get_children():
+		homework_grid.remove_child(child)
+		child.queue_free()
+	var done: Array=saved.get("homework",[])
+	for item in catalog.homework(region):
+		var b=hangar_button("",toggle_homework.bind(item.id),78,15)
+		b.name="Homework_"+item.id
+		b.set_meta("item",item)
+		b.tooltip_text=item.about
+		b.text="%s%s\n%s · %d plekken" % [item.name,"  ✓" if item.id in done else "",item.source,item.count]
+		homework_grid.add_child(b)
+	refresh_homework()
+	homework_backdrop.move_to_front()
+	homework_panel.move_to_front()
+	homework_backdrop.show()
+	homework_panel.show()
+	reveal(homework_panel)
+
+func close_homework() -> void:
+	if not homework_open:
+		return
+	homework_open=false
+	homework_panel.hide()
+	homework_backdrop.hide()
+
+func toggle_homework(id: String) -> void:
+	if id in homework_selected:
+		homework_selected.erase(id)
+	else:
+		homework_selected.append(id)
+	sfx.play("star",1.1+homework_selected.size()*.06)
+	refresh_homework()
+
+func select_all_homework(on: bool) -> void:
+	homework_selected=[]
+	if on:
+		for item in catalog.homework("nl"):
+			homework_selected.append(item.id)
+	sfx.play("whoosh",1.2)
+	refresh_homework()
+
+func chosen_homework() -> Array:
+	return catalog.homework("nl").filter(func(item): return item.id in homework_selected)
+
+func refresh_homework() -> void:
+	var chosen=chosen_homework()
+	for b in homework_grid.get_children():
+		style_button(b,b.get_meta("item").id in homework_selected,12,10)
+	var places=TopoCatalog.merge_places(chosen.map(func(item): return item.places))
+	homework_start.disabled=chosen.is_empty()
+	homework_start.text="START HUISWERK  ▶" if chosen.size()<=1 else "START %d OPDRACHTEN  ▶" % chosen.size()
+	var mode="Je vliegt in de modus %s." % ["Leren","Oefenen","Records"][mode_select.selected]
+	if chosen.is_empty():
+		homework_status.text="Nog niets gekozen. "+mode
+	elif chosen.size()==1:
+		homework_status.text="%s · %d plekken. %s" % [chosen[0].name,places.size(),mode]
+	else:
+		homework_status.text="%d opdrachten samen · %d plekken (dubbele plekken één keer). %s" % [chosen.size(),places.size(),mode]
+
+# One assignment is just its route in the picker, so best times and the
+# leaderboard match. Several fly as one merged mission.
+func start_homework() -> void:
+	var chosen=chosen_homework()
+	if chosen.is_empty():
+		return
+	close_homework()
+	sfx.play("whoosh",1.2)
+	if chosen.size()==1:
+		nl_route_select.select(chosen[0].index)
+		update_best_label()
+		start_mission()
+	else:
+		start_mission(TopoCatalog.merge_places(chosen.map(func(item): return item.places)),false)
+
+# "Huiswerk · A + B" when a mission is exactly some homework assignments.
+func homework_title(places: Array) -> String:
+	if region!="nl":
+		return ""
+	var covered=catalog.homework_covered(region,places)
+	if covered.size()<2 or TopoCatalog.merge_places(covered.map(func(item): return item.places)).size()!=places.size():
+		return ""
+	return "Huiswerk · "+" + ".join(covered.map(func(item): return item.name))
+
+# Marks the assignments a finished mission covered and awards the homework
+# medals. Returns the names flown, for the summary.
+func record_homework(places: Array) -> PackedStringArray:
+	var names=PackedStringArray()
+	if region!="nl":
+		return names
+	var covered=catalog.homework_covered(region,places)
+	if not saved.has("homework"):
+		saved.homework=[]
+	for item in covered:
+		names.append(item.name)
+		if not item.id in saved.homework:
+			saved.homework.append(item.id)
+	if covered.size()>=2:
+		award_medal("combi")
+	if catalog.homework(region).all(func(item): return item.id in saved.homework):
+		award_medal("huiswerk")
+	return names
 
 # Pilots: every player on this device gets a profile with its own points,
 # hangar and look. The leaderboard is shared, so they compete on one list.
@@ -2563,7 +2760,15 @@ func build_pilots() -> void:
 		cell.add_theme_constant_override("separation",0)
 		cell.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 		looks.add_child(cell)
-		cell.add_child(label(entry[1],13,MUTED))
+		# The caption shows how many options of this part are earned.
+		var caption=HBoxContainer.new()
+		cell.add_child(caption)
+		var caption_text=label(entry[1],13,MUTED)
+		caption_text.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		caption.add_child(caption_text)
+		var count=label("",12,Color(GOLD,.8))
+		count.name="Count_"+attribute
+		caption.add_child(count)
 		var line=HBoxContainer.new()
 		line.add_theme_constant_override("separation",6)
 		cell.add_child(line)
@@ -2589,24 +2794,29 @@ func build_pilots() -> void:
 		next.custom_minimum_size=Vector2(44,38)
 		tone_button(next,"ghost",10,6)
 		line.add_child(next)
-		pilot_values[attribute]={"label":value,"swatch":swatch}
-	# The free tenth cell: everything at random.
-	var surprise_cell=VBoxContainer.new()
-	surprise_cell.add_theme_constant_override("separation",0)
-	surprise_cell.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-	looks.add_child(surprise_cell)
-	surprise_cell.add_child(label("Alles tegelijk",13,MUTED))
-	var surprise=button("Verras me",random_look)
+		pilot_values[attribute]={"label":value,"swatch":swatch,"count":count}
+	# New looks are earned with flight points and medals, like the hangar.
+	pilot_unlocks=label("",13,GOLD)
+	pilot_unlocks.name="PilotUnlocks"
+	pilot_unlocks.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	right.add_child(pilot_unlocks)
+	var footer=HBoxContainer.new()
+	footer.add_theme_constant_override("separation",12)
+	col.add_child(footer)
+	var surprise=button("Verras me · alles tegelijk",random_look)
 	surprise.name="RandomLook"
-	surprise.custom_minimum_size.y=38
-	tone_button(surprise,"teal",10,6)
-	surprise_cell.add_child(surprise)
+	surprise.custom_minimum_size=Vector2(0,50)
+	surprise.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	tone_button(surprise,"teal",12,10)
+	footer.add_child(surprise)
 	var done=button("Klaar · naar de hangar  →",close_pilots,true)
 	done.custom_minimum_size.y=50
-	col.add_child(done)
+	done.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	done.size_flags_stretch_ratio=1.4
+	footer.add_child(done)
 
 func open_pilots() -> void:
-	if state!="menu" or paint_open or themes_open or board_open:
+	if state!="menu" or paint_open or themes_open or board_open or homework_open:
 		return
 	pilots_open=true
 	pilot_delete_armed=false
@@ -2650,9 +2860,15 @@ func refresh_pilots() -> void:
 	var look=pilot_look()
 	for attribute in pilot_values:
 		var cell: Dictionary=pilot_values[attribute]
+		var open=PilotFigure.open_ids(attribute,points(),medals())
 		cell.label.text=PilotFigure.option_name(attribute,look[attribute])
+		cell.label.tooltip_text="%d van %d vrijgespeeld" % [open.size(),PilotFigure.options(attribute).size()]
+		cell.count.text="%d/%d" % [open.size(),PilotFigure.options(attribute).size()]
 		if cell.swatch!=null:
 			cell.swatch.color=Color(look[attribute])
+	var left=PilotFigure.locked_count(points(),medals())
+	var next=next_look_unlock()
+	pilot_unlocks.text=("Nog %d looks op slot. Volgende: %s bij %d punten (nog %d)." % [left,next.name,next.points,next.points-points()] if not next.is_empty() else "Nog %d looks op slot, die verdien je met medailles." % left) if left>0 else "Alle looks zijn vrijgespeeld!"
 	pilot_preview.configure(look)
 	if is_instance_valid(hangar_pilot):
 		hangar_pilot.configure(look)
@@ -2714,8 +2930,17 @@ func delete_pilot() -> void:
 		pilot_status.text="%s is verwijderd. Je vliegt nu als %s; de vluchten op de ranglijst blijven staan." % [removed,pilot_name()]
 	refresh_pilots()
 
+# The cheapest pilot look still locked behind points.
+func next_look_unlock() -> Dictionary:
+	var best: Dictionary={}
+	for entry in PilotFigure.ATTRIBUTES:
+		for option in entry[2]:
+			if option.size()>2 and option[2].has("points") and int(option[2].points)>points() and (best.is_empty() or int(option[2].points)<best.points):
+				best={"name":"%s (%s)" % [option[1],String(entry[1]).to_lower()],"points":int(option[2].points)}
+	return best
+
 func step_look(attribute: String,direction: int) -> void:
-	var look=PilotFigure.step(pilot_look(),attribute,direction)
+	var look=PilotFigure.step(pilot_look(),attribute,direction,points(),medals())
 	# A new figure starts with a matching haircut; every part stays changeable.
 	if attribute=="figuur":
 		if look.figuur=="vrouw" and look.haar=="kort":
@@ -2729,7 +2954,7 @@ func step_look(attribute: String,direction: int) -> void:
 func random_look() -> void:
 	var look: Dictionary={}
 	for entry in PilotFigure.ATTRIBUTES:
-		var ids=PilotFigure.option_ids(entry[0])
+		var ids=PilotFigure.open_ids(entry[0],points(),medals())
 		look[entry[0]]=ids[randi()%ids.size()]
 	saved.look=PilotFigure.clean(look)
 	sfx.play("whoosh",1.3)
@@ -3719,21 +3944,46 @@ func smoke_test() -> void:
 	assert(equipped().model=="redder" and helicopter.config.model=="redder","A locked type cannot be chosen")
 	show_hangar_page("upgrades")
 	assert(hangar_pages.upgrades.visible and not hangar_pages.type.visible,"Hangar tabs switch pages")
-	saved.points=2000
+	saved.points=HangarCatalog.MAX_POINTS
 	refresh_hangar()
 	assert(not libel_button.disabled and not paint_panel.find_child("Scheme_Ambulance",true,false).disabled,"Points unlock types and schemes")
+	assert(HangarCatalog.models_of("vliegtuig").size()>=4 and HangarCatalog.models_of("jet").size()>=3 and HangarCatalog.models_of("heli").size()>=8,"The hangar has helicopters, aeroplanes and jets")
+	var rotor_counts={"tandem":2,"coax":2}
 	for model in HangarCatalog.MODELS:
 		choose_model(model.id)
-		assert(helicopter.config.model==model.id and preview_heli.config.model==model.id and helicopter.rotors.size()==(2 if model.id=="tandem" else 1),"Every type builds: "+model.id)
+		var rotors_expected: int=rotor_counts.get(model.id,1) if model.kind=="heli" else 0
+		assert(helicopter.config.model==model.id and preview_heli.config.model==model.id and helicopter.rotors.size()==rotors_expected,"Every type builds: "+model.id)
+		assert(helicopter.kind==model.kind and (model.kind!="vliegtuig" or not helicopter.propellers.is_empty()) and (model.kind!="jet" or not helicopter.exhausts.is_empty()),"Planes get propellers and jets an afterburner: "+model.id)
+		assert(paint_panel.find_child("Model_"+model.id,true,false)!=null,"The type page lists "+model.id)
+	choose_model("redder")
+	var medal_items=HangarCatalog.ACCESSORIES.filter(func(item): return item.has("medal"))
 	for item in HangarCatalog.ACCESSORIES:
 		toggle_accessory(item.id)
-	assert(equipped().accessories.size()==HangarCatalog.ACCESSORIES.size()-1 and not "wimpel" in equipped().accessories,"A medal accessory needs its medal")
+	assert(equipped().accessories.size()==HangarCatalog.ACCESSORIES.size()-medal_items.size() and not "wimpel" in equipped().accessories,"A medal accessory needs its medal")
+	assert(HangarCatalog.ACCESSORIES.size()>=24,"Many accessories to earn")
 	award_medal("eerste_record")
 	toggle_accessory("wimpel")
 	assert("wimpel" in equipped().accessories and helicopter.flag!=null and helicopter.swing!=null,"Accessories are built on the helicopter")
+	assert(helicopter.spinners.size()==1 and helicopter.bobbers.size()==3 and helicopter.flashers.size()==2 and not helicopter.twinkles.is_empty(),"Radar, balloons, police lights and the light string animate")
+	# Every accessory on every type, so no anchor is missing anywhere.
+	for medal in HangarCatalog.MEDALS:
+		award_medal(medal)
+	for model in HangarCatalog.MODELS:
+		var test_garage: Dictionary=HangarCatalog.DEFAULT_GARAGE.duplicate(true)
+		test_garage.model=model.id
+		test_garage.accessories=HangarCatalog.ACCESSORIES.map(func(item): return item.id)
+		var test_heli=RotorHelicopter.new()
+		add_child(test_heli)
+		test_heli.configure(test_garage)
+		assert(test_heli.config.accessories.size()==HangarCatalog.ACCESSORIES.size() and test_heli.flags.size()==3 and test_heli.swings.size()==2,"All accessories fit on "+model.id)
+		test_heli.queue_free()
+	saved.medals=["eerste_record"]
 	var blades_before=helicopter.rotors[0].get_child_count()
 	set_upgrade("rotor",2)
 	assert(helicopter.rotors[0].get_child_count()==blades_before+2,"Rotor upgrade adds blades")
+	choose_model("sport")
+	assert(helicopter.propellers[0].get_child_count()==2+2+1,"Rotor upgrade adds propeller blades (plus the spinner)")
+	choose_model("redder")
 	set_upgrade("motor",2)
 	var base_speed=10.0 if region=="nl" else 42.0
 	game_mode=GameMode.LEARN
@@ -3750,8 +4000,9 @@ func smoke_test() -> void:
 	var cleaned_hangar=ProgressStore.clean({"garage":{"model":"ufo","accessories":["krat","krat","raket"],"rotor":9,"motor":1.5},"points":-5,"medals":["eerste_record","nep"],"pilot":"  Niek\n "})
 	assert(cleaned_hangar.garage=={"model":"redder","accessories":["krat"],"rotor":2,"motor":0,"lights":0} and cleaned_hangar.points==0 and cleaned_hangar.medals==["eerste_record"] and cleaned_hangar.pilot=="Niek","Hangar progress is validated")
 	assert(HangarCatalog.mission_points(GameMode.RECORDS,12,12,3,true,12)==385 and HangarCatalog.mission_points(GameMode.LEARN,1,1,2,false,1)==19,"Mission points follow mode, first tries, stars and records")
-	assert(HangarCatalog.newly_unlocked(140,[],160,[])==PackedStringArray(["heli Libel"]),"The summary names what just unlocked")
-	assert(HangarCatalog.next_unlock(0).points==50 and HangarCatalog.rank(500)=="Gezagvoerder","Next unlock and rank follow the points")
+	assert(HangarCatalog.newly_unlocked(140,[],150,[])==PackedStringArray(["heli Libel"]),"The summary names what just unlocked")
+	assert("Rookspoor" in HangarCatalog.newly_unlocked(899,[],900,[]) and "kapsel Afro" in HangarCatalog.newly_unlocked(259,[],260,[]),"Accessories and pilot looks are named when they unlock")
+	assert(HangarCatalog.next_unlock(0).points==40 and HangarCatalog.rank(500)=="Gezagvoerder" and HangarCatalog.rank(5000)=="Luchtvaartlegende","Next unlock and rank follow the points")
 	saved=progress_snapshot
 	apply_garage()
 	set_paint(paint_before)
@@ -3818,9 +4069,20 @@ func smoke_test() -> void:
 	for i in 20:
 		ProgressStore.add_profile(reloaded,"Piloot %d" % i)
 	assert(reloaded.profiles.size()==ProgressStore.MAX_PROFILES,"At most eight pilots per device")
-	var odd_look=PilotFigure.clean({"haar":"paars","bril":"zonnebril","extra":1})
-	assert(odd_look.haar==PilotFigure.DEFAULT_LOOK.haar and odd_look.bril=="zonnebril" and not odd_look.has("extra"),"Pilot looks are validated")
-	assert(PilotFigure.step(PilotFigure.DEFAULT_LOOK,"bril",-1).bril=="vliegbril","Look choices wrap round")
+	var odd_look=PilotFigure.clean({"haar":"paars","bril":"zonnebril","onbekend":1,"extra":7})
+	assert(odd_look.haar==PilotFigure.DEFAULT_LOOK.haar and odd_look.bril=="zonnebril" and not odd_look.has("onbekend") and odd_look.extra=="geen","Pilot looks are validated")
+	assert(PilotFigure.step(PilotFigure.DEFAULT_LOOK,"bril",-1,0,[]).bril=="vliegbril","Look choices wrap round over the free options")
+	# New looks are earned: locked ones are skipped and fall back when worn.
+	assert(PilotFigure.step({"haar":"kaal"},"haar",1,0,[]).haar=="kort" and PilotFigure.step({"haar":"kaal"},"haar",1,70,[]).haar=="kuif","Locked hairstyles are skipped until earned")
+	var earned_look={"haar":"afro","hoofd":"kroon","outfit":"ridder","kleur":"d4a017","extra":"papegaai","huid":"8fd16a"}
+	var worn=PilotFigure.effective(earned_look,0,[])
+	assert(worn.haar=="kort" and worn.hoofd=="koptelefoon" and worn.outfit=="vliegpak" and worn.kleur=="e67b34" and worn.extra=="geen" and worn.huid=="f6d7c3","Locked looks fall back to the default")
+	worn=PilotFigure.effective(earned_look,HangarCatalog.MAX_POINTS,["huiswerk","combi","foutloos"])
+	assert(worn.haar=="afro" and worn.hoofd=="kroon" and worn.outfit=="ridder" and worn.kleur=="d4a017" and worn.extra=="papegaai","Earned looks are worn")
+	var look_total=0
+	for entry in PilotFigure.ATTRIBUTES:
+		look_total+=entry[2].filter(func(option): return option.size()>2).size()
+	assert(look_total>=55 and PilotFigure.locked_count(0,[])==look_total and PilotFigure.locked_count(HangarCatalog.MAX_POINTS,HangarCatalog.MEDALS.keys())==0,"Many pilot looks to earn, all reachable")
 	for entry in PilotFigure.ATTRIBUTES:
 		for option in entry[2]:
 			var figure_look=PilotFigure.DEFAULT_LOOK.duplicate()
@@ -3868,6 +4130,49 @@ func smoke_test() -> void:
 	start_theme(first_theme.index)
 	assert(not themes_open and state=="flight" and mission.size()==first_theme.count,"A theme starts its own mission")
 	return_menu()
+	europe_route_select.select(picked_route)
+	update_best_label()
+	# Huiswerk: the six worksheet assignments, alone or several at once.
+	var homework_before: Dictionary=saved.duplicate(true)
+	saved.homework=[]
+	saved.medals=[]
+	open_homework()
+	assert(homework_open and region=="nl" and homework_grid.get_child_count()==6,"Huiswerk lists the six worksheet assignments")
+	for item in catalog.homework("nl"):
+		assert(not item.name.begins_with("Kaart") and not item.name.contains("kaart") and not item.source.is_empty(),"Assignments have a fitting name and keep their worksheet: "+item.name)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	print("Homework panel: %s" % homework_panel.get_global_rect().size)
+	assert(screen.encloses(homework_panel.get_global_rect()),"Homework screen fits on screen")
+	select_all_homework(false)
+	assert(homework_start.disabled,"Nothing chosen, nothing to start")
+	toggle_homework("west")
+	toggle_homework("noord")
+	var west_north=TopoCatalog.merge_places([catalog.homework("nl")[2].places,catalog.homework("nl")[3].places])
+	assert(not homework_start.disabled and homework_status.text.contains("2 opdrachten") and homework_status.text.contains("%d plekken" % west_north.size()),"Two assignments merge, every place once")
+	assert(west_north.size()<catalog.homework("nl")[2].count+catalog.homework("nl")[3].count,"Shared places (the Afsluitdijk, the IJsselmeer) are flown once")
+	start_homework()
+	assert(not homework_open and state=="flight" and mission.size()==west_north.size() and not custom_mission,"Several assignments fly as one mission")
+	assert(homework_title(mission)=="Huiswerk · De Randstad en Zeeland + Het Noorden en de Wadden","The combined mission is named after its assignments")
+	var flown=record_homework(mission)
+	assert(flown.size()==2 and "west" in saved.homework and "noord" in saved.homework and "combi" in saved.medals and not "huiswerk" in saved.medals,"Flown assignments are remembered; two at once earns a medal")
+	return_menu()
+	homework_selected=["zuid"]
+	start_homework()
+	assert(state=="flight" and nl_route_select.selected==catalog.homework("nl")[5].index and mission.size()==catalog.homework("nl")[5].count,"One assignment flies its own route")
+	return_menu()
+	record_homework(TopoCatalog.merge_places(catalog.homework("nl").map(func(item): return item.places)))
+	assert(saved.homework.size()==6 and "huiswerk" in saved.medals,"All six flown earns the homework medal")
+	open_homework()
+	assert(homework_grid.get_child(0).text.contains("✓"),"Flown assignments get a tick")
+	go_back(false)
+	assert(not homework_open,"Back closes the homework screen")
+	assert(ProgressStore.clean({"homework":["west","west",5,"noord"]}).homework==["west","noord"],"Homework progress is validated")
+	saved=homework_before
+	homework_selected=[]
+	apply_profile()
+	region_select.select(1)
+	load_world("eu")
 	europe_route_select.select(picked_route)
 	update_best_label()
 	assert(mode_tiles.size()==3 and mode_tiles[mode_select.selected].selected,"Mode tiles mirror the chosen mode")
@@ -3946,7 +4251,8 @@ func capture_preview() -> void:
 		elif model.id=="pijl":
 			saved.garage.accessories=["drijvers","zoeklicht","wimpel"]
 			apply_garage()
-		paint_panel.find_child("Scheme_"+["Kustwacht","Neonracer","Middernacht","Camouflage","Brandweer"][HangarCatalog.MODELS.find(model)],true,false).pressed.emit()
+		var showcase=["Kustwacht","Neonracer","Middernacht","Camouflage","Brandweer","Junglegroen","Traumageel","Robijn","Racerood","Oceaanblauw","Woestijn","Ambulance","Europa","Marinegrijs","Nachtzwart"]
+		paint_panel.find_child("Scheme_"+showcase[HangarCatalog.MODELS.find(model)%showcase.size()],true,false).pressed.emit()
 		await get_tree().create_timer(.6).timeout
 		get_viewport().get_texture().get_image().save_png("res://build/preview-hangar-"+model.id+".png")
 	for page in ["kleuren","accessoires","upgrades"]:
@@ -4055,6 +4361,70 @@ func capture_effects() -> void:
 	return_menu()
 
 # Quick visual pass over the interface and Europe: hangar, flight, feedback and cities.
+# The homework screen, every aircraft with accessories, the accessory list
+# and a few earned pilot looks, plus a jet and a plane in flight.
+func capture_hangar() -> void:
+	saved.mute=true
+	seed(1206)
+	DirAccess.make_dir_recursive_absolute("res://build")
+	saved.points=HangarCatalog.MAX_POINTS
+	saved.medals=HangarCatalog.MEDALS.keys()
+	saved.homework=["overzicht","west"]
+	update_best_label()
+	await get_tree().create_timer(.6).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-menu-huiswerk.png")
+	open_homework()
+	toggle_homework("west")
+	toggle_homework("noord")
+	await get_tree().create_timer(.5).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-huiswerk.png")
+	close_homework()
+	var sets={"molen":["ogen","ballonnen","wielen"],"wesp":["haaienbek","tanks","zwaailichten"],"coax":["radar","bluskorf","vlag"],
+		"sport":["ogen","banner","rookspoor"],"dubbel":["haaienbek","regenboog","kroon"],"zee":["lichtslinger","koffer","vlag"],"dakota":["zonnepaneel","radar","wimpel"],
+		"valk":["haaienbek","vuurwerk","meetneus"],"delta":["ogen","tanks","regenboog"],"schaduw":["kroon","rookspoor","zwaailichten"]}
+	var showcase={"molen":"Traumageel","wesp":"Camouflage","coax":"Kustwacht","sport":"Racerood","dubbel":"Robijn","zee":"Oceaanblauw","dakota":"Woestijn","valk":"Marinegrijs","delta":"Europa","schaduw":"Nachtzwart"}
+	open_paint_shop()
+	show_hangar_page("type")
+	for id in sets:
+		saved.garage={"model":id,"accessories":sets[id],"rotor":1,"motor":2,"lights":1}
+		apply_garage()
+		paint_panel.find_child("Scheme_"+showcase[id],true,false).pressed.emit()
+		await get_tree().create_timer(.7).timeout
+		get_viewport().get_texture().get_image().save_png("res://build/preview-hangar-"+id+".png")
+	var scroll: ScrollContainer=paint_panel.find_child("TypeScroll",true,false)
+	scroll.scroll_vertical=10000
+	await get_tree().create_timer(.3).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-hangar-types-jets.png")
+	show_hangar_page("accessoires")
+	await get_tree().create_timer(.3).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-hangar-accessoires-lijst.png")
+	close_paint_shop()
+	var looks=[{"figuur":"vrouw","haar":"afro","haarkleur":"8a4fd8","hoofd":"kroon","outfit":"superheld","kleur":"264a7a","extra":"papegaai","bril":"hartjes"},
+		{"figuur":"man","huid":"8fd16a","haar":"hanenkam","haarkleur":"3fbf6a","hoofd":"geen","outfit":"astronaut","kleur":"e8453a","extra":"vlag","gezicht":"blosjes"},
+		{"figuur":"man","haar":"dreads","hoofd":"piraat","bril":"ooglap","outfit":"piraat","gezicht":"krulsnor","extra":"landkaart"},
+		{"figuur":"vrouw","haar":"knotjes","haarkleur":"e8c33a","hoofd":"propellerpet","outfit":"voetbal","kleur":"e67b34","bril":"sterren","extra":"rugzak"},
+		{"figuur":"man","haar":"kuif","hoofd":"baret","outfit":"smoking","kleur":"c8211d","gezicht":"kerstbaard","extra":"teddybeer"},
+		{"figuur":"vrouw","haar":"bob","hoofd":"astronaut","outfit":"ridder","kleur":"5c1428","bril":"skibril","extra":"parachute"}]
+	open_pilots()
+	for i in looks.size():
+		saved.look=PilotFigure.clean(looks[i])
+		refresh_pilots()
+		pilot_preview.rotation.y=PI
+		await get_tree().create_timer(.5).timeout
+		get_viewport().get_texture().get_image().save_png("res://build/preview-piloot-%d.png" % (i+1))
+	close_pilots()
+	for id in ["valk","sport"]:
+		saved.garage={"model":id,"accessories":["regenboog"] if id=="valk" else ["banner","rookspoor"],"rotor":1,"motor":2,"lights":1}
+		apply_garage()
+		start_mission([catalog.lookup.amsterdam,catalog.lookup.rotterdam])
+		helicopter.position=world.project(5.0,52.23)+Vector3(0,flight_altitude(),0)
+		for i in 40:
+			await get_tree().process_frame
+		get_viewport().get_texture().get_image().save_png("res://build/preview-flight-"+id+".png")
+		return_menu()
+	print("HANGAR CAPTURE PASSED")
+	get_tree().quit()
+
 func capture_ui() -> void:
 	saved.mute=true
 	DirAccess.make_dir_recursive_absolute("res://build")

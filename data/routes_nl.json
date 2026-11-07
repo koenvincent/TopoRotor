@@ -1,5 +1,5 @@
 {
-  "note": "Routes uit de TopoMaster-werkbladen Nederland (overzichtskaart en kaarten A-D), daarna de thema's. Namen moeten in data/places.json staan; 'theme' zet een route in het menu Thema's.",
+  "note": "Routes uit de TopoMaster-werkbladen Nederland (overzichtskaart, leerkaart en kaarten A-D), daarna de thema's. Namen moeten in data/places.json staan. 'homework' zet een route als opdracht onder Huiswerk, met 'source' als werkblad; 'theme' zet een route in het menu Thema's.",
   "routes": [
     {
       "title": "Nederland · kort rondje",
@@ -19,7 +19,10 @@
       ]
     },
     {
-      "title": "Overzichtskaart Nederland",
+      "title": "Huiswerk · Provincies en hoofdsteden",
+      "homework": "overzicht",
+      "source": "Overzichtskaart",
+      "about": "De twaalf provincies met hun hoofdstad, de grootste steden, het grote water en de Afsluitdijk.",
       "places": [
         "Groningen provincie",
         "Friesland",
@@ -58,7 +61,10 @@
       ]
     },
     {
-      "title": "Leerkaart Nederland",
+      "title": "Huiswerk · Rivieren, meren en dijken",
+      "homework": "water",
+      "source": "Leerkaart",
+      "about": "Provincies en hoofdsteden, met alle rivieren, zeearmen, kanalen en dijken van de leerkaart.",
       "places": [
         "Groningen provincie",
         "Friesland",
@@ -105,7 +111,10 @@
       ]
     },
     {
-      "title": "Kaart A · West",
+      "title": "Huiswerk · De Randstad en Zeeland",
+      "homework": "west",
+      "source": "Kaart A",
+      "about": "Noord-Holland, Zuid-Holland en Zeeland: steden, eilanden en het water in het westen.",
       "places": [
         "Noord-Holland",
         "Zuid-Holland",
@@ -148,7 +157,10 @@
       ]
     },
     {
-      "title": "Kaart B · Noord",
+      "title": "Huiswerk · Het Noorden en de Wadden",
+      "homework": "noord",
+      "source": "Kaart B",
+      "about": "Groningen, Friesland en Drenthe met de Waddeneilanden.",
       "places": [
         "Groningen provincie",
         "Friesland",
@@ -174,7 +186,10 @@
       ]
     },
     {
-      "title": "Kaart C · Midden en oost",
+      "title": "Huiswerk · Het Oosten en de Veluwe",
+      "homework": "oost",
+      "source": "Kaart C",
+      "about": "Flevoland, Overijssel en Gelderland: van de IJssel tot Twente.",
       "places": [
         "Flevoland",
         "Overijssel",
@@ -206,7 +221,10 @@
       ]
     },
     {
-      "title": "Kaart D · Zuid",
+      "title": "Huiswerk · Het Zuiden: Brabant en Limburg",
+      "homework": "zuid",
+      "source": "Kaart D",
+      "about": "Utrecht, Noord-Brabant en Limburg, tot de Vaalserberg.",
       "places": [
         "Utrecht provincie",
         "Noord-Brabant",

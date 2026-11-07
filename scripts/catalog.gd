@@ -29,8 +29,43 @@ func load_routes(region: String) -> Array:
 		var resolved: Array = []
 		for name in route.places:
 			resolved.append(resolve(name,region))
-		result.append({"title":route.title,"theme":String(route.get("theme","")),"places":resolved})
+		result.append({"title":route.title,"theme":String(route.get("theme","")),"homework":String(route.get("homework","")),
+			"source":String(route.get("source","")),"about":String(route.get("about","")),"places":resolved})
 	return result
+
+# Homework: the assignments from the worksheet photos, as their own routes.
+# name is the title without the "Huiswerk · " prefix the route picker shows.
+func homework(region: String) -> Array:
+	var list: Array=[]
+	var all := routes(region)
+	for i in all.size():
+		if not String(all[i].homework).is_empty():
+			list.append({"index":i,"id":all[i].homework,"name":String(all[i].title).trim_prefix("Huiswerk · "),"source":all[i].source,
+				"about":all[i].about,"count":all[i].places.size(),"places":all[i].places})
+	return list
+
+# Places of several routes in one list, each place once, in route order.
+static func merge_places(lists: Array) -> Array:
+	var seen: Dictionary={}
+	var merged: Array=[]
+	for places in lists:
+		for place in places:
+			if not seen.has(place.name):
+				seen[place.name]=true
+				merged.append(place)
+	return merged
+
+# Homework assignments of which every place is in this list: what a finished
+# mission counts as done.
+func homework_covered(region: String,places: Array) -> Array:
+	var names: Dictionary={}
+	for place in places:
+		names[place.name]=true
+	var covered: Array=[]
+	for item in homework(region):
+		if item.places.all(func(p): return names.has(p.name)):
+			covered.append(item)
+	return covered
 
 # Theme routes (provinces, rivers, areas, islands, ...) with their index in
 # the region's route list, so the menu can select them in the route picker.
