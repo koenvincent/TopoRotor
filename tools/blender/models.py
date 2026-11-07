@@ -82,7 +82,7 @@ def ring(w, h, yc, z, n, segments, xc=0.0):
     return pts
 
 
-def loft(name, sections, paint, segments=24, n=2.3, subdiv=2):
+def loft(name, sections, paint, segments=24, n=2.3, subdiv=1):
     """Skin cross-sections (z, width, height, centre_y[, centre_x]) into a
     closed body. paint is a slot name or a function of the face centre and
     normal.
@@ -658,7 +658,7 @@ def build_scenery():
     block.name = "Block"
     mod = block.modifiers.new("Bevel", "BEVEL")
     mod.width = .06
-    mod.segments = 2
+    mod.segments = 1
     block.data.shade_smooth()
     block.data.set_sharp_from_angle(angle=math.radians(30))
     # Roof: a gable prism with chamfered ridge and eaves.
@@ -678,11 +678,11 @@ def build_scenery():
     bm.free()
     mod = roof.modifiers.new("Bevel", "BEVEL")
     mod.width = .04
-    mod.segments = 2
+    mod.segments = 1
     roof.data.shade_smooth()
     roof.data.set_sharp_from_angle(angle=math.radians(30))
     # Crown: a lumpy faceted ball for leafy trees.
-    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=.5)
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=.5)
     crown = bpy.context.active_object
     crown.name = "Crown"
     for v in crown.data.vertices:
@@ -780,11 +780,11 @@ def colour(obj, name):
     return obj
 
 
-def shell(name, slot, grow=1.08, keep=None, thick=.035, centre=None, subdiv=2):
+def shell(name, slot, grow=1.08, keep=None, thick=.035, centre=None, subdiv=1):
     """A cap that follows the head: a grown head sphere keeping only the
     faces where keep(x, y, z) is true, thickened and smoothed."""
     cx, cy, cz = centre or HEAD
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=40, ring_count=24, location=G(cx, cy, cz))
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=18, location=G(cx, cy, cz))
     obj = bpy.context.active_object
     obj.name = name
     obj.scale = (HR[0] * grow, HR[2] * grow, HR[1] * grow)
@@ -823,7 +823,7 @@ def hairline(front, side, back, face_cut=True):
     return keep
 
 
-def blobs(name, balls, slot, resolution=.012):
+def blobs(name, balls, slot, resolution=.02):
     """Metaball cluster (pos, radius) merged into one smooth mesh: curls,
     buns, quiffs and manes that flow together like moulded vinyl."""
     mb = bpy.data.metaballs.new(name)
@@ -840,6 +840,10 @@ def blobs(name, balls, slot, resolution=.012):
     bpy.ops.object.convert(target="MESH")
     out = bpy.context.active_object
     out.name = name
+    # Metaballs come out dense; a decimate keeps the shape at a fraction of
+    # the triangles.
+    dec = out.modifiers.new("Decimate", "DECIMATE")
+    dec.ratio = .35
     out.data.shade_smooth()
     return colour(out, slot)
 
@@ -889,7 +893,7 @@ def build_pilot_parts():
     afro = [((math.cos(a) * .27 * math.cos(b), 2.04 + .26 * math.sin(b), math.sin(a) * .25 * math.cos(b) + .06), .12)
             for a in [i * math.tau / 10 for i in range(10)] for b in (0.0, .6, 1.1)]
     afro = [ball for ball in afro if not (ball[0][2] < -.12 and ball[0][1] < 2.05)] + [((0, 2.2, .05), .2)]
-    merge("haar_afro", [blobs("af", afro, hair, resolution=.015)])
+    merge("haar_afro", [blobs("af", afro, hair, resolution=.022)])
     merge("haar_knotjes", [shell("kj", hair, keep=short), blobs("kb", [((-.16, 2.2, .03), .09), ((.16, 2.2, .03), .09)], hair)])
     crest = [spike(f"hk{i}", (0, 2.12, -.14 + i * .07), (0, 2.3 + .04 * (2 - abs(i - 2)), -.18 + i * .08), .045, hair) for i in range(5)]
     merge("haar_hanenkam", [shell("hs", "skin", keep=hairline(2.08, 1.95, 1.85), grow=1.02, thick=.01)] + crest + [blobs("hb", [((0, 2.14, -.1 + i * .05), .05) for i in range(6)], hair)])
@@ -898,7 +902,7 @@ def build_pilot_parts():
     merge("haar_dreads", [shell("dd", hair, keep=short)] + [colour(d, hair) for d in dreads])
     mane = [((math.cos(a) * .24, 2.02 + math.sin(a * 3) * .05, math.sin(a) * .22 + .06), .1) for a in [i * math.tau / 11 for i in range(11)]]
     mane += [((0, 1.8, .2), .14), ((-.12, 1.78, .16), .1), ((.12, 1.78, .16), .1), ((0, 2.18, .02), .14)]
-    merge("haar_wild", [blobs("wm", mane, hair, resolution=.015)])
+    merge("haar_wild", [blobs("wm", mane, hair, resolution=.022)])
 
     # Headwear.
     def cap_crown(name, slot, cut=2.0, grow=1.12):
@@ -1001,15 +1005,15 @@ PILOT_PART_NAMES = ["haar_kort", "haar_stekels", "haar_krullen", "haar_lang", "h
 def build_landmark_kit():
     """Smoother stand-ins for the landmark primitives: a column with rounded
     rims (radius .5, height 1) and a smooth orb (diameter 1)."""
-    bpy.ops.mesh.primitive_cylinder_add(vertices=20, radius=.5, depth=1)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=.5, depth=1)
     col = bpy.context.active_object
     col.name = "Column"
     mod = col.modifiers.new("Bevel", "BEVEL")
     mod.width = .05
-    mod.segments = 2
+    mod.segments = 1
     col.data.shade_smooth()
     col.data.set_sharp_from_angle(angle=math.radians(40))
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=18, ring_count=10, radius=.5)
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=14, ring_count=8, radius=.5)
     orb = bpy.context.active_object
     orb.name = "Orb"
     orb.data.shade_smooth()
