@@ -3,6 +3,8 @@ extends RefCounted
 
 var places: Array = []
 var lookup: Dictionary = {}
+# Dutch worksheet routes (overview map and maps A-D): [{title, places: [Dictionary]}].
+var nl_routes: Array = []
 
 func _init() -> void:
 	places = JSON.parse_string(FileAccess.get_file_as_string("res://data/places.json"))
@@ -10,6 +12,12 @@ func _init() -> void:
 		lookup[normalize(p.name)] = p
 		for alias in p.aliases:
 			lookup[normalize(alias)] = p
+	var routes: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/routes_nl.json"))
+	for route in routes.routes:
+		var resolved: Array = []
+		for name in route.places:
+			resolved.append(lookup[normalize(name)])
+		nl_routes.append({"title":route.title,"places":resolved})
 
 func normalize(value: String) -> String:
 	var s = value.strip_edges().to_lower()
@@ -50,6 +58,8 @@ func parse_list(text: String) -> Dictionary:
 	return {"found":found,"unknown":unknown}
 
 func presets(region: String, scope: int=0) -> Array:
+	if region=="nl" and scope>=0 and scope<nl_routes.size():
+		return nl_routes[scope].places.duplicate()
 	if region=="eu" and scope>0:
 		var all_places: Array=[]
 		for place in places:
