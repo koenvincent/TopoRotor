@@ -10,6 +10,14 @@ var hud: Control
 var summary: PanelContainer
 var joystick: FlightJoystick
 var minimap: FlightMinimap
+var locator: LocatorCard
+var map_turn_button: Button
+var menu_turn_button: Button
+var mode_tiles: Array = []
+var menu_shade: TextureRect
+var menu_flight_time: float = 0.0
+const MENU_HELI_SCALE = 8.5
+const FLIGHT_HELI_SCALE = 1.25
 var title_label: Label
 var detail_label: Label
 var progress_label: Label
@@ -44,7 +52,7 @@ var ocr_input_snapshot: String = ""
 var ocr_retry_after_msec: int = 0
 # Test/capture harness is only reachable from debug (editor/CI) builds, never from release exports.
 var is_test_mode: bool = OS.is_debug_build() and OS.get_cmdline_user_args().has("--smoke-test")
-var is_capture_mode: bool = OS.is_debug_build() and (OS.get_cmdline_user_args().has("--capture") or OS.get_cmdline_user_args().has("--capture-fx") or OS.get_cmdline_user_args().has("--capture-ui"))
+var is_capture_mode: bool = OS.is_debug_build() and (OS.get_cmdline_user_args().has("--capture") or OS.get_cmdline_user_args().has("--capture-fx") or OS.get_cmdline_user_args().has("--capture-learn") or OS.get_cmdline_user_args().has("--capture-ui"))
 # Smoke tests exercise the real save path against a separate file, never the player's profile.
 var save_path: String = "user://smoke-progress.json" if is_test_mode else "user://progress.json"
 var http: HTTPRequest
@@ -77,8 +85,12 @@ var camera_level: int = 0
 var height_label: Label
 var lower_button: Button
 var higher_button: Button
-const FLIGHT_ZOOMS = [22.0,38.0,64.0]
-const FLIGHT_ALTITUDES = [9.0,14.0,23.0]
+# Every level sits one step higher than in 0.4: the old Midden is now Laag,
+# the old Hoog is Midden, and Hoog shows a wider area around the helicopter.
+const FLIGHT_ZOOMS = [38.0,64.0,100.0]
+const FLIGHT_ALTITUDES = [14.0,23.0,32.0]
+# Effects (sight, beacon, fireworks) were sized for this zoom; they scale from it.
+const FX_REFERENCE_ZOOM = 22.0
 const HEIGHT_NAMES = ["Laag","Midden","Hoog"]
 const TURN_RATE = 2.1 # rad/s at full stick
 const REVERSE_FACTOR = .45
@@ -132,15 +144,12 @@ const PANEL_SOLID = Color(.025,.1,.14,.98)
 const EDGE = Color(.31,.85,1.0,.26)
 # Leren is green, Oefenen blue, Records red: the colour follows you into the flight.
 const MODE_COLORS = [Color("4cd97b"),Color("3cb9ff"),Color("ff5470")]
-const MODE_HINTS = ["Alle namen, afstand en doelmarkers","Hulp verschijnt pas als je dichtbij bent","Geen hints, de klok telt · +10 sec per fout"]
 const BUTTON_TONES = {
 	"gold":{"base":Color("ffc94a"),"hover":Color("ffdb7a"),"pressed":Color("f0a92c"),"edge":Color("b8640f"),"ink":Color("0b2530"),"glow":Color(1,.79,.29,.5)},
 	"teal":{"base":Color("1d6577"),"hover":Color("27839a"),"pressed":Color("164f5d"),"edge":Color("082a33"),"ink":Color("fff7e6"),"glow":Color(.31,.85,1,.4)},
 	"ghost":{"base":Color(1,1,1,.08),"hover":Color(.31,.85,1,.18),"pressed":Color(1,1,1,.04),"edge":Color(0,0,0,.35),"ink":Color("fff7e6"),"glow":Color(.31,.85,1,.3)},
 }
 var region_tiles: Array = []
-var mode_buttons: Array = []
-var mode_caption: Label
 var stars_label: Label
 var hud_card_style: StyleBoxFlat
 var streak: int = 0
@@ -159,7 +168,7 @@ func _ready() -> void:
 		call_deferred("smoke_test")
 	if is_capture_mode:
 		var args=OS.get_cmdline_user_args()
-		call_deferred("capture_effects_only" if args.has("--capture-fx") else "capture_ui" if args.has("--capture-ui") else "capture_preview")
+		call_deferred("capture_effects_only" if args.has("--capture-fx") else "capture_learning_only" if args.has("--capture-learn") else "capture_ui" if args.has("--capture-ui") else "capture_preview")
 
 func build_environment() -> void:
 	var env = WorldEnvironment.new()
@@ -575,7 +584,27 @@ func pill(text: String,background: Color,ink: Color=INK,size_px: int=12) -> Labe
 	return l
 
 func build_menu() -> void:
+	# A soft dark gradient behind the panel keeps it readable over the bright
+	# map and gives the hangar some depth.
+	menu_shade=TextureRect.new()
+	var shade=GradientTexture2D.new()
+	var ramp=Gradient.new()
+	ramp.set_color(0,Color(.01,.05,.07,.82))
+	ramp.set_color(1,Color(.01,.05,.07,0))
+	ramp.add_point(.45,Color(.01,.05,.07,.45))
+	shade.gradient=ramp
+	shade.fill_from=Vector2(0,.5)
+	shade.fill_to=Vector2(1,.5)
+	shade.width=256
+	shade.height=4
+	menu_shade.texture=shade
+	menu_shade.stretch_mode=TextureRect.STRETCH_SCALE
+	menu_shade.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+	menu_shade.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	ui.add_child(menu_shade)
+	pin(menu_shade,Rect2(0,0,.62,1),0,0,0,0)
 	menu=PanelContainer.new()
+	menu.visibility_changed.connect(func(): menu_shade.visible=menu.visible)
 	var menu_style=card(PANEL,28)
 	menu_style.content_margin_left=28
 	menu_style.content_margin_right=28
@@ -595,20 +624,34 @@ func build_menu() -> void:
 	col.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	col.add_theme_constant_override("separation",8)
 	menu.add_child(col)
+	# Brand row: the app icon as logo, then badges, the two-tone name and tagline.
+	var brand=HBoxContainer.new()
+	brand.add_theme_constant_override("separation",14)
+	col.add_child(brand)
+	var logo=TextureRect.new()
+	logo.texture=load("res://assets/icon.svg")
+	logo.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+	logo.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	logo.custom_minimum_size=Vector2(84,84)
+	logo.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+	brand.add_child(logo)
+	var brand_text=VBoxContainer.new()
+	brand_text.add_theme_constant_override("separation",0)
+	brand_text.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	brand.add_child(brand_text)
 	var badges=HBoxContainer.new()
-	badges.add_theme_constant_override("separation",8)
-	badges.add_child(pill("VLIEGAVONTUUR",GOLD))
-	badges.add_child(pill("TOPOGRAFIE",Color(SKY,.85)))
-	col.add_child(badges)
-	# Two-tone logo: "Nieks" in cream, "TopoRotor" in gold.
-	var logo=HBoxContainer.new()
-	logo.add_theme_constant_override("separation",12)
-	logo.add_child(title("Nieks",50,CREAM))
-	logo.add_child(title("TopoRotor",50))
-	col.add_child(logo)
-	var intro=label("Vlieg je topografie-huiswerk tegemoet.",17,Color("cfe6e2"))
+	badges.add_theme_constant_override("separation",6)
+	badges.add_child(pill("VLIEGAVONTUUR",GOLD,INK,11))
+	badges.add_child(pill("TOPOGRAFIE",Color(SKY,.85),INK,11))
+	brand_text.add_child(badges)
+	var name_row=HBoxContainer.new()
+	name_row.add_theme_constant_override("separation",9)
+	name_row.add_child(title("Nieks",40,CREAM))
+	name_row.add_child(title("TopoRotor",40))
+	brand_text.add_child(name_row)
+	var intro=label("Vlieg je topografie-huiswerk tegemoet.",15,Color("cfe6e2"))
 	intro.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-	col.add_child(intro)
+	brand_text.add_child(intro)
 	col.add_child(kicker("VLUCHTGEBIED"))
 	# Region tiles drive the hidden picker that the rest of the game reads.
 	region_select=OptionButton.new()
@@ -676,34 +719,20 @@ func build_menu() -> void:
 	mode_select.add_item("Oefenen · hulp als je dichtbij bent")
 	mode_select.add_item("Records · zonder hints, op snelheid")
 	mode_select.item_selected.connect(func(_index): update_best_label())
+	# The dropdown stays the model for the chosen mode; three tiles drive it.
 	mode_select.visible=false
 	col.add_child(mode_select)
-	var segments=HBoxContainer.new()
-	segments.add_theme_constant_override("separation",8)
-	col.add_child(segments)
-	var mode_group=ButtonGroup.new()
-	mode_buttons=[]
-	for i in MODE_NAMES.size():
-		var segment=Button.new()
-		segment.text=MODE_NAMES[i]
-		segment.name="Mode_"+MODE_NAMES[i]
-		segment.toggle_mode=true
-		segment.button_group=mode_group
-		segment.custom_minimum_size=Vector2(0,46)
-		segment.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-		segment.add_theme_font_size_override("font_size",17)
-		toggle_style(segment,MODE_COLORS[i],12,.12)
-		segment.pressed.connect(func():
-			sfx.play("star",.9+i*.12)
-			mode_select.select(i)
-			update_best_label()
-		)
-		add_press_juice(segment)
-		segments.add_child(segment)
-		mode_buttons.append(segment)
-	mode_caption=label("",14,MODE_COLORS[0])
-	mode_caption.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(mode_caption)
+	var mode_row=HBoxContainer.new()
+	mode_row.add_theme_constant_override("separation",8)
+	col.add_child(mode_row)
+	for entry in [["Leren","alle hints","Leren: namen, afstand en richting in beeld."],["Oefenen","hulp dichtbij","Oefenen: richting en hulp als je dichtbij bent."],["Records","op snelheid","Records: geen hints, op tijd en elke fout kost 10 seconden."]]:
+		var tile=MenuWidgets.ModeTile.new(mode_tiles.size(),entry[0],entry[1],entry[2])
+		tile.name="Mode_"+entry[0]
+		tile.pressed.connect(choose_mode.bind(mode_tiles.size()))
+		add_press_juice(tile)
+		mode_row.add_child(tile)
+		mode_tiles.append(tile)
+	refresh_mode_tiles()
 	var start=button("START VLIEGMISSIE  ▶",func(): start_mission(),true)
 	start.name="Start"
 	start.custom_minimum_size.y=66
@@ -749,10 +778,18 @@ func build_menu() -> void:
 	tone_button(paint_button,"ghost",12,12)
 	footer.add_child(paint_button)
 	mute_button=button("Geluid: uit" if saved.mute else "Geluid: aan",toggle_sound)
-	mute_button.custom_minimum_size=Vector2(124,40)
+	mute_button.custom_minimum_size=Vector2(0,40)
 	mute_button.add_theme_font_size_override("font_size",15)
 	tone_button(mute_button,"ghost",12,12)
 	footer.add_child(mute_button)
+	# Same setting as the button under the flight heights: compass and minimap
+	# stay north-up, or turn with the helicopter.
+	menu_turn_button=button("",toggle_compass_mode)
+	menu_turn_button.custom_minimum_size=Vector2(0,40)
+	menu_turn_button.add_theme_font_size_override("font_size",15)
+	menu_turn_button.tooltip_text="Vast: noord blijft boven. Draait mee: je neus wijst altijd omhoog. Geldt voor kompasrand en minikaart; tijdens het vliegen ook met toets R."
+	tone_button(menu_turn_button,"ghost",12,12)
+	footer.add_child(menu_turn_button)
 	var credits=LinkButton.new()
 	credits.text="Bronnen"
 	credits.tooltip_text="Bronnen en licenties"
@@ -761,7 +798,7 @@ func build_menu() -> void:
 	credits.pressed.connect(show_credits)
 	footer.add_child(credits)
 
-# Keeps the tiles and mode segments in step with the pickers they drive.
+# Keeps the region tiles in step with the picker they drive.
 func sync_menu_controls() -> void:
 	if region_tiles.size()==2:
 		region_tiles[0].set_pressed_no_signal(region=="nl")
@@ -769,12 +806,6 @@ func sync_menu_controls() -> void:
 		for tile in region_tiles:
 			var sub: Label=tile.find_child("Sub",true,false)
 			sub.add_theme_color_override("font_color",INK if tile.button_pressed else MUTED)
-	var mode=maxi(mode_select.selected,0)
-	for i in mode_buttons.size():
-		mode_buttons[i].set_pressed_no_signal(i==mode)
-	if is_instance_valid(mode_caption):
-		mode_caption.text=MODE_HINTS[mode]
-		mode_caption.add_theme_color_override("font_color",MODE_COLORS[mode])
 
 # Panels pop in instead of appearing: a short fade and a slight scale-up.
 func reveal(c: Control,delay: float=0.0) -> void:
@@ -784,6 +815,15 @@ func reveal(c: Control,delay: float=0.0) -> void:
 	var t=c.create_tween().set_parallel(true)
 	t.tween_property(c,"modulate:a",1.0,.18).set_delay(delay)
 	t.tween_property(c,"scale",Vector2.ONE,.26).set_delay(delay).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func choose_mode(index: int) -> void:
+	mode_select.select(index)
+	update_best_label()
+	sfx.play("whoosh",1.3)
+
+func refresh_mode_tiles() -> void:
+	for tile in mode_tiles:
+		tile.selected=tile.mode_index==mode_select.selected
 
 func chip(color: Color) -> StyleBoxFlat:
 	var s=style(color,9)
@@ -843,10 +883,12 @@ func build_hud() -> void:
 	hud.add_child(minimap)
 	pin(minimap,top_right,-284,84,-24,314)
 	minimap.mouse_filter=Control.MOUSE_FILTER_STOP
+	minimap.rotate_with_heading=saved.get("minimap_rotate",false)==true
+	minimap.rotation_mode_changed.connect(minimap_rotation_changed)
 	var height_panel=PanelContainer.new()
 	height_panel.add_theme_stylebox_override("panel",compact_card())
 	hud.add_child(height_panel)
-	pin(height_panel,top_right,-284,326,-24,426)
+	pin(height_panel,top_right,-284,326,-24,474)
 	var height_col=VBoxContainer.new()
 	height_col.add_theme_constant_override("separation",8)
 	height_panel.add_child(height_col)
@@ -863,6 +905,13 @@ func build_hud() -> void:
 		control.add_theme_font_size_override("font_size",15)
 		style_button(control,false,10,8)
 		height_row.add_child(control)
+	map_turn_button=button("",toggle_compass_mode)
+	map_turn_button.custom_minimum_size=Vector2(0,36)
+	map_turn_button.add_theme_font_size_override("font_size",14)
+	map_turn_button.tooltip_text="Vast: noord blijft boven. Draait mee: je neus wijst altijd omhoog. Geldt voor kompasrand en minikaart. Toets R."
+	style_button(map_turn_button,false,10,8)
+	height_col.add_child(map_turn_button)
+	update_map_turn_button()
 	update_height_controls()
 	joystick=FlightJoystick.new()
 	hud.add_child(joystick)
@@ -905,7 +954,29 @@ func build_hud() -> void:
 	status_label.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
 	status_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	status_panel.add_child(status_label)
+	locator=LocatorCard.new()
+	for place in catalog.places:
+		if place.kind=="land" and not String(place.code).is_empty():
+			locator.country_names[place.code]=LocatorCard.display_name(place)
+	minimap.country_names=locator.country_names
+	hud.add_child(locator)
+	pin(locator,top_left,24,132,324,132)
 	hud.hide()
+
+func toggle_compass_mode() -> void:
+	minimap.toggle_rotation()
+
+func update_map_turn_button() -> void:
+	if is_instance_valid(map_turn_button):
+		map_turn_button.text="Kompas: draait mee" if minimap.rotate_with_heading else "Kompas: vast"
+	# Shorter in the hangar so the footer keeps the menu at its usual width.
+	if is_instance_valid(menu_turn_button):
+		menu_turn_button.text="Kompas: draait" if minimap.rotate_with_heading else "Kompas: vast"
+
+func minimap_rotation_changed(rotating: bool) -> void:
+	update_map_turn_button()
+	saved.minimap_rotate=rotating
+	save_data()
 
 func compact_card() -> StyleBoxFlat:
 	var s=card(PANEL,16)
@@ -942,6 +1013,9 @@ func load_world(new_region: String) -> void:
 	world.build(region,catalog)
 	fx.attach_target(world.target)
 	minimap.world=world
+	if is_instance_valid(locator):
+		locator.world=world
+		locator.dismiss()
 	helicopter.position=world.project(SPAWN.x,SPAWN.y)+Vector3(0,flight_altitude(),0)
 	position_menu_camera()
 	world.set_hints(false)
@@ -952,6 +1026,7 @@ func selected_presets() -> Array:
 	return catalog.presets(region,maxi(picker.selected,0) if is_instance_valid(picker) else 0)
 
 func update_best_label() -> void:
+	refresh_mode_tiles()
 	var best=float(saved.get("records",{}).get(record_key(selected_presets()),0.0))
 	var practice=clampi(int(saved.best.get(region+"_oefenen",0)),0,3)
 	var records=clampi(int(saved.best.get(region+"_test",0)),0,3)
@@ -980,6 +1055,7 @@ func start_mission(custom: Array = [],as_custom: bool = true) -> void:
 	sfx.muted=saved.mute
 	fx.clear_effects()
 	hud_fx.clear()
+	locator.dismiss()
 	shake=0.0
 	in_zone=false
 	if game_mode==GameMode.RECORDS:
@@ -996,6 +1072,9 @@ func start_mission(custom: Array = [],as_custom: bool = true) -> void:
 	exam=game_mode==GameMode.RECORDS
 	show_hints=game_mode==GameMode.LEARN
 	hint_button.visible=game_mode==GameMode.LEARN
+	# Learning and practice point the way on the minimap; records never do.
+	minimap.show_direction=game_mode!=GameMode.RECORDS
+	minimap.show_place_names=game_mode!=GameMode.RECORDS
 	hint_button.text="Alle aanwijzingen aan"
 	hint_button.disabled=true
 	hints_used=false
@@ -1008,6 +1087,7 @@ func start_mission(custom: Array = [],as_custom: bool = true) -> void:
 	reveal(hud)
 	velocity=Vector2.ZERO
 	joystick.reset()
+	helicopter.scale=Vector3.ONE*FLIGHT_HELI_SCALE
 	helicopter.position=world.project(SPAWN.x,SPAWN.y)+Vector3(0,flight_altitude(),0)
 	heading=0.0
 	helicopter.rotation.y=heading
@@ -1017,6 +1097,7 @@ func start_mission(custom: Array = [],as_custom: bool = true) -> void:
 	update_flight_camera(0.0,true)
 	compass.heading=heading
 	minimap.heading=heading
+	minimap.aircraft=helicopter.position
 	update_goal()
 
 func update_goal() -> void:
@@ -1043,6 +1124,8 @@ func update_goal() -> void:
 func _process(delta: float) -> void:
 	if paint_open and is_instance_valid(preview_heli):
 		preview_heli.rotate_y(delta*.6)
+	if state=="menu":
+		fly_menu_helicopter(delta)
 	if state!="flight" or photo_open:
 		return
 	flight_time+=delta
@@ -1061,8 +1144,13 @@ func _process(delta: float) -> void:
 	if mission_index<mission.size():
 		var p: Dictionary=mission[mission_index]
 		var km=distance_km(p)
-		var nav="Afstand: %d km" % km if game_mode==GameMode.LEARN else "Je bent dichtbij!" if show_hints else "Zoek zelf de juiste plek."
+		var nav="%d km %s" % [km,goal_heading_word()] if game_mode==GameMode.LEARN else "Je bent dichtbij!" if show_hints else "Richting: %s" % goal_heading_word() if game_mode==GameMode.PRACTICE else "Zoek zelf de juiste plek."
 		detail_label.text="%s  ·  %s %.1f sec  ·  %d gevonden" % [nav,"Recordtijd" if exam else "Vliegtijd",flight_time+mistakes*10.0 if exam else flight_time,completed.size()]
+
+# Eight-wind direction from the helicopter to the current goal.
+func goal_heading_word() -> String:
+	var target=world.project(mission[mission_index].lon,mission[mission_index].lat)
+	return CompassWords.HEADING[CompassWords.index_for_map_delta(Vector2(target.x-helicopter.position.x,target.z-helicopter.position.z))]
 
 func flight_speed() -> float:
 	return 10.0 if region=="nl" else 42.0
@@ -1071,7 +1159,7 @@ func flight_speed() -> float:
 # "in de zone" state is only computed while the mode already shows the goal,
 # so it can never give away a hidden target.
 func update_effects(delta: float) -> void:
-	fx.view_scale=camera.size/FLIGHT_ZOOMS[0] if not show_overview else 1.0
+	fx.view_scale=camera.size/FX_REFERENCE_ZOOM if not show_overview else 1.0
 	var speed_fraction=clampf(velocity.length()/flight_speed(),0.0,1.0)
 	fx.update_downwash(helicopter.position,camera_level,speed_fraction,not show_overview)
 	rotor_audio.pitch_scale=.94+speed_fraction*.22
@@ -1152,6 +1240,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				toggle_hint()
 			elif event.physical_keycode==KEY_M:
 				toggle_overview()
+			elif event.physical_keycode==KEY_R:
+				toggle_compass_mode()
 			elif event.physical_keycode in [KEY_Q,KEY_EQUAL,KEY_KP_ADD]:
 				change_height(-1)
 			elif event.physical_keycode in [KEY_E,KEY_MINUS,KEY_KP_SUBTRACT]:
@@ -1243,6 +1333,9 @@ func answer() -> void:
 		if state=="flight":
 			hud_fx.show_hit(hit_word(first_try),p.name,streak)
 			status_label.text="Goed gevonden! Op naar %s." % mission[mission_index].name
+			# Leren and Oefenen show where the place lies in the whole country.
+			if game_mode!=GameMode.RECORDS:
+				locator.present(p,mission.slice(0,mission_index-1))
 		answer_cooldown=.6
 	else:
 		mistakes+=1
@@ -1487,6 +1580,20 @@ func return_menu() -> void:
 	world.set_hints(false)
 	position_menu_camera()
 	update_best_label()
+
+# In the hangar a big helicopter circles over the map, banking into the turn.
+func fly_menu_helicopter(delta: float) -> void:
+	menu_flight_time+=delta
+	var nl=region=="nl"
+	var centre=world.bounds.get_center()+(Vector2(20,-10) if nl else Vector2(40,-30))
+	var radius=58.0 if nl else 130.0
+	var angle=menu_flight_time*.16
+	var at=centre+Vector2(cos(angle),sin(angle))*radius
+	var direction=Vector2(-sin(angle),cos(angle))
+	helicopter.scale=Vector3.ONE*MENU_HELI_SCALE*(1.0 if nl else 1.9)
+	helicopter.position=Vector3(at.x,(60.0 if nl else 110.0)+sin(menu_flight_time*.7)*3.0,at.y)
+	helicopter.rotation.y=atan2(-direction.x,-direction.y)
+	helicopter.lean(Vector2(.55,1.0),delta)
 
 func position_menu_camera() -> void:
 	var center=world.bounds.get_center()
@@ -2136,8 +2243,15 @@ func _notification(what: int) -> void:
 		if state=="flight":
 			pause_flight()
 
+func key_event(code: Key) -> InputEventKey:
+	var event=InputEventKey.new()
+	event.physical_keycode=code
+	event.pressed=true
+	return event
+
 func smoke_test() -> void:
 	assert(world.province_regions.size()==12,"All Dutch provinces are bundled")
+	assert(world.neighbour_polys.has("DEU") and world.neighbour_polys.has("BEL") and not world.neighbour_polys.has("NLD"),"2D maps get whole neighbour countries")
 	assert(world.boundary_data.municipality_count==342,"Official municipality layer is complete")
 	for level in ["national","provincial","municipal"]:
 		assert(not world.boundary_paths[level].is_empty(),"Boundary level has usable geometry: "+level)
@@ -2255,6 +2369,24 @@ func smoke_test() -> void:
 	assert(not show_overview and camera_level==1,"Height control exits the overview into the chosen flight view")
 	change_height(-1)
 	assert(flight_zoom()==close_zoom,"Pilot can return to low search flight")
+	assert(close_zoom==38.0 and low_altitude==14.0 and FLIGHT_ZOOMS[2]>64.0,"Every level is one step higher: Laag is the former Midden")
+	# Minimap: north-up by default, heading-up on request; turning is a node
+	# rotation, so the country geometry is never redrawn for it.
+	minimap.aircraft=helicopter.position
+	minimap.heading=PI*.5 # nose west
+	minimap.rotate_with_heading=true
+	minimap.refresh_navigation()
+	assert(minimap.screen_direction(nose_direction(PI*.5)).distance_to(Vector2.UP)<.01,"Heading-up minimap turns the nose up")
+	assert(is_equal_approx(minimap.map_layer.rotation,PI*.5),"Map layer turns as a node")
+	assert(minimap.screen_direction(CompassWords.map_direction(0)).distance_to(Vector2.RIGHT)<.01,"Flying west, north lies to the right on a heading-up map")
+	assert(minimap.screen_point(minimap.view_center).distance_to(minimap.circle_center())<1.0,"Turning country map turns around its centre")
+	assert(saved.minimap_rotate==true and map_turn_button.text.contains("draait mee") and menu_turn_button.text=="Kompas: draait","Rotation choice is stored and shown in flight and in the hangar")
+	_unhandled_key_input(key_event(KEY_R))
+	minimap.refresh_navigation()
+	assert(not minimap.rotate_with_heading and is_zero_approx(minimap.map_layer.rotation) and saved.minimap_rotate==false,"R returns to a still north-up map")
+	assert(minimap.screen_direction(Vector2.UP)==Vector2.UP and map_turn_button.text=="Kompas: vast","North-up map shows north at the top")
+	assert(ProgressStore.clean({"minimap_rotate":true}).minimap_rotate==true and not ProgressStore.clean({"minimap_rotate":"ja"}).has("minimap_rotate"),"Rotation setting is validated")
+	minimap.heading=heading
 	helicopter.position=world.project(5.8987,51.9851)+Vector3(0,9.0 if region=="nl" else 3.3,0)
 	assert(distance_km(mission[0])<.01,"Distance at target")
 	# Answer range covers the visible city: every Dutch city plan fits inside it.
@@ -2321,6 +2453,10 @@ func smoke_test() -> void:
 	assert(world.country_contains("UKR",world.project(34.1,44.95)) and not world.country_contains("RUS",world.project(34.1,44.95)),"Crimea counts as Ukraine")
 	assert(world.country_contains("CYP",world.project(33.9,35.3)),"Northern Cyprus counts as Cyprus")
 	assert(world.country_contains("FIN",world.project(19.95,60.2)),"Aland counts as Finland")
+	for pair in [["rome","Rome ligt in Italië, ten zuidoosten van Nederland."],["londen","Londen ligt in het Verenigd Koninkrijk, ten westen van Nederland."],["duitsland","Duitsland ligt ten oosten van Nederland."]]:
+		if catalog.lookup.has(pair[0]):
+			var sentence=locator.describe(catalog.lookup[pair[0]])
+			assert(sentence==pair[1],"European locator sentence: "+sentence)
 	mission_text.text="Mijn dorp | 52.123 | 5.456\nAmsterdam"
 	var custom=parse_custom()
 	assert(custom.found.size()==2 and custom.unknown.is_empty(),"Custom coordinate import")
@@ -2403,9 +2539,48 @@ func smoke_test() -> void:
 	mode_select.select(GameMode.LEARN)
 	start_mission([catalog.lookup.amsterdam])
 	assert(minimap.show_goal and world.target.visible,"Learning reveals the target")
+	minimap.refresh_navigation()
+	assert(minimap.direction_index==-1,"A goal visible on the minimap needs no arrow")
+	assert(goal_heading_word()=="noordwest","Learning names the direction: Amsterdam lies north-west of Utrecht")
+	# Locator card: after a correct answer the whole country shows where it lies.
+	start_mission([catalog.lookup.assen,catalog.lookup.maastricht])
+	assert(not locator.visible,"A new mission starts without a locator card")
+	var first_goal: Dictionary=mission[0]
+	helicopter.position=world.project(first_goal.lon,first_goal.lat)
+	answer_cooldown=0
+	answer()
+	assert(locator.visible and locator.place.name==first_goal.name and locator.found_before.is_empty(),"Learning shows where the found place lies")
+	assert(locator.body_label.text==locator.describe(first_goal),"Card explains the position in words")
+	helicopter.position=world.project(mission[1].lon,mission[1].lat)
+	answer_cooldown=0
+	answer()
+	assert(state=="summary" and not locator.is_visible_in_tree(),"The last goal opens the summary instead of a card")
+	var expected_sentences={
+		"assen":"Assen ligt in het noordoosten van Nederland, in de provincie Drenthe.",
+		"maastricht":"Maastricht ligt in het zuiden van Nederland, in de provincie Limburg.",
+		"utrecht":"Utrecht ligt in het midden van Nederland, in de provincie Utrecht.",
+		"middelburg":"Middelburg ligt in het zuidwesten van Nederland, in de provincie Zeeland.",
+		"groningen provincie":"Groningen is een provincie in het noordoosten van Nederland.",
+	}
+	for key in expected_sentences:
+		var sentence=locator.describe(catalog.lookup[key])
+		assert(sentence==expected_sentences[key],"Locator sentence for %s: %s" % [key,sentence])
+	for place in catalog.places:
+		if place.region=="nl":
+			assert(locator.describe(place).ends_with(".") and not locator.describe(place).contains("  "),"Every Dutch place gets a sentence: "+place.name)
 	mode_select.select(GameMode.PRACTICE)
 	start_mission([catalog.lookup.amsterdam])
 	assert(not minimap.show_goal and not world.target.visible,"Practice hides distant target")
+	minimap.refresh_navigation()
+	assert(minimap.direction_index==7,"Practice arrow points north-west towards Amsterdam")
+	_process(1.0/60.0)
+	assert(detail_label.text.begins_with("Richting: noordwest"),"Practice names the direction in words")
+	var cards_before=locator.shown_count
+	start_mission([catalog.lookup.amsterdam,catalog.lookup.arnhem])
+	helicopter.position=world.project(mission[0].lon,mission[0].lat)
+	answer()
+	assert(locator.shown_count==cards_before+1 and locator.visible,"Practice also shows the locator card")
+	start_mission([catalog.lookup.amsterdam])
 	toggle_hint()
 	assert(not minimap.show_goal,"H cannot reveal distant practice target")
 	helicopter.position=world.project(catalog.lookup.amsterdam.lon,catalog.lookup.amsterdam.lat)
@@ -2420,13 +2595,19 @@ func smoke_test() -> void:
 	refresh_mode_hints()
 	toggle_hint()
 	assert(not minimap.show_goal and not world.target.visible,"Records never reveals target, even nearby or via H")
+	minimap.refresh_navigation()
+	assert(minimap.direction_index==-1 and not minimap.show_direction,"Records never points the way")
+	minimap.current_area="Noord-Holland"
+	assert(minimap.caption_text().begins_with("Nederland"),"Records keeps the minimap caption neutral")
 	update_effects(1.0/60.0)
 	assert(not in_zone and not fx.inside and found_button.modulate==Color.WHITE,"Records never hints the zone, even at the goal")
 	for marker in world.labels:
 		assert(not marker.visible,"Records hides all map names")
 	flight_time=12.5
 	mistakes=1
+	var record_cards=locator.shown_count
 	answer()
+	assert(locator.shown_count==record_cards,"Records shows no locator card")
 	var race_key=record_key(mission)
 	assert(state=="summary" and saved.records[race_key]==22.5,"Record adds ten seconds per wrong answer")
 	start_mission([catalog.lookup.amsterdam])
@@ -2489,9 +2670,7 @@ func smoke_test() -> void:
 	assert(region=="nl" and region_select.selected==0,"Region tile switches to the Netherlands")
 	region_tiles[1].pressed.emit()
 	assert(region=="eu" and europe_route_select.visible,"Region tile switches to Europe")
-	mode_buttons[2].pressed.emit()
-	assert(mode_select.selected==GameMode.RECORDS and mode_buttons[2].button_pressed and not mode_buttons[0].button_pressed,"Mode segments drive the game mode")
-	mode_buttons[0].pressed.emit()
+	choose_mode(GameMode.LEARN)
 	assert(world.europe_scenery.peak_count>20 and world.europe_scenery.terrain_patches>100,"Europe has terrain and mountain variety")
 	assert(catalog.presets("eu",1).size()>40 and catalog.presets("eu",2).size()>35,"Full-European capital and country routes exist")
 	mode_select.select(GameMode.PRACTICE)
@@ -2551,6 +2730,13 @@ func smoke_test() -> void:
 	var screen=get_viewport().get_visible_rect()
 	assert(screen.encloses(menu.get_global_rect()),"Hangar menu fits on screen without scrolling")
 	assert(menu.get_global_rect().size.y<=screen.size.y-32,"Hangar menu keeps a margin")
+	print("Hangar menu height: %d px" % menu.get_global_rect().size.y)
+	assert(mode_tiles.size()==3 and mode_tiles[mode_select.selected].selected,"Mode tiles mirror the chosen mode")
+	choose_mode(GameMode.PRACTICE)
+	assert(mode_select.selected==GameMode.PRACTICE and mode_tiles[1].selected and not mode_tiles[0].selected,"Tapping a tile picks the mode")
+	choose_mode(GameMode.LEARN)
+	fly_menu_helicopter(1.0)
+	assert(helicopter.scale.x>FLIGHT_HELI_SCALE*2,"The hangar shows a big circling helicopter")
 	print("SMOKE TEST PASSED: parsing, coordinates, land boundaries, flight scoring, custom missions")
 	await get_tree().process_frame
 	get_tree().quit()
@@ -2624,6 +2810,7 @@ func capture_preview() -> void:
 		await get_tree().create_timer(.4).timeout
 		get_viewport().get_texture().get_image().save_png("res://build/preview-"+city.replace(" ","-")+".png")
 	await capture_effects()
+	await capture_learning()
 	# Shared camera/UI/helicopter changes also get a visual check in Europe.
 	load_world("eu")
 	start_mission([catalog.lookup.parijs])
@@ -2714,6 +2901,62 @@ func capture_ui() -> void:
 	await get_tree().create_timer(1.5).timeout
 	get_viewport().get_texture().get_image().save_png("res://build/ui-europe-overview.png")
 	print("UI CAPTURE PASSED")
+	get_tree().quit()
+
+# Learning aids: the locator card after a hit, the practice direction arrow
+# and the heading-up minimap, in the Netherlands and in Europe.
+func capture_learning() -> void:
+	var previous_region=region
+	if region!="nl":
+		load_world("nl")
+	mode_select.select(GameMode.LEARN)
+	seed(7)
+	start_mission([catalog.lookup.zwolle,catalog.lookup.assen,catalog.lookup.middelburg])
+	for index in 2:
+		var found: Dictionary=mission[mission_index]
+		helicopter.position=world.project(found.lon,found.lat)+Vector3(0,flight_altitude(),0)
+		answer_cooldown=0
+		answer()
+	locator.time_left=60.0
+	await get_tree().create_timer(1.6).timeout
+	assert(locator.visible,"Locator card stays up for the screenshot")
+	get_viewport().get_texture().get_image().save_png("res://build/preview-learn-locator.png")
+	mode_select.select(GameMode.PRACTICE)
+	start_mission([catalog.lookup.groningen])
+	helicopter.position=world.project(5.6,52.4)+Vector3(0,flight_altitude(),0)
+	heading=deg_to_rad(40.0) # nose north-west
+	helicopter.rotation.y=heading
+	camera_yaw=heading
+	minimap.rotate_with_heading=true
+	await get_tree().create_timer(1.2).timeout
+	assert(minimap.direction_index>=0,"Practice arrow is drawn")
+	get_viewport().get_texture().get_image().save_png("res://build/preview-practice-direction.png")
+	minimap.toggle_detail()
+	await get_tree().create_timer(.4).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-minimap-heading-up.png")
+	minimap.toggle_detail()
+	minimap.rotate_with_heading=false
+	load_world("eu")
+	mode_select.select(GameMode.LEARN)
+	start_mission([catalog.lookup.rome,catalog.lookup.oslo])
+	var found_eu: Dictionary=mission[0]
+	helicopter.position=world.project(found_eu.lon,found_eu.lat)+Vector3(0,flight_altitude(),0)
+	answer_cooldown=0
+	answer()
+	locator.time_left=60.0
+	await get_tree().create_timer(1.6).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-learn-locator-europe.png")
+	locator.dismiss()
+	mode_select.select(GameMode.LEARN)
+	return_menu()
+	if previous_region!=region:
+		load_world(previous_region)
+
+func capture_learning_only() -> void:
+	saved.mute=true
+	DirAccess.make_dir_recursive_absolute("res://build")
+	await capture_learning()
+	print("LEARN CAPTURE PASSED")
 	get_tree().quit()
 
 func capture_effects_only() -> void:

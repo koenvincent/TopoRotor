@@ -4,6 +4,8 @@ Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland 
 
 ## Download voor Android
 
+Het app-icoon toont een reddingsheli die vanaf een gouden speld in Brabant over Nederland vliegt, binnen een kompasring. Android krijgt ook een adaptief icoon (voor- en achtergrondlaag). Bouw ze opnieuw met `python3 tools/build_icon.py`.
+
 **[Download de Android-app (APK)](https://github.com/koenvincent/TopoRotor/releases)**
 
 Open de link op je Android-telefoon of -tablet en kies `TopoRotor.apk` bij de gewenste release. Open het gedownloade bestand om de app te installeren en geef je browser of bestandsapp zo nodig toestemming. Zie de [installatie-instructies](docs/ANDROID-BUILDS.md#download-op-tablet) voor meer uitleg.
@@ -16,9 +18,9 @@ Open de link op je Android-telefoon of -tablet en kies `TopoRotor.apk` bij de ge
 
 Installeer **Godot 4.5.1 Standard** (geen .NET nodig), importeer `project.godot` en druk F5. Alle kaartdata, 3D-graphics, fonts en geluiden zijn meegeleverd. Er zijn geen online kaarttegels of game-accounts nodig.
 
-- Kies Nederland of Europa, Leren, Oefenen of Records en start een vliegmissie.
-- Sturen: joystick, WASD of pijltjes. Links/rechts draait de helikopter; omhoog/W vliegt vooruit en omlaag/S achteruit. De camera hangt achter de heli en draait soepel mee; achteruit gaat langzamer. Het kompas bovenin toont je koers. De minikaart en de overzichtskaart blijven noordgericht; een pijl op de minikaart wijst de neus aan. Menu en HUD schalen mee met brede telefoons en 4:3-tablets zonder scrollbalk. Antwoorden: ‘Hier is het!’ of spatie. M: overzicht.
-- Je begint **laag en dichtbij**. Gebruik **Lager / Hoger**, het muiswiel of **Q / E** om tussen drie vlieghoogtes te wisselen. Lager toont meer detail; hoger geeft meer zicht op de omgeving. De overzichtskaart (M) blijft apart beschikbaar. Het spel controleert je positie; er is geen landingssimulatie.
+- Kies Nederland of Europa en tik een van de drie spelmodus-kaarten aan (Leren, Oefenen of Records) en start een vliegmissie. In de hangar cirkelt je eigen helikopter boven de kaart, en Duitsland, België en Frankrijk lopen nu door tot aan de rand in plaats van te stoppen bij een grijze rechthoek.
+- Sturen: joystick, WASD of pijltjes. Links/rechts draait de helikopter; omhoog/W vliegt vooruit en omlaag/S achteruit. De camera hangt achter de heli en draait soepel mee; achteruit gaat langzamer. Het kompas bovenin toont je koers. De overzichtskaart blijft noordgericht. De minikaart staat standaard ook noord boven; de heli is daarop een felrode stip met een witte punt die de neus aanwijst; met **Kompas: draait mee** (in de hangar, onder de vlieghoogtes of met toets **R**) draaien kompasrand en minikaart mee, zodat je neus altijd omhoog wijst. **Kompas: vast** houdt noord boven. De keuze wordt bewaard. N, O, Z en W staan op de rand van de minikaart en draaien mee. Menu en HUD schalen mee met brede telefoons en 4:3-tablets zonder scrollbalk. Antwoorden: ‘Hier is het!’ of spatie. M: overzicht.
+- Je begint **laag en dichtbij**. Gebruik **Lager / Hoger**, het muiswiel of **Q / E** om tussen drie vlieghoogtes te wisselen. Lager toont meer detail; hoger geeft meer zicht op de omgeving. Elke hoogte ligt een stap hoger dan in eerdere versies: Laag is het oude Midden, Midden het oude Hoog, en Hoog laat een groot deel van het land zien. Gemeentegrenzen verschijnen bij Laag en Midden. De overzichtskaart (M) blijft apart beschikbaar. Het spel controleert je positie; er is geen landingssimulatie.
 - **Doelzone:** zodra de modus het doel toont (Leren altijd, Oefenen als je dichtbij bent) zie je een gouden cirkel op de grond. Dat is precies het bereik waarin ‘Hier is het!’ goed telt; de minikaart toont dezelfde ring. Een lichtzuil en een zwevende markering wijzen het doel aan. Ben je binnen de cirkel, dan wordt alles groen, pulseert de antwoordknop en meldt de statusbalk ‘In de zone!’. Records toont nooit een zone. Landen worden op hun grens gecontroleerd en krijgen daarom wel de lichtzuil maar geen cirkel.
 - **Grondvizier:** de camera kijkt schuin, waardoor de heli iets boven zijn echte positie lijkt te hangen. Een vizier op de grond met een loodlijn naar de heli toont het punt dat het spel controleert.
 - **Effecten:** een goed antwoord geeft vuurwerk met fluitende pijlen, knallen en knetterende vonken, een schokgolf op de grond en een ‘GOED ZO!’-banner. Fout geeft een groot rood kruis met ‘MIS!’, een rood kruis op de grond, een rode flits, schudbeeld en een zoemer. Een voltooide missie eindigt met confetti, een fanfare en sterren die één voor één verschijnen. Verder: rotorstof bij laag vliegen, een bewegende rotorschijf, knipperende anti-botsingslichten en strobes, zachte glow en een vignet. Alle effectgeluiden worden bij het opstarten in code gesynthetiseerd; er zijn geen extra audiobestanden. ‘Geluid: uit’ dempt ook deze.
@@ -27,6 +29,14 @@ Installeer **Godot 4.5.1 Standard** (geen .NET nodig), importeer `project.godot`
 ![Vuurwerk na een goed antwoord](docs/screenshots/preview-fx-fireworks.png)
 
 ![Groot rood kruis bij een fout antwoord](docs/screenshots/preview-fx-miss.png)
+
+- **Waar ligt het?** Na een goed antwoord in Leren en Oefenen verschijnt zes seconden een kaartje van heel Nederland (of Europa) met de gevonden plek, de plekken die je eerder in de missie vond en een zin als ‘Assen ligt in het noordoosten van Nederland, in de provincie Drenthe.’ De provincie licht op. In Europa staat Nederland oranje als vast referentiepunt, bijvoorbeeld ‘Oslo ligt in Noorwegen, ten noorden van Nederland.’ Tik om het kaartje te sluiten. Records toont het niet.
+- **Richting:** Leren toont afstand en windrichting (‘49 km zuidwest’). Oefenen toont geen plek, maar wel de windrichting (‘Richting: noordoost’) en een gouden pijl op de rand van de minikaart. Die pijl wijst in acht stappen (N, NO, O, …), dus een richting en geen exacte plek. Ben je dichtbij, dan verschijnt het doel zoals voorheen. Records geeft geen richting.
+![Waar ligt het? na een goed antwoord](docs/screenshots/preview-learn-locator.png)
+
+![Waar ligt het? in Europa](docs/screenshots/preview-learn-locator-europe.png)
+
+![Oefenen met richtingpijl en meedraaiende minikaart](docs/screenshots/preview-practice-direction.png)
 
 - ‘Pauze’, Escape of de Android-terugknop pauzeert de vlucht. Kies verder vliegen of stoppen naar de hangar. Naar de achtergrond schakelen pauzeert ook; hervatten doe je zelf. De terugknop sluit eerst een geopende foto.
 
@@ -53,8 +63,8 @@ Via **Helikopter spuiten** in de hangar kies je een van negen kleurschema's, zoa
 ### Grenzen op landschap en minikaart
 
 - Op het landschap: neutrale lijnen, met een dikke landsgrens, gestreepte provinciegrenzen en fijnere gestippelde gemeentegrenzen. Gemeentegrenzen verschijnen bij laag/midden vliegen; op grote afstand blijft de kaart rustig. Gebieden op het landschap krijgen **geen provincie- of gemeentekleuren**.
-- Alleen de minikaart kleurt de twaalf provincies in. Landsgrenzen zijn goud, provinciegrenzen licht en gemeentegrenzen blauwgrijs. Een legenda verklaart de accenten.
-- **Tik of klik op de minikaart** om te wisselen tussen Nederland en de omgeving. De lokale weergave volgt de helikopter en maakt gemeentegrenzen beter leesbaar. Onderaan staat de huidige provincie.
+- De minikaart is rond, met een kompasrand (N, O, Z, W en een streepje per 15°). Alleen de minikaart kleurt de twaalf provincies in. De landsgrens is goud, provinciegrenzen zijn licht en gemeentegrenzen blauwgrijs (alleen in de omgevingsweergave). Buurlanden staan er in hun geheel op, in gedempte kleuren: de Nederlandse kaartdata stopt bij 7,5°O en 50,5°N, dus voor België, Duitsland en Frankrijk gebruiken de minikaart en het Waar-ligt-het-kaartje de Europese contouren. Het 3D-landschap verandert daardoor niet.
+- **Tik of klik op de minikaart** om te wisselen tussen Nederland en de omgeving. De lokale weergave volgt de helikopter en maakt gemeentegrenzen beter leesbaar. Onderaan staat de huidige provincie (boven Europa het land). In Records staat daar alleen ‘Nederland’ of ‘Europa’, zodat de minikaart geen antwoord verraadt.
 - De gebundelde Nederlandse grensdata omvat twaalf provincies en 342 gemeenten uit de officiële Kadaster/PDOK-laag van 2026. De lijnen zijn vereenvoudigd voor de game. Bronvermelding en licentie zijn ook bereikbaar via **Bronnen en licenties** in de hangar.
 
 ![Verschillende stadsopbouw bij Arnhem en Nijmegen](docs/screenshots/preview-arnhem.png)

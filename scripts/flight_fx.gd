@@ -244,10 +244,10 @@ func build_downwash() -> void:
 
 # Dust rings stronger the lower the helicopter flies.
 func update_downwash(aircraft: Vector3, altitude_level: int, speed_fraction: float, active: bool) -> void:
-	# High flight is too far above the ground to stir up dust.
-	downwash.emitting = active and altitude_level < 2
+	# Only the lowest flight level is close enough to the ground to stir up dust.
+	downwash.emitting = active and altitude_level == 0
 	downwash.global_position = Vector3(aircraft.x, .25, aircraft.z)
-	downwash.scale = Vector3.ONE * view_scale * (1.0 if altitude_level == 0 else 1.35)
+	downwash.scale = Vector3.ONE * view_scale * 1.35
 	downwash.speed_scale = .8 + speed_fraction * .6
 
 # Three to five rockets around the goal, each with trail, burst, glitter,
