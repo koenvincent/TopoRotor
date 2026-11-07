@@ -55,6 +55,10 @@ func material(color: Color, gloss: float = .55) -> StandardMaterial3D:
 # light like a scale model; every other mesh is scaled to size.
 func part(mesh: Mesh, at: Vector3, size: Vector3, mat: Material, parent: Node3D) -> MeshInstance3D:
 	var p = MeshInstance3D.new()
+	if ghost and parent == body and not keep:
+		p.mesh = mesh
+		phantoms.append(p)
+		return p
 	if mesh is BoxMesh and (mesh as BoxMesh).size == Vector3.ONE:
 		p.mesh = ToyLook.rounded_box(size)
 	else:
@@ -140,7 +144,13 @@ func rebuild() -> void:
 	var builders = {"redder":build_redder,"libel":build_libel,"molen":build_molen,"pijl":build_pijl,"tandem":build_tandem,"wesp":build_wesp,
 		"kraan":build_kraan,"coax":build_coax,"sport":build_sport,"dubbel":build_dubbel,"zee":build_zee,"dakota":build_dakota,
 		"valk":build_valk,"delta":build_delta,"schaduw":build_schaduw}
-	var anchors: Dictionary = fill_anchors(builders.get(config.model, build_redder).call())
+	var builder: Callable = builders.get(config.model, build_redder)
+	ghost = airframe(config.model)
+	var anchors: Dictionary = fill_anchors(builder.call())
+	ghost = false
+	for phantom in phantoms:
+		phantom.free()
+	phantoms.clear()
 	rotor = rotors[0] if not rotors.is_empty() else null
 	tail_rotor = tail_rotors[0] if not tail_rotors.is_empty() else null
 	rotor_disc = body.get_node_or_null("RotorDisc0")
@@ -189,7 +199,9 @@ func add_propeller(at: Vector3, span: float, blades: int, slot: String = "rotor"
 	disc_mesh.size = Vector2.ONE * (span + .1)
 	var disc_mat = ShaderMaterial.new()
 	disc_mat.shader = load("res://assets/shaders/rotor_disc.gdshader")
+	keep = true
 	var disc = part(disc_mesh, at + Vector3(0,0,-.03), Vector3.ONE, disc_mat, body)
+	keep = false
 	disc.rotation.x = PI / 2
 	disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return p
@@ -236,7 +248,9 @@ func add_rotor(at: Vector3, span: float, blades: int, spin: float = 1.0) -> void
 	disc_mesh.size = Vector2.ONE * (span + .2)
 	var disc_mat = ShaderMaterial.new()
 	disc_mat.shader = load("res://assets/shaders/rotor_disc.gdshader")
+	keep = true
 	var disc = part(disc_mesh, at - Vector3(0,.02,0), Vector3.ONE, disc_mat, body)
+	keep = false
 	disc.name = "RotorDisc%d" % (rotors.size() - 1)
 	disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
@@ -274,11 +288,20 @@ func skids(x: float, y: float, z: float, length: float, leg_z: Array, leg_top: f
 # stay procedural, because the rotor upgrade adds blades.
 const MODEL_DIR = "res://assets/models/"
 
+# While a Blender airframe stands in for the body, the procedural builder
+# still runs for its rotors, propellers and anchors, but its body parts are
+# phantoms that never enter the tree (freed at the end of rebuild).
+var ghost: bool = false
+var keep: bool = false
+var phantoms: Array[Node] = []
+
+static func has_airframe(id: String) -> bool:
+	return ResourceLoader.exists(MODEL_DIR + id + ".glb")
+
 func airframe(id: String) -> bool:
-	var path = MODEL_DIR + id + ".glb"
-	if not ResourceLoader.exists(path):
+	if not has_airframe(id):
 		return false
-	var frame: Node3D = (load(path) as PackedScene).instantiate()
+	var frame: Node3D = (load(MODEL_DIR + id + ".glb") as PackedScene).instantiate()
 	frame.name = "Airframe"
 	body.add_child(frame)
 	for mesh_node in frame.find_children("*", "MeshInstance3D", true, false):
@@ -290,13 +313,6 @@ func airframe(id: String) -> bool:
 	return true
 
 func build_redder() -> Dictionary:
-	if airframe("redder"):
-		add_rotor(Vector3(0,1.42,.12),8.0,4)
-		add_tail_rotor(Vector3(.2,.95,3.95),1.5,4)
-		return {"nose":Vector3(0,-.55,-1.3),"side":Vector3(.95,.45,-.2),"belly":Vector3(0,-.75,.2),"top":Vector3(0,1.0,.5),"tail":Vector3(0,1.6,4.05),
-			"skid":[1.1,-.9,0.0,3.3],"wing":[1.0,-.1,.6],"exhaust":[Vector3(-.32,.9,1.66),Vector3(.32,.9,1.66)],
-			"beacon":Vector3(0,1.0,1.15),"strobes":[Vector3(0,1.62,4.0),Vector3(-.9,.64,3.2),Vector3(.9,.64,3.2)],"nav":[Vector3(-.94,-.15,.3),Vector3(.94,-.15,.3)],"landing":Vector3(0,-.6,-1.25),
-			"eyes":Vector3(0,.32,-1.42)}
 	ball(Vector3(0,0,0),Vector3(1.9,1.45,2.5),"body")
 	ball(Vector3(0,.22,-.65),Vector3(1.78,1.15,1.65),"glass")
 	box(Vector3(0,.16,-.9),Vector3(.07,1.35,1.25),"rotor")
