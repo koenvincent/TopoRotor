@@ -1421,5 +1421,158 @@
       "Ijsland"
     ],
     "code": "ISL"
+  },
+  {
+    "name": "Belarus",
+    "lat": 53.9006,
+    "lon": 27.559,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "BLR"
+  },
+  {
+    "name": "Rusland",
+    "lat": 55.7558,
+    "lon": 37.6173,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "RUS"
+  },
+  {
+    "name": "Moldavië",
+    "lat": 47.0105,
+    "lon": 28.8638,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "MDA"
+  },
+  {
+    "name": "Montenegro",
+    "lat": 42.4304,
+    "lon": 19.2594,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "MNE"
+  },
+  {
+    "name": "Noord-Macedonië",
+    "lat": 41.9981,
+    "lon": 21.4254,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "MKD"
+  },
+  {
+    "name": "Malta",
+    "lat": 35.8992,
+    "lon": 14.5141,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "MLT"
+  },
+  {
+    "name": "Cyprus",
+    "lat": 35.1856,
+    "lon": 33.3823,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "CYP"
+  },
+  {
+    "name": "Monaco land",
+    "lat": 43.7384,
+    "lon": 7.4246,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "MCO"
+  },
+  {
+    "name": "Liechtenstein",
+    "lat": 47.141,
+    "lon": 9.5209,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "LIE"
+  },
+  {
+    "name": "Andorra",
+    "lat": 42.5063,
+    "lon": 1.5218,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "AND"
+  },
+  {
+    "name": "Vaticaanstad",
+    "lat": 41.904,
+    "lon": 12.453,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "VAT"
+  },
+  {
+    "name": "San Marino",
+    "lat": 43.93179,
+    "lon": 12.46777,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "SMR"
+  },
+  {
+    "name": "Kosovo",
+    "lat": 42.57544,
+    "lon": 20.85549,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "KOS"
+  },
+  {
+    "name": "Turkije",
+    "lat": 38.70639,
+    "lon": 34.67411,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "TUR"
+  },
+  {
+    "name": "Georgië",
+    "lat": 42.35254,
+    "lon": 42.70109,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "GEO"
+  },
+  {
+    "name": "Armenië",
+    "lat": 40.60423,
+    "lon": 44.35607,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "ARM"
+  },
+  {
+    "name": "Azerbeidzjan",
+    "lat": 39.6357,
+    "lon": 44.881,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "AZE"
   }
 ]
