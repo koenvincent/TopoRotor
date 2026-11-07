@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "missions": [
+    {"title": "Randstad rondje", "places": ["Amsterdam", "Utrecht", "Rotterdam", "Den Haag"]},
+    {"title": "Europese hoofdsteden", "places": ["Parijs", "Londen", "Berlijn", "Rome"]}
+  ]
+}
