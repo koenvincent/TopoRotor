@@ -53,6 +53,9 @@ var cross_tween: Tween
 var banner_tween: Tween
 var crosses_shown: int = 0
 var banners_shown: int = 0
+# 'Rustige beelden': no flashes, shake, spinning, confetti or bouncy tweens.
+# The cross, banner and text still show, just without the motion.
+var calm: bool = false
 
 # The vignette exists before _ready so the owner can place it below the HUD.
 func _init() -> void:
@@ -191,6 +194,9 @@ func big_label(text: String, size_px: int, color: Color, extrude: Color = Color(
 func flash(color: Color, amount: float = .55, seconds: float = .7) -> void:
 	if flash_tween:
 		flash_tween.kill()
+	if calm:
+		vignette_material.set_shader_parameter("flash_color", Color(color.r, color.g, color.b, 0.0))
+		return
 	vignette_material.set_shader_parameter("flash_color", Color(color.r, color.g, color.b, amount))
 	flash_tween = create_tween()
 	flash_tween.tween_method(func(a: float): vignette_material.set_shader_parameter("flash_color", Color(color.r, color.g, color.b, a)), amount, 0.0, seconds).set_ease(Tween.EASE_IN)
@@ -203,6 +209,22 @@ func show_miss(message: String = "MIS!") -> void:
 	cross.show()
 	cross_label.show()
 	cross.queue_redraw()
+	if calm:
+		# Plain fade in and out: no pop, spin or shake.
+		cross.scale = Vector2.ONE
+		cross.rotation = 0.0
+		cross.position.x = 0.0
+		cross_label.scale = Vector2.ONE
+		cross.modulate.a = 0.0
+		cross_label.modulate.a = 0.0
+		cross_tween = create_tween().set_parallel(true)
+		cross_tween.tween_property(cross, "modulate:a", 1.0, .2)
+		cross_tween.tween_property(cross_label, "modulate:a", 1.0, .2)
+		cross_tween.chain().tween_interval(.9)
+		cross_tween.chain().tween_property(cross, "modulate:a", 0.0, .35)
+		cross_tween.parallel().tween_property(cross_label, "modulate:a", 0.0, .35)
+		cross_tween.chain().tween_callback(hide_miss)
+		return
 	cross.scale = Vector2.ONE * 1.9
 	cross.rotation = -.35
 	cross.modulate.a = 0.0
@@ -242,6 +264,16 @@ func show_hit(title_text: String, detail: String, streak: int = 0) -> void:
 	streak_label.text = "%d× OP RIJ!" % streak if streak >= 2 else ""
 	streak_label.visible = streak >= 2
 	banner.show()
+	if calm:
+		burst.hide()
+		banner.scale = Vector2.ONE
+		banner.modulate.a = 0.0
+		banner_tween = create_tween()
+		banner_tween.tween_property(banner, "modulate:a", 1.0, .2)
+		banner_tween.tween_interval(1.1)
+		banner_tween.tween_property(banner, "modulate:a", 0.0, .4)
+		banner_tween.tween_callback(banner.hide)
+		return
 	burst.show()
 	burst.queue_redraw()
 	burst.modulate.a = 0.0
@@ -265,6 +297,8 @@ func show_hit(title_text: String, detail: String, streak: int = 0) -> void:
 
 func celebrate() -> void:
 	move_to_front()
+	if calm:
+		return
 	place_confetti()
 	confetti.restart()
 	confetti.emitting = true

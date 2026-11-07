@@ -41,7 +41,7 @@ static func scenery_kit() -> Dictionary:
 func _init(parent: Node3D) -> void:
 	world=parent
 	city_plans=JSON.parse_string(FileAccess.get_file_as_string("res://data/city_plans_nl.json")).cities
-	landmark_data=JSON.parse_string(FileAccess.get_file_as_string("res://data/landmarks_nl.json")).cities
+	landmark_data=landmark_cities(JSON.parse_string(FileAccess.get_file_as_string("res://data/landmarks_nl.json")),"landmarks_nl.json")
 	kit=LandmarkKit.new(self)
 	var pieces: Dictionary=scenery_kit()
 	soft_block=pieces.get("Block",box)
@@ -80,7 +80,18 @@ func piece(mesh: Mesh, pos: Vector3, dimensions: Vector3, color: String, angle: 
 	var basis=Basis(Vector3.UP,angle) * Basis.from_scale(dimensions)
 	surfaces[color].append_from(mesh,0,Transform3D(basis,pos))
 
-# Every free-form mesh placement goes through here, so a subclass can transform it.
+# The "cities" table of a parsed landmark data file, or {} with a warning naming
+# the file when it is missing or malformed, so the map still loads without landmarks.
+static func landmark_cities(parsed: Variant,file: String) -> Dictionary:
+	if parsed is Dictionary and parsed.get("cities") is Dictionary:
+		return parsed.cities
+	push_warning("%s is missing or invalid; the map gets no landmarks." % file)
+	return {}
+
+# Free-form meshes placed with an explicit basis (the landmark kit) go through
+# here, so a subclass can transform them. piece() and beam() are separate hooks
+# that a subclass overrides itself; mound(), leaning_tower() and the landscape
+# add their vertices directly.
 func put_mesh(mesh: Mesh,origin: Vector3,basis: Basis,color: String) -> void:
 	surface(color).append_from(mesh,0,Transform3D(basis,origin))
 
@@ -190,8 +201,7 @@ func town(pos: Vector3,name: String) -> void:
 				town_square(pos,plan)
 	var built=0
 	for entry in entries:
-		if entry.get("type")!="builtin":
-			kit.build(pos+Vector3(entry.at[0],0,entry.at[1]),entry)
+		if entry.get("type")!="builtin" and kit.build(pos+Vector3(entry.at[0],0,entry.at[1]),entry):
 			built+=1
 	landmark_built[name]=built
 	landmarks[name]=true

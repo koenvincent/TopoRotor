@@ -34,6 +34,9 @@ var rng = RandomNumberGenerator.new()
 const RADAR_COLOR = Color("5ce1ff")
 var radar_rings: Array = []
 var radar_shown: int = 0
+# 'Rustige beelden': shaders hold still, the beacon and marker stop pulsing and
+# bobbing, and a correct answer skips the rockets and the light flash.
+var calm: bool = false
 
 func _ready() -> void:
 	rng.randomize()
@@ -42,6 +45,7 @@ func _ready() -> void:
 	build_zone()
 	build_downwash()
 	build_sight()
+	set_calm(calm)
 
 # The chase camera looks down at an angle, so the helicopter appears north of
 # the ground point the game checks. A sight on the ground plus a plumb line
@@ -75,6 +79,26 @@ func build_sight() -> void:
 	plumb.visible = false
 	add_child(plumb)
 
+# 1.0 lets the overlay shaders animate, 0.0 freezes them.
+func motion_amount() -> float:
+	return 0.0 if calm else 1.0
+
+func set_calm(value: bool) -> void:
+	calm = value
+	for m in [zone_material, beacon_material, sight_material]:
+		if m:
+			m.set_shader_parameter("motion", motion_amount())
+	for ring in radar_rings:
+		ring.material_override.set_shader_parameter("motion", motion_amount())
+
+# The sight turns green over the goal only while the goal is on show. With the
+# neutral radar rings out, or the target hidden by the mode, the colour stays
+# the same over every place, so the sight can never give the answer away.
+func sight_tint() -> float:
+	if radar_shown > 0 or not zone.is_visible_in_tree():
+		return 0.0
+	return inside_amount
+
 func update_sight(aircraft: Vector3, active: bool) -> void:
 	sight.visible = active
 	plumb.visible = active
@@ -82,7 +106,7 @@ func update_sight(aircraft: Vector3, active: bool) -> void:
 		return
 	sight.global_position = Vector3(aircraft.x, .34, aircraft.z)
 	sight.scale = Vector3.ONE * view_scale * 1.1
-	var color = (RADAR_COLOR if radar_shown > 0 else Color("fffbe8")).lerp(Color("5cff8f"), inside_amount)
+	var color = (RADAR_COLOR if radar_shown > 0 else Color("fffbe8")).lerp(HudFx.GREEN, sight_tint())
 	sight_material.set_shader_parameter("sight_color", Vector3(color.r, color.g, color.b))
 	plumb_material.albedo_color = Color(color.r, color.g, color.b, .5)
 	var top = maxf(aircraft.y - 1.0 * view_scale, .5)
@@ -161,7 +185,7 @@ func build_zone() -> void:
 	cone.rings = 1
 	marker.mesh = cone
 	marker_material = StandardMaterial3D.new()
-	marker_material.albedo_color = Color("ffc35c")
+	marker_material.albedo_color = HudFx.GOLD
 	marker_material.emission_enabled = true
 	marker_material.emission = Color("ffb340")
 	marker_material.emission_energy_multiplier = 1.4
@@ -209,6 +233,7 @@ func show_radar(rings: Array) -> void:
 		m.set_shader_parameter("extent", ZONE_EXTENT)
 		m.set_shader_parameter("zone_color", Vector3(RADAR_COLOR.r, RADAR_COLOR.g, RADAR_COLOR.b))
 		m.set_shader_parameter("inside", 0.0)
+		m.set_shader_parameter("motion", motion_amount())
 		ring.material_override = m
 		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(ring)
@@ -235,12 +260,12 @@ func _process(delta: float) -> void:
 	var tall = 26.0 * view_scale
 	beacon.scale = Vector3(view_scale * .9, tall, view_scale * .9)
 	beacon.position.y = tall * .5
-	var glow = Color("ffc35c").lerp(Color("5cff8f"), inside_amount)
+	var glow = HudFx.GOLD.lerp(HudFx.GREEN, inside_amount)
 	beacon_material.set_shader_parameter("beam_color", Vector3(glow.r, glow.g, glow.b))
-	beacon_material.set_shader_parameter("strength", .75 + .35 * sin(time * 4.0))
+	beacon_material.set_shader_parameter("strength", .75 if calm else .75 + .35 * sin(time * 4.0))
 	marker.scale = Vector3.ONE * view_scale * 1.25
-	marker.position.y = (6.5 + sin(time * 2.6) * .7) * view_scale
-	marker.rotation.y = time * 1.8
+	marker.position.y = (6.5 if calm else 6.5 + sin(time * 2.6) * .7) * view_scale
+	marker.rotation.y = 0.0 if calm else time * 1.8
 	marker_material.albedo_color = glow
 	marker_material.emission = glow
 
@@ -289,6 +314,8 @@ func update_downwash(aircraft: Vector3, altitude_level: int, speed_fraction: flo
 func celebrate(at: Vector3) -> void:
 	var s = view_scale
 	shockwave(Vector3(at.x, .35, at.z), zone_radius * 1.6 if zone_has_ring else 8.0 * s)
+	if calm:
+		return
 	var rockets = rng.randi_range(3, 5)
 	for i in rockets:
 		var offset = Vector3(rng.randf_range(-6, 6), 0, rng.randf_range(-6, 6)) * s
@@ -433,9 +460,10 @@ func miss_mark(at: Vector3) -> void:
 			bar.position.y = layer[2]
 			bar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			mark.add_child(bar)
-	mark.scale = Vector3.ONE * view_scale * 1.8
+	mark.scale = Vector3.ONE * view_scale * (1.0 if calm else 1.8)
 	var tween = mark.create_tween()
-	tween.tween_property(mark, "scale", Vector3.ONE * view_scale, .25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if not calm:
+		tween.tween_property(mark, "scale", Vector3.ONE * view_scale, .25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tween.tween_interval(.9)
 	tween.tween_method(func(a: float):
 		m.albedo_color.a = a * .92

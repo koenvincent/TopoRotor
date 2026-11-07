@@ -48,7 +48,8 @@ static func footprint(entry: Dictionary) -> float:
 		return 2.1
 	return float(FOOTPRINTS.get(type,1.2))
 
-func build(pos: Vector3,entry: Dictionary) -> void:
+# Returns false (with a warning) for a type this kit cannot draw, so callers do not count it as built.
+func build(pos: Vector3,entry: Dictionary) -> bool:
 	var c: String=entry.get("color","c4ad87")
 	match entry.get("type",""):
 		"spire": spire(pos,c,float(entry.get("height",5.0)),float(entry.get("lean",0.0)))
@@ -79,6 +80,10 @@ func build(pos: Vector3,entry: Dictionary) -> void:
 		"textile_mill": textile_mill(pos)
 		"factory": s.factory(pos)
 		"gothic_hall": gothic_hall(pos,c,int(entry.get("towers",0)))
+		_:
+			push_warning("Unknown landmark type '%s'; nothing was built." % entry.get("type",""))
+			return false
+	return true
 
 func put(mesh: Mesh,origin: Vector3,basis: Basis,color: String) -> void:
 	s.put_mesh(mesh,origin,basis,color)

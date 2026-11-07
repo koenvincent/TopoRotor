@@ -31,12 +31,17 @@ De image heeft een Docker-`HEALTHCHECK`. Met `docker ps` of `docker inspect --fo
 
 ### Meerdere tokens, rotatie en intrekken
 
-In plaats van `TOPOROTOR_OCR_TOKEN` kun je `TOPOROTOR_OCR_TOKENS` zetten: een kommagescheiden lijst, bijvoorbeeld één token per apparaat. Elk token moet minimaal 32 bytes zijn. Zijn beide variabelen gezet, dan worden alle tokens geaccepteerd. Bij elke geslaagde aanvraag logt de service alleen de index van het gebruikte token (`ocr_auth token_index=N`), nooit het token zelf.
+In plaats van `TOPOROTOR_OCR_TOKEN` kun je `TOPOROTOR_OCR_TOKENS` zetten: een kommagescheiden lijst, bijvoorbeeld één token per apparaat. Elk token moet minimaal 32 bytes zijn. Een te kort token wordt overgeslagen (nooit geaccepteerd) en gelogd met alleen zijn plaats in de lijst (`ocr_config_warning reason=token_too_short index=N`, tellend vanaf 0); de geldige tokens blijven werken en `/ready` toont de waarschuwing onder `warnings`. Is geen enkel token geldig, dan geeft `/ready` 503 met `token_too_short index=N` per ongeldig item (of `token_not_configured` als er niets is gezet). Zijn beide variabelen gezet, dan worden alle tokens geaccepteerd. Bij elke geslaagde aanvraag logt de service alleen de index van het gebruikte token (`ocr_auth token_index=N`), nooit het token zelf.
 
 - Roteren: voeg het nieuwe token toe aan de lijst, herstart de container, zet het nieuwe token op de apparaten, verwijder daarna het oude token en herstart opnieuw.
 - Intrekken (bijv. verloren tablet): verwijder alleen het token van dat apparaat uit de lijst en herstart de container. Andere apparaten blijven werken.
 
-Er zit geen standaardtoken in de image. Een ontbrekend of kort token maakt `/extract` onbeschikbaar (503). Verkeerde credentials geven 401. De container draait als gebruiker 10001. Met twee gelijktijdige uploads/herkenningen is de dienst bezet; extra werk krijgt 429. Een upload heeft 20 seconden en de Tesseract-aanroep 30 seconden als limiet.
+Er zit geen standaardtoken in de image. Een ontbrekend of kort token maakt `/extract` onbeschikbaar (503). Verkeerde credentials geven 401. De container draait als gebruiker 10001. Met twee gelijktijdige uploads/herkenningen is de dienst bezet; extra werk krijgt 429. Met meer dan één token kan één token nooit alle slots tegelijk bezetten: er blijft er minstens één over voor de andere tokens. Een upload heeft 20 seconden en de Tesseract-aanroep 30 seconden als limiet.
+
+### Overige instellingen
+
+- `TOPOROTOR_OCR_SLOTS` (standaard 2): aantal gelijktijdige uploads/herkenningen **per uvicorn-worker**. Met `--workers N` is het totaal N × slots. Stel het geheugenlimiet van de container daarop af, of draai één worker per container en schaal met replica's.
+- `TOPOROTOR_CATALOG_PATH`: pad naar `places.json` (standaard `../data/places.json` naast de service). Een ontbrekend of ongeldig bestand laat de service niet crashen: `/ready` meldt `catalog_missing` of `catalog_invalid` en `/extract` geeft 503.
 
 Plaats een HTTPS reverse proxy voor de loopback-poort en bescherm de toegang desgewenst verder via je VPN. Een Caddy-voorbeeld voor een eigen bereikbaar domein:
 
@@ -60,9 +65,10 @@ De app bewaart lokaal één schoolwerkfoto. Wis appgegevens om die te verwijdere
 ## API
 
 - `GET /health`: 200 bij een reagerende applicatie; geen authenticatie. Dit is liveness, geen garantie dat OCR of een token goed is ingesteld.
+- `GET /ready`: 200 `{"status":"ready","reasons":[],"warnings":[...]}` of 503 `{"status":"not_ready","reasons":[...],"warnings":[...],"detail":"..."}`. Reden bijvoorbeeld `token_not_configured`, `token_too_short index=N`, `catalog_missing`, `tesseract_not_found`, `tesseract_langs_missing`. Verliest Tesseract na de start zijn taaldata, dan wordt dat na de eerste mislukte herkenning ook hier zichtbaar.
 - `POST /extract`: raw PNG/JPG, `Content-Type: image/png` of `image/jpeg`, header `Authorization: Bearer <token>`. Maximaal 12 MiB en 12 megapixel; afmetingen worden vóór pixeldecodering gecontroleerd.
-- Antwoord: `{"api_version":1, "catalog_version":"...", "text":"...", "candidates":["Arnhem"], "review_required":true}`.
-- Fouten: 400 ongeldige afbeelding; 401 onjuist token; 408 uploadtimeout; 413 te groot; 415 formaat; 429 bezet; 502 enginefout; 503 configuratie/engine ontbreekt; 504 OCR-timeout.
+- Antwoord: `{"api_version":1, "catalog_version":"...", "text":"...", "candidates":["Arnhem"], "candidate_places":[{"name":"Arnhem","regions":["nl"]}], "review_required":true}`. `candidate_places` heeft dezelfde volgorde en lengte als `candidates`; `regions` noemt de regio's (`nl`, `eu`) waarin de naam voorkomt, bijvoorbeeld `Noordzee` in beide. Een naam die deel is van een langere plaatsnaam in de tekst (Rijn in Neder-Rijn) wordt niet apart gemeld.
+- Fouten: 400 ongeldige afbeelding; 401 onjuist token; 408 uploadtimeout; 413 te groot; 415 formaat; 429 bezet; 502 enginefout (de log noemt een vaste reden zoals `language_data`, nooit de tekst van het werkblad);  503 configuratie/engine ontbreekt; 504 OCR-timeout.
 - Foutbody: altijd JSON `{"detail":"<melding>"}` (string). 401 bevat `WWW-Authenticate: Bearer`, 429 bevat `Retry-After`.
 - Het schema (request body en velden) staat in `/openapi.json` en is bruikbaar om een client te genereren.
 
