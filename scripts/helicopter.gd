@@ -7,6 +7,10 @@ var body: Node3D
 var ground_shadow: MeshInstance3D
 var running: bool = true
 var time: float = 0.0
+# Paint scheme: body (hull, tail boom, fin), trim (stripes, stabiliser, legs)
+# and dark (rotor blades, skids, engines). Hex strings without '#'.
+const DEFAULT_PAINT = {"body":"e67b34","trim":"dce4dc","dark":"263845"}
+var paint_materials: Dictionary = {}
 var rotor_disc: MeshInstance3D
 var beacon_light: MeshInstance3D
 var strobes: Array[MeshInstance3D] = []
@@ -37,10 +41,11 @@ func part(mesh: Mesh, at: Vector3, size: Vector3, mat: Material, parent: Node3D)
 func _ready() -> void:
 	body = Node3D.new()
 	add_child(body)
-	var amber = material(Color("e67b34"),.15)
-	var dark = material(Color("263845"),.3)
+	var amber = material(Color(DEFAULT_PAINT.body),.15)
+	var dark = material(Color(DEFAULT_PAINT.dark),.3)
 	var glass = material(Color("234c68"),.25)
-	var cream = material(Color("dce4dc"),.2)
+	var cream = material(Color(DEFAULT_PAINT.trim),.2)
+	paint_materials={"body":amber,"trim":cream,"dark":dark}
 	var sphere = SphereMesh.new()
 	sphere.radial_segments = 16
 	sphere.rings = 8
@@ -112,6 +117,17 @@ func _ready() -> void:
 	shadow.size = Vector2(5.5,7.0)
 	ground_shadow = part(shadow,Vector3(.5,-3.15/scale.y,.4),Vector3.ONE,shadow_mat,self)
 	ground_shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+static func valid_hex(value: Variant) -> bool:
+	return value is String and value.length()==6 and value.is_valid_hex_number(false)
+
+func apply_paint(paint: Dictionary) -> void:
+	for part in DEFAULT_PAINT:
+		var hex: Variant=paint.get(part,DEFAULT_PAINT[part])
+		paint_materials[part].albedo_color=Color(hex if valid_hex(hex) else DEFAULT_PAINT[part])
+
+func paint_hex(part: String) -> String:
+	return paint_materials[part].albedo_color.to_html(false)
 
 func _process(delta: float) -> void:
 	ground_shadow.global_position.y=.09

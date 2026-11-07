@@ -3,7 +3,7 @@ extends RefCounted
 
 # Schema version of progress.json. Files without a version field are treated as version 1.
 const VERSION := 1
-const KNOWN_KEYS = ["version","best","records","custom","endpoint","mute"]
+const KNOWN_KEYS = ["version","best","records","custom","endpoint","mute","paint"]
 
 # True when the file was written by a newer app with a schema this build does not understand.
 static func is_newer(raw: Variant) -> bool:
@@ -21,6 +21,13 @@ static func clean(raw: Variant) -> Dictionary:
 			data[key]=raw[key]
 	if raw.get("mute") is bool:
 		data.mute=raw.mute
+	if raw.get("paint") is Dictionary:
+		var paint: Dictionary={}
+		for part in RotorHelicopter.DEFAULT_PAINT:
+			if RotorHelicopter.valid_hex(raw.paint.get(part)):
+				paint[part]=String(raw.paint[part]).to_lower()
+		if not paint.is_empty():
+			data.paint=paint
 	if raw.get("endpoint") is String and raw.endpoint.length()<=2048:
 		data.endpoint=raw.endpoint
 	if raw.get("best") is Dictionary:

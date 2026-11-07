@@ -40,6 +40,16 @@ De referentiestijl is vertaald naar eenvoudige hoekige 3D-modellen, warm licht e
 
 Alle vijftig Nederlandse steden hebben nu een eigen wijkindeling, verschillende gevels, dakvormen, hoogtes en bebouwingsdichtheid. Historische centra, rivierstadjes, havens, groene woonsteden en moderne steden gebruiken verschillende typen bebouwing. Onder meer Arnhem/Nijmegen (verschillende boogbruggen), Leeuwarden (Oldehove), Groningen (Martinitorenmotief), Maastricht (Maasbrug en kerksilhouet), Den Haag (Hofvijver en hof) en Almere/Lelystad hebben een eigen centrum. De gebouwen, wegen en herkenningspunten blijven schematisch en uitvergroot; dit is geen nauwkeurig 3D-model van de echte stad. De beschikbare globale Natural Earth-bebouwde contouren begrenzen de gegenereerde woonwijken. Voor Sneek ontbreekt dekking en wordt een schematische indeling gebruikt.
 
+### Echte herkenningspunten
+
+Elke Nederlandse stad heeft 1 tot 3 echte herkenningspunten, samen 102 stuks, in [`data/landmarks_nl.json`](data/landmarks_nl.json). Voorbeelden zijn het Centraal Station en het Rijksmuseum in Amsterdam, de Euromast en de Kubuswoningen in Rotterdam en de Sint-Bavo, Molen De Adriaan en de Amsterdamse Poort in Haarlem. Ook het Stadhuis en Molen De Roode Leeuw in Gouda, het Evoluon en het Philips Stadion in Eindhoven, de Lange Jaap in Den Helder, de schachtbok en het Glaspaleis in Heerlen en de hunebedden bij Emmen staan erin. Ze worden gebouwd uit een vaste set silhouetten in `scripts/landmark_kit.gd`: kerk, molen, poort, kasteel, stadion, vuurtoren, schip en meer. De woningen op die plek maken plaats. De posities volgen grofweg de echte ligging in de stad; maat en detail zijn uitvergroot. Namen staan alleen in het databestand en worden in het spel niet getoond, zodat Oefenen en Records geen doel verraden.
+
+### Spuitcabine
+
+Via **Helikopter spuiten** in de hangar kies je een van negen kleurschema's, zoals Politie, Traumageel of Nachtzwart. Met drie kleurkiezers stel je ook zelf de romp, strepen en rotor in. Een draaiend 3D-voorbeeld toont het resultaat direct. De keuze wordt opgeslagen in je voortgang; ongeldige kleuren vallen terug op de fabriekskleuren.
+
+![Spuitcabine](docs/screenshots/preview-paint.png)
+
 ### Grenzen op landschap en minikaart
 
 - Op het landschap: neutrale lijnen, met een dikke landsgrens, gestreepte provinciegrenzen en fijnere gestippelde gemeentegrenzen. Gemeentegrenzen verschijnen bij laag/midden vliegen; op grote afstand blijft de kaart rustig. Gebieden op het landschap krijgen **geen provincie- of gemeentekleuren**.

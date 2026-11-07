@@ -88,6 +88,25 @@ const AIM_HEIGHT = .3
 var heading: float = 0.0
 var camera_yaw: float = 0.0
 var compass: FlightCompass
+var paint_button: Button
+var paint_panel: PanelContainer
+var paint_backdrop: ColorRect
+var paint_pickers: Dictionary = {}
+var preview_heli: RotorHelicopter
+var paint_open: bool = false
+# Name, body, trim, dark. The first entry is the factory paint.
+const PAINT_SCHEMES = [
+	["Reddingsoranje","e67b34","dce4dc","263845"],
+	["Traumageel","f4c51c","2a3035","1f2428"],
+	["Politie","f1f3f5","1e4fa3","23344a"],
+	["Marinegrijs","6f7b80","d9dfe0","2d3a40"],
+	["Racerood","c62f2f","f2f2f2","1d1f22"],
+	["Junglegroen","4f7a3a","d7c48b","2d3a2a"],
+	["Nachtzwart","25292c","f0b93a","111315"],
+	["Oceaanblauw","2f7fb8","f4efe0","1d3346"],
+	["Flamingoroze","e57fa8","fff1f6","3b2b3a"],
+]
+const PAINT_PARTS = [["body","Romp"],["trim","Strepen"],["dark","Rotor en ski's"]]
 var fx: FlightFx
 var hud_fx: HudFx
 var sfx: SfxBank
@@ -115,6 +134,7 @@ func _ready() -> void:
 	if not is_test_mode and not is_capture_mode:
 		load_save()
 	build_environment()
+	helicopter.apply_paint(saved.get("paint",{}))
 	build_ui()
 	load_world("nl")
 	state="menu"
@@ -419,6 +439,7 @@ func build_ui() -> void:
 	pausecol.add_child(button("Stoppen · terug naar de hangar",return_menu))
 	pause_panel.hide()
 	build_photo_dialog()
+	build_paint_shop()
 
 func title(text: String,size_px: int) -> Label:
 	var l=label(text,size_px,GOLD)
@@ -504,9 +525,6 @@ func build_menu() -> void:
 		b.add_theme_font_size_override("font_size",17)
 		b.clip_text=true
 		extras.add_child(b)
-	var hint=label("Fotografeer je werkblad of typ zelf een lijst plaatsen.",14,MUTED)
-	hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-	col.add_child(hint)
 	var stats=PanelContainer.new()
 	var stats_style=style(Color(.08,.21,.25,.85),14,EDGE)
 	stats_style.content_margin_top=10
@@ -522,18 +540,23 @@ func build_menu() -> void:
 	var footer=HBoxContainer.new()
 	footer.add_theme_constant_override("separation",12)
 	col.add_child(footer)
+	paint_button=button("Helikopter spuiten",open_paint_shop)
+	paint_button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	paint_button.custom_minimum_size=Vector2(0,40)
+	paint_button.add_theme_font_size_override("font_size",15)
+	style_button(paint_button,false,12,12)
+	footer.add_child(paint_button)
 	mute_button=button("Geluid: uit" if saved.mute else "Geluid: aan",toggle_sound)
-	mute_button.custom_minimum_size=Vector2(150,40)
+	mute_button.custom_minimum_size=Vector2(140,40)
 	mute_button.add_theme_font_size_override("font_size",15)
 	style_button(mute_button,false,12,12)
 	footer.add_child(mute_button)
 	var credits=LinkButton.new()
 	credits.text="Bronnen en licenties"
 	credits.add_theme_font_size_override("font_size",14)
-	credits.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-	credits.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+	credits.size_flags_horizontal=Control.SIZE_SHRINK_END
 	credits.pressed.connect(show_credits)
-	footer.add_child(credits)
+	col.add_child(credits)
 
 func chip(color: Color) -> StyleBoxFlat:
 	var s=style(color,8)
@@ -776,6 +799,8 @@ func update_goal() -> void:
 	answer_cooldown=0.0
 
 func _process(delta: float) -> void:
+	if paint_open and is_instance_valid(preview_heli):
+		preview_heli.rotate_y(delta*.6)
 	if state!="flight" or photo_open:
 		return
 	flight_time+=delta
@@ -891,7 +916,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				change_height(1)
 
 func go_back(allow_quit: bool) -> void:
-	if photo_open:
+	if paint_open:
+		close_paint_shop()
+	elif photo_open:
 		close_photo_dialog()
 	elif state=="flight":
 		pause_flight()
@@ -1217,6 +1244,170 @@ func save_data() -> void:
 	f.close()
 	if DirAccess.rename_absolute(save_path+".tmp",save_path)!=OK:
 		push_warning("Kon het voortgangsbestand niet vervangen.")
+
+# Paint shop: preset schemes plus three free colour pickers, with a live,
+# slowly turning 3D preview rendered in its own little world.
+func build_paint_shop() -> void:
+	paint_backdrop=ColorRect.new()
+	paint_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	paint_backdrop.color=Color(.015,.055,.07,.78)
+	ui.add_child(paint_backdrop)
+	paint_backdrop.hide()
+	paint_panel=PanelContainer.new()
+	var panel_style=card(PANEL_SOLID,26)
+	for side in [SIDE_LEFT,SIDE_RIGHT]:
+		panel_style.set_content_margin(side,28)
+	for side in [SIDE_TOP,SIDE_BOTTOM]:
+		panel_style.set_content_margin(side,22)
+	paint_panel.add_theme_stylebox_override("panel",panel_style)
+	ui.add_child(paint_panel)
+	center_panel(paint_panel,Vector2(860,0))
+	paint_panel.hide()
+	var col=VBoxContainer.new()
+	col.add_theme_constant_override("separation",12)
+	paint_panel.add_child(col)
+	col.add_child(kicker("HANGAR · SPUITCABINE"))
+	col.add_child(title("Spuit je helikopter",34))
+	var row=HBoxContainer.new()
+	row.add_theme_constant_override("separation",24)
+	col.add_child(row)
+	var stage=PanelContainer.new()
+	var stage_style=style(Color("0b2228"),18,EDGE)
+	for side in [SIDE_LEFT,SIDE_RIGHT,SIDE_TOP,SIDE_BOTTOM]:
+		stage_style.set_content_margin(side,0)
+	stage.add_theme_stylebox_override("panel",stage_style)
+	row.add_child(stage)
+	var view_box=SubViewportContainer.new()
+	view_box.stretch=true
+	view_box.custom_minimum_size=Vector2(320,300)
+	view_box.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	stage.add_child(view_box)
+	var viewport=SubViewport.new()
+	viewport.own_world_3d=true
+	viewport.transparent_bg=true
+	viewport.msaa_3d=Viewport.MSAA_4X
+	view_box.add_child(viewport)
+	var preview_camera=Camera3D.new()
+	preview_camera.fov=34
+	preview_camera.position=Vector3(0,6.6,12.0)
+	var look=Environment.new()
+	look.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR
+	look.ambient_light_color=Color("d6e8df")
+	look.ambient_light_energy=.7
+	look.background_mode=Environment.BG_CLEAR_COLOR
+	preview_camera.environment=look
+	viewport.add_child(preview_camera)
+	preview_camera.look_at(Vector3(0,1.8,0),Vector3.UP)
+	var sun=DirectionalLight3D.new()
+	sun.rotation_degrees=Vector3(-48,-30,0)
+	sun.light_energy=1.1
+	viewport.add_child(sun)
+	var pad=MeshInstance3D.new()
+	var pad_mesh=CylinderMesh.new()
+	pad_mesh.top_radius=3.1
+	pad_mesh.bottom_radius=3.1
+	pad_mesh.height=.12
+	pad.mesh=pad_mesh
+	var pad_mat=StandardMaterial3D.new()
+	pad_mat.albedo_color=Color("2c4a50")
+	pad.material_override=pad_mat
+	pad.position.y=-.02
+	viewport.add_child(pad)
+	preview_heli=RotorHelicopter.new()
+	viewport.add_child(preview_heli)
+	preview_heli.rotation.y=-.7
+	preview_heli.position.y=2.4
+	var right=VBoxContainer.new()
+	right.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	right.add_theme_constant_override("separation",10)
+	row.add_child(right)
+	right.add_child(kicker("KLEURSCHEMA'S"))
+	var grid=GridContainer.new()
+	grid.columns=3
+	grid.add_theme_constant_override("h_separation",10)
+	grid.add_theme_constant_override("v_separation",10)
+	right.add_child(grid)
+	for scheme in PAINT_SCHEMES:
+		var swatch=button(scheme[0],func(): set_paint({"body":scheme[1],"trim":scheme[2],"dark":scheme[3]}))
+		swatch.name="Scheme_"+scheme[0]
+		swatch.custom_minimum_size=Vector2(150,46)
+		swatch.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		swatch.add_theme_font_size_override("font_size",15)
+		var body=Color(scheme[1])
+		var ink=INK if body.get_luminance()>.55 else CREAM
+		for state_name in ["normal","hover","pressed","hover_pressed"]:
+			var face_style=face(body.lightened(.12) if state_name=="hover" else body,Color(scheme[2]),state_name.contains("pressed"),12,8)
+			face_style.border_width_bottom=0 if state_name.contains("pressed") else 6
+			swatch.add_theme_stylebox_override(state_name,face_style)
+		for key in ["font_color","font_hover_color","font_pressed_color","font_focus_color","font_hover_pressed_color"]:
+			swatch.add_theme_color_override(key,ink)
+		grid.add_child(swatch)
+	right.add_child(kicker("EIGEN KLEUREN"))
+	var custom=HBoxContainer.new()
+	custom.add_theme_constant_override("separation",10)
+	right.add_child(custom)
+	for part in PAINT_PARTS:
+		var cell=VBoxContainer.new()
+		cell.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		cell.add_theme_constant_override("separation",4)
+		custom.add_child(cell)
+		cell.add_child(label(part[1],14,MUTED))
+		var picker=ColorPickerButton.new()
+		picker.edit_alpha=false
+		picker.custom_minimum_size=Vector2(0,42)
+		picker.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		var colour_picker=picker.get_picker()
+		colour_picker.presets_visible=false
+		colour_picker.can_add_swatches=false
+		colour_picker.sampler_visible=false
+		picker.color_changed.connect(func(colour: Color):
+			var paint=current_paint()
+			paint[part[0]]=colour.to_html(false)
+			set_paint(paint,false))
+		paint_pickers[part[0]]=picker
+		cell.add_child(picker)
+	var footer=HBoxContainer.new()
+	footer.add_theme_constant_override("separation",12)
+	col.add_child(footer)
+	var reset=button("Fabriekskleuren",func(): set_paint(RotorHelicopter.DEFAULT_PAINT.duplicate()))
+	reset.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	footer.add_child(reset)
+	var done=button("Klaar · naar de hangar  →",close_paint_shop,true)
+	done.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	footer.add_child(done)
+
+func current_paint() -> Dictionary:
+	var paint: Dictionary={}
+	for part in RotorHelicopter.DEFAULT_PAINT:
+		paint[part]=helicopter.paint_hex(part)
+	return paint
+
+func set_paint(paint: Dictionary,sync_pickers: bool=true) -> void:
+	helicopter.apply_paint(paint)
+	if is_instance_valid(preview_heli) and not preview_heli.paint_materials.is_empty():
+		preview_heli.apply_paint(paint)
+	saved.paint=current_paint()
+	if sync_pickers:
+		for part in paint_pickers:
+			paint_pickers[part].color=Color(saved.paint[part])
+
+func open_paint_shop() -> void:
+	if state!="menu":
+		return
+	paint_open=true
+	set_paint(current_paint())
+	paint_backdrop.show()
+	paint_panel.show()
+
+func close_paint_shop() -> void:
+	if not paint_open:
+		return
+	paint_open=false
+	for picker in paint_pickers.values():
+		picker.get_popup().hide()
+	paint_panel.hide()
+	paint_backdrop.hide()
+	save_data()
 
 func build_photo_dialog() -> void:
 	photo_backdrop=ColorRect.new()
@@ -1662,6 +1853,24 @@ func smoke_test() -> void:
 			assert(stats.plots>0,"City plan is not empty: "+place.name)
 			layouts[stats.layout]=true
 	assert(layouts.size()==50,"Dutch cities do not repeat the same layout")
+	var builtin_cities=["Amsterdam","Rotterdam","Utrecht","Den Haag","Groningen","Arnhem","Nijmegen","Maastricht","Almere","Lelystad","Leeuwarden","Zwolle","Breda","Delft","Middelburg","Sneek","Eindhoven"]
+	var real_landmarks=0
+	for place in catalog.places:
+		if place.kind=="stad" and place.region=="nl":
+			var entries: Array=world.dutch_scenery.landmark_data.get(place.name,[])
+			assert(entries.size()>=1 and entries.size()<=3,"1-3 real landmarks per Dutch city: "+place.name)
+			var built=0
+			for entry in entries:
+				assert(LandmarkKit.known(entry.get("type","")),"Known landmark type for "+place.name)
+				assert(entry.get("type")!="builtin" or place.name in builtin_cities,"Builtin landmark exists for "+place.name)
+				if entry.get("type")!="builtin":
+					built+=1
+					assert(Vector2(entry.at[0],entry.at[1]).length()<8.0,"Landmark stays inside its city: "+entry.name)
+			assert(world.dutch_scenery.landmark_built.get(place.name,-1)==built,"Every listed landmark is built in "+place.name)
+			real_landmarks+=entries.size()
+	assert(real_landmarks>=100,"Dutch cities share at least 100 recognisable landmarks")
+	for name in world.dutch_scenery.landmark_data:
+		assert(catalog.lookup.has(catalog.normalize(name)),"Landmark city exists in the catalog: "+name)
 	minimap.toggle_detail()
 	assert(minimap.local_view,"Minimap can show local municipality boundaries")
 	minimap.toggle_detail()
@@ -1963,6 +2172,23 @@ func smoke_test() -> void:
 	assert(state=="summary","Vatican fallback accepts its reference point")
 	mode_select.select(GameMode.LEARN)
 	return_menu()
+	# Paint shop: presets and pickers recolour the real helicopter and persist.
+	var paint_before=current_paint()
+	open_paint_shop()
+	assert(paint_open and paint_panel.visible,"Paint shop opens from the hangar")
+	var police: Button=paint_panel.find_child("Scheme_Politie",true,false)
+	police.pressed.emit()
+	assert(helicopter.paint_hex("body")=="f1f3f5" and helicopter.paint_hex("trim")=="1e4fa3","Preset recolours the helicopter")
+	assert(preview_heli.paint_hex("body")=="f1f3f5","Preview follows the chosen preset")
+	assert(paint_pickers.body.color.to_html(false)=="f1f3f5","Pickers follow the chosen preset")
+	paint_pickers.trim.color_changed.emit(Color("12ab34"))
+	assert(helicopter.paint_hex("trim")=="12ab34" and saved.paint.trim=="12ab34","Custom colour applies and is remembered")
+	go_back(false)
+	assert(not paint_open and not paint_panel.visible and state=="menu","Back closes the paint shop")
+	var cleaned_paint=ProgressStore.clean({"paint":{"body":"ABCDEF","trim":"zzzzzz","dark":42}})
+	assert(cleaned_paint.paint=={"body":"abcdef"},"Saved paint keeps only valid colours")
+	assert(not ProgressStore.clean({"paint":"red"}).has("paint"),"Malformed paint is dropped")
+	set_paint(paint_before)
 	# Layout must fit the base viewport without a scrollbar in the hangar menu.
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -2020,7 +2246,13 @@ func capture_preview() -> void:
 	photo_open=false
 	photo_dialog.hide()
 	photo_backdrop.hide()
-	for city in ["amsterdam","utrecht","rotterdam","den haag","groningen","arnhem","nijmegen","almere","maastricht","zwolle","sneek"]:
+	open_paint_shop()
+	paint_panel.find_child("Scheme_Politie",true,false).pressed.emit()
+	await get_tree().create_timer(.6).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-paint.png")
+	set_paint(RotorHelicopter.DEFAULT_PAINT.duplicate())
+	close_paint_shop()
+	for city in ["amsterdam","utrecht","rotterdam","den haag","groningen","arnhem","nijmegen","almere","maastricht","zwolle","sneek","haarlem","gouda","delft","leiden","eindhoven","heerlen","den helder","emmen","den bosch","alkmaar","heerenveen"]:
 		var place: Dictionary=catalog.lookup[city]
 		start_mission([place])
 		state="preview" # Freeze flight while photographing a detail view.

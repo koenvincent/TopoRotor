@@ -1,0 +1,207 @@
+{
+  "note": "1-3 echte herkenningspunten per Nederlandse stad. Posities zijn wereldeenheden ten opzichte van het stadsanker (x = oost, z = zuid) en grofweg naar de echte ligging gekozen; modellen zijn uitvergrote, gestileerde miniaturen. 'builtin' verwijst naar de bestaande handgemaakte stadsmodellen in scripts/dutch_scenery.gd. Namen worden niet in het spel getoond, zodat ze in Oefenen en Records geen doel verraden.",
+  "cities": {
+    "Amsterdam": [
+      {"name": "Grachtengordel en Oude Kerk", "type": "builtin"},
+      {"name": "Centraal Station", "type": "museum", "at": [0.6, -4.4], "color": "a65a43", "towers": 2, "length": 6.0, "train_shed": true},
+      {"name": "Rijksmuseum", "type": "museum", "at": [1.4, 6.2], "color": "a9573f", "towers": 2, "length": 4.6}
+    ],
+    "Rotterdam": [
+      {"name": "Erasmusbrug en haven", "type": "builtin"},
+      {"name": "Euromast", "type": "needle", "at": [-3.2, -4.6], "height": 9.5},
+      {"name": "Kubuswoningen", "type": "cubes", "at": [3.8, -4.9], "color": "e2c34a"}
+    ],
+    "Den Haag": [
+      {"name": "Binnenhof en Hofvijver", "type": "builtin"},
+      {"name": "Vredespaleis", "type": "museum", "at": [-3.8, -4.3], "color": "b06a4e", "towers": 1, "length": 3.8}
+    ],
+    "Utrecht": [
+      {"name": "Domtoren en Oudegracht", "type": "builtin"},
+      {"name": "Domkerk", "type": "church", "at": [1.2, 2.6], "color": "c9b48c", "tower": false, "length": 2.8},
+      {"name": "Stadion Galgenwaard", "type": "stadium", "at": [5.4, 4.2], "roof": "open"}
+    ],
+    "Amersfoort": [
+      {"name": "Koppelpoort", "type": "water_gate", "at": [-3.0, -2.6]},
+      {"name": "Onze Lieve Vrouwetoren", "type": "spire", "at": [1.8, 1.2], "color": "bca783", "height": 6.4}
+    ],
+    "Arnhem": [
+      {"name": "John Frostbrug", "type": "builtin"},
+      {"name": "Eusebiuskerk", "type": "church", "at": [-3.2, -2.8], "color": "b89a72", "height": 6.2, "top": "lantern", "length": 3.0},
+      {"name": "GelreDome", "type": "stadium", "at": [4.2, 4.4], "roof": "closed"}
+    ],
+    "Nijmegen": [
+      {"name": "Waalbrug", "type": "builtin"},
+      {"name": "Stevenskerk", "type": "church", "at": [-2.8, -3.0], "color": "bf9f78", "height": 5.2, "top": "lantern", "length": 2.8}
+    ],
+    "Eindhoven": [
+      {"name": "Philips-fabriek op Strijp", "type": "builtin"},
+      {"name": "Evoluon", "type": "saucer", "at": [3.4, -3.2]},
+      {"name": "Philips Stadion", "type": "stadium", "at": [-3.8, 3.0], "roof": "open"}
+    ],
+    "Groningen": [
+      {"name": "Martinitoren", "type": "builtin"},
+      {"name": "Groninger Museum", "type": "colour_blocks", "at": [2.8, 4.0]}
+    ],
+    "Leeuwarden": [
+      {"name": "Oldehove", "type": "builtin"},
+      {"name": "Achmeatoren", "type": "skyscraper", "at": [3.2, 2.8], "height": 7.6, "color": "8fa2a6"},
+      {"name": "Waag", "type": "waag", "at": [-2.8, 2.0]}
+    ],
+    "Assen": [
+      {"name": "TT Circuit Assen", "type": "race_track", "at": [-1.0, 3.6]},
+      {"name": "Drents Museum", "type": "museum", "at": [2.4, -2.4], "color": "a8644a", "towers": 1, "length": 2.8}
+    ],
+    "Zwolle": [
+      {"name": "Peperbus en stadsgracht", "type": "builtin"},
+      {"name": "Sassenpoort", "type": "gate", "at": [2.4, 3.6], "color": "a8694c", "pointed": true}
+    ],
+    "Lelystad": [
+      {"name": "Haven", "type": "builtin"},
+      {"name": "Batavia", "type": "ship", "at": [3.2, 3.4], "color": "6b4a32", "masts": 3}
+    ],
+    "Almere": [
+      {"name": "Weerwater en centrum", "type": "builtin"}
+    ],
+    "Haarlem": [
+      {"name": "Grote of Sint-Bavokerk", "type": "church", "at": [0.6, -2.2], "color": "c7b28a", "height": 6.0, "top": "lantern", "length": 3.6, "crossing": true},
+      {"name": "Molen De Adriaan", "type": "windmill", "at": [3.6, 1.8], "height": 4.2},
+      {"name": "Amsterdamse Poort", "type": "gate", "at": [-3.4, 1.4], "color": "b07155", "pointed": true}
+    ],
+    "Middelburg": [
+      {"name": "Stadhuis", "type": "builtin"},
+      {"name": "Lange Jan", "type": "spire", "at": [-2.6, -2.6], "color": "c3ad86", "height": 6.6}
+    ],
+    "Den Bosch": [
+      {"name": "Sint-Janskathedraal", "type": "church", "at": [0.0, -0.6], "color": "c4a87d", "height": 5.6, "top": "lantern", "length": 4.2, "crossing": true, "buttresses": true},
+      {"name": "Stadhuis op de Markt", "type": "gothic_hall", "at": [2.8, 3.0], "color": "d2c3a2"}
+    ],
+    "Maastricht": [
+      {"name": "Sint Servaasbrug en basiliek", "type": "builtin"},
+      {"name": "Helpoort", "type": "gate", "at": [-3.0, 3.0], "color": "a99577", "pointed": false}
+    ],
+    "Breda": [
+      {"name": "Grote Kerk", "type": "builtin"},
+      {"name": "Kasteel van Breda", "type": "castle", "at": [2.8, -3.4], "moat": true}
+    ],
+    "Tilburg": [
+      {"name": "TextielMuseum", "type": "textile_mill", "at": [-3.0, 2.6]},
+      {"name": "Westpoint", "type": "skyscraper", "at": [3.0, -2.8], "height": 8.6, "color": "b7c0bb"}
+    ],
+    "Enschede": [
+      {"name": "De Grolsch Veste", "type": "stadium", "at": [-3.6, 3.2], "roof": "open"},
+      {"name": "Textielfabriek met schoorsteen", "type": "textile_mill", "at": [3.0, -2.4]}
+    ],
+    "Deventer": [
+      {"name": "Lebuïnuskerk", "type": "church", "at": [0.6, -2.8], "color": "bea47b", "height": 5.6, "top": "lantern", "length": 3.0},
+      {"name": "De Waag", "type": "waag", "at": [-2.8, 1.8]}
+    ],
+    "Apeldoorn": [
+      {"name": "Paleis Het Loo", "type": "palace", "at": [0.4, -3.8], "gardens": true}
+    ],
+    "Doetinchem": [
+      {"name": "Catharinakerk", "type": "church", "at": [-2.4, -2.2], "color": "b48d6a", "height": 5.0, "top": "spire", "length": 2.6}
+    ],
+    "Gouda": [
+      {"name": "Stadhuis van Gouda", "type": "gothic_hall", "at": [0.2, -2.4], "color": "d9cdb0"},
+      {"name": "Sint-Janskerk", "type": "church", "at": [2.8, 1.8], "color": "c7b38f", "height": 3.6, "top": "spire", "length": 4.4},
+      {"name": "Molen De Roode Leeuw", "type": "windmill", "at": [-3.4, 2.6], "height": 4.0}
+    ],
+    "Delft": [
+      {"name": "Nieuwe Kerk", "type": "builtin"},
+      {"name": "Oude Kerk met scheve toren", "type": "spire", "at": [-2.8, 1.6], "color": "b49573", "height": 4.6, "lean": 0.07},
+      {"name": "Oostpoort", "type": "gate", "at": [3.2, 2.8], "color": "a8694c", "pointed": true}
+    ],
+    "Leiden": [
+      {"name": "Molen De Valk", "type": "windmill", "at": [-3.0, -2.4], "height": 4.6},
+      {"name": "De Burcht", "type": "castle", "at": [1.2, 1.8], "round": true},
+      {"name": "Pieterskerk", "type": "church", "at": [2.8, -2.0], "color": "c2ab84", "height": 2.6, "top": "flat", "length": 3.6}
+    ],
+    "Alkmaar": [
+      {"name": "Waag en kaasmarkt", "type": "waag", "at": [0.8, -2.4], "cheese": true},
+      {"name": "Grote of Sint-Laurenskerk", "type": "church", "at": [-3.0, 1.8], "color": "c6b18b", "height": 3.0, "top": "spire", "length": 3.8}
+    ],
+    "Den Helder": [
+      {"name": "Vuurtoren Lange Jaap", "type": "lighthouse", "at": [-3.4, -2.6], "color": "c8463b", "height": 6.4},
+      {"name": "Marinehaven", "type": "ship", "at": [3.2, 2.6], "color": "7d878a", "masts": 0}
+    ],
+    "Venlo": [
+      {"name": "Stadhuis", "type": "gothic_hall", "at": [-0.2, -2.6], "color": "c9ad86", "towers": 2},
+      {"name": "Sint-Martinuskerk", "type": "church", "at": [3.0, 2.0], "color": "b28d68", "height": 5.0, "top": "spire", "length": 3.0}
+    ],
+    "Roermond": [
+      {"name": "Munsterkerk", "type": "four_towers", "at": [-2.4, -2.2]},
+      {"name": "Sint-Christoffelkathedraal", "type": "church", "at": [2.6, 2.0], "color": "b99a72", "height": 4.8, "top": "spire", "length": 3.0}
+    ],
+    "Emmen": [
+      {"name": "Hunebed D45 in de Emmerdennen", "type": "hunebed", "at": [3.6, -3.0]},
+      {"name": "Wildlands", "type": "dome", "at": [-3.2, 2.8], "pool": false}
+    ],
+    "Dordrecht": [
+      {"name": "Grote Kerk met stompe toren", "type": "church", "at": [-2.0, -2.4], "color": "c2ab84", "height": 5.0, "top": "flat", "length": 3.6},
+      {"name": "Groothoofdspoort", "type": "gate", "at": [2.8, -3.6], "color": "b39a77", "pointed": false}
+    ],
+    "Hoorn": [
+      {"name": "Hoofdtoren", "type": "harbour_tower", "at": [3.0, 3.2]},
+      {"name": "Waag op de Roode Steen", "type": "waag", "at": [-2.8, 1.4]}
+    ],
+    "Sneek": [
+      {"name": "Waterpoort", "type": "builtin"},
+      {"name": "Martinikerk", "type": "church", "at": [2.8, -3.2], "color": "b9906b", "height": 4.6, "top": "spire", "length": 3.2}
+    ],
+    "Drachten": [
+      {"name": "Philips-fabriek", "type": "factory", "at": [2.6, -2.8]}
+    ],
+    "Heerenveen": [
+      {"name": "Abe Lenstra Stadion", "type": "stadium", "at": [-3.4, 3.0], "roof": "open"},
+      {"name": "IJsstadion Thialf", "type": "hall", "at": [3.2, -2.8], "length": 5.0, "color": "c9d3d0"}
+    ],
+    "Winschoten": [
+      {"name": "Molen Berg", "type": "windmill", "at": [-3.0, -2.4], "height": 4.2},
+      {"name": "Molen Edens", "type": "windmill", "at": [3.0, 2.4], "height": 3.6}
+    ],
+    "Zutphen": [
+      {"name": "Drogenapstoren", "type": "gate", "at": [3.0, -2.6], "color": "a8694c", "pointed": true, "single": true},
+      {"name": "Walburgiskerk", "type": "church", "at": [-2.6, 2.0], "color": "b89c76", "height": 4.4, "top": "spire", "length": 3.0}
+    ],
+    "Hengelo": [
+      {"name": "Lambertusbasiliek", "type": "spire", "at": [-2.4, -2.4], "color": "a9785a", "height": 6.4},
+      {"name": "Stork-fabriekshal", "type": "textile_mill", "at": [3.2, -2.8]}
+    ],
+    "Harderwijk": [
+      {"name": "Vischpoort", "type": "gate", "at": [-3.0, -2.8], "color": "a8694c", "pointed": false},
+      {"name": "Dolfinarium", "type": "dome", "at": [3.2, -1.2], "pool": true}
+    ],
+    "Wageningen": [
+      {"name": "Molen De Vlijt", "type": "windmill", "at": [2.4, -2.4], "height": 4.0}
+    ],
+    "Vlissingen": [
+      {"name": "Oranjemolen", "type": "windmill", "at": [-3.2, -2.6], "height": 3.8},
+      {"name": "Gevangentoren", "type": "harbour_tower", "at": [2.8, 3.0], "round": true}
+    ],
+    "Terneuzen": [
+      {"name": "Zeesluis", "type": "lock", "at": [0.6, -3.0]}
+    ],
+    "Goes": [
+      {"name": "Grote of Maria Magdalenakerk", "type": "church", "at": [0.6, 1.8], "color": "c4ad87", "height": 4.6, "top": "lantern", "length": 3.6}
+    ],
+    "Bergen op Zoom": [
+      {"name": "Gevangenpoort", "type": "gate", "at": [-2.8, -2.2], "color": "b39a77", "pointed": true},
+      {"name": "Markiezenhof", "type": "palace", "at": [2.6, 2.0], "scale": 0.6}
+    ],
+    "Helmond": [
+      {"name": "Kasteel Helmond", "type": "castle", "at": [-2.8, -2.4], "moat": true},
+      {"name": "Paalwoningen", "type": "cubes", "at": [3.0, 2.6], "color": "e8e1c8"}
+    ],
+    "Oss": [
+      {"name": "Margarinefabriek-erfgoed", "type": "textile_mill", "at": [-2.6, -2.4]}
+    ],
+    "Sittard": [
+      {"name": "Sint-Petruskerk", "type": "spire", "at": [-2.4, -2.2], "color": "b9a07e", "height": 5.6},
+      {"name": "Fortuna Sittard-stadion", "type": "stadium", "at": [3.6, 3.4], "roof": "open"}
+    ],
+    "Heerlen": [
+      {"name": "Schachtbok Oranje-Nassaumijn", "type": "headframe", "at": [-3.0, 2.6]},
+      {"name": "Glaspaleis", "type": "skyscraper", "at": [2.6, -2.4], "height": 2.6, "width": 2.2, "color": "a9d6dc", "glass": true}
+    ]
+  }
+}
