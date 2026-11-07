@@ -21,7 +21,7 @@ const SHOW_SECONDS = 6.0
 const NL_CENTRE = Vector2(5.3,52.1) # lon, lat; Amersfoort/Utrecht area
 const MIDDLE_KM = 35.0
 const FAR_WATER_KM = 150.0
-const RIVERS = ["Rijn","Waal","IJssel","Maas"]
+const RIVERS = ["Rijn","Waal","IJssel","Maas","Merwede"]
 const AREA_LABELS = [["DUITSLAND",8.1,52.05],["BELGIË",4.35,51.0],["NOORDZEE",3.55,53.05]]
 # Country names that take an article in a Dutch sentence.
 const WITH_ARTICLE = ["Verenigd Koninkrijk"]
@@ -253,7 +253,7 @@ func draw_map(canvas: Control) -> void:
 			fill(canvas,ring,color)
 	if world.region=="nl":
 		var own=world.province_at(world.project(place.lon,place.lat)) if place.get("kind","")!="provincie" else ""
-		var target_province=display_name(place) if place.get("kind","")=="provincie" else own
+		var target_province=TopoWorld.province_name_for(place) if place.get("kind","")=="provincie" else own
 		var index=0
 		for province in world.province_regions:
 			var base=Color(FlightMinimap.PROVINCE_COLORS[index%FlightMinimap.PROVINCE_COLORS.size()])

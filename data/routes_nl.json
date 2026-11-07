@@ -1,5 +1,5 @@
 {
-  "note": "Routes uit de TopoMaster-werkbladen Nederland (overzichtskaart en kaarten A-D). Namen moeten in data/places.json staan.",
+  "note": "Routes uit de TopoMaster-werkbladen Nederland (overzichtskaart en kaarten A-D), daarna de thema's. Namen moeten in data/places.json staan; 'theme' zet een route in het menu Thema's.",
   "routes": [
     {
       "title": "Nederland · kort rondje",
@@ -232,6 +232,106 @@
         "Neder-Rijn",
         "Lek",
         "Maas"
+      ]
+    },
+    {
+      "title": "Nederland · provincies",
+      "theme": "Provincies",
+      "places": [
+        "Noord-Holland",
+        "Zuid-Holland",
+        "Utrecht provincie",
+        "Flevoland",
+        "Friesland",
+        "Groningen provincie",
+        "Drenthe",
+        "Overijssel",
+        "Gelderland",
+        "Zeeland",
+        "Noord-Brabant",
+        "Limburg"
+      ]
+    },
+    {
+      "title": "Nederland · rivieren en water",
+      "theme": "Rivieren en water",
+      "places": [
+        "IJsselmeer",
+        "Markermeer",
+        "Waddenzee",
+        "Noordzee",
+        "Rijn",
+        "Waal",
+        "IJssel",
+        "Maas",
+        "Westerschelde",
+        "Oosterschelde",
+        "Neder-Rijn",
+        "Lek",
+        "Noordzeekanaal",
+        "Nieuwe Waterweg",
+        "Amsterdam-Rijnkanaal",
+        "Hollands Diep",
+        "Haringvliet",
+        "Grevelingen",
+        "Veerse Meer",
+        "Lauwersmeer",
+        "Eems",
+        "Dollard",
+        "Ketelmeer",
+        "Gooimeer",
+        "Merwede",
+        "Twentekanaal",
+        "Julianakanaal"
+      ]
+    },
+    {
+      "title": "Nederland · gebieden",
+      "theme": "Gebieden",
+      "places": [
+        "Randstad",
+        "Rijnmond",
+        "Haarlemmermeer",
+        "Zeeuws-Vlaanderen",
+        "Twente",
+        "Veluwe",
+        "Biesbos",
+        "Achterhoek",
+        "Betuwe",
+        "De Peel",
+        "Het Gooi",
+        "De Kempen",
+        "Zuid-Limburg",
+        "Noordoostpolder",
+        "Westland",
+        "West-Friesland",
+        "Groene Hart",
+        "Utrechtse Heuvelrug",
+        "Salland",
+        "Hondsrug",
+        "Gelderse Vallei",
+        "Kop van Noord-Holland"
+      ]
+    },
+    {
+      "title": "Nederland · eilanden",
+      "theme": "Eilanden",
+      "places": [
+        "Texel",
+        "Vlieland",
+        "Terschelling",
+        "Ameland",
+        "Schiermonnikoog",
+        "Walcheren",
+        "Noord-Beveland",
+        "Zuid-Beveland",
+        "Schouwen-Duiveland",
+        "Tholen",
+        "Goeree-Overflakkee",
+        "Voorne-Putten",
+        "Hoeksche Waard",
+        "Rottumeroog",
+        "Marken"
       ]
     }
   ]

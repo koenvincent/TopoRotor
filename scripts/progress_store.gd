@@ -3,8 +3,14 @@ extends RefCounted
 
 # Schema version of progress.json. Files without a version field are treated as version 1.
 const VERSION := 1
-const KNOWN_KEYS = ["version","best","records","custom","endpoint","mute","paint","minimap_rotate","points","medals","garage","boards","pilot"]
+const KNOWN_KEYS = ["version","best","records","custom","endpoint","mute","paint","minimap_rotate","points","medals","garage","boards","pilot","look","profiles"]
 const DEFAULT_PILOT = "Niek"
+# Pilot profiles on one device. Each keeps its own points, medals, hangar,
+# paint, stars, record times and pilot look; the leaderboard is shared, so
+# the pilots compete on the same lists. The active profile also lives at the
+# top level of the save, which is what the rest of the game reads.
+const PROFILE_KEYS = ["points","medals","garage","paint","best","records","look"]
+const MAX_PROFILES = 8
 
 # True when the file was written by a newer app with a schema this build does not understand.
 static func is_newer(raw: Variant) -> bool:
@@ -14,19 +20,15 @@ static func is_newer(raw: Variant) -> bool:
 	return typeof(v) in [TYPE_INT,TYPE_FLOAT] and is_finite(float(v)) and float(v)>VERSION
 
 static func defaults() -> Dictionary:
-	return {"version":VERSION,"best":{},"records":{},"custom":[],"endpoint":"","mute":false,"points":0,"medals":[],"garage":HangarCatalog.DEFAULT_GARAGE.duplicate(true),"boards":{},"pilot":DEFAULT_PILOT}
+	var data: Dictionary={"version":VERSION,"best":{},"records":{},"custom":[],"endpoint":"","mute":false,"points":0,"medals":[],"garage":HangarCatalog.DEFAULT_GARAGE.duplicate(true),"boards":{},"pilot":DEFAULT_PILOT,"look":PilotFigure.DEFAULT_LOOK.duplicate()}
+	data.profiles={DEFAULT_PILOT:snapshot(data)}
+	return data
 
-static func clean(raw: Variant) -> Dictionary:
-	var data: Dictionary = defaults()
+# Progress of one pilot, validated. Paint is only present when it was set.
+static func clean_profile(raw: Variant) -> Dictionary:
+	var data: Dictionary={"points":0,"medals":[],"garage":HangarCatalog.DEFAULT_GARAGE.duplicate(true),"best":{},"records":{},"look":PilotFigure.DEFAULT_LOOK.duplicate()}
 	if not raw is Dictionary:
 		return data
-	for key in raw:
-		if not key in KNOWN_KEYS:
-			data[key]=raw[key]
-	if raw.get("mute") is bool:
-		data.mute=raw.mute
-	if raw.get("minimap_rotate") is bool:
-		data.minimap_rotate=raw.minimap_rotate
 	if raw.get("paint") is Dictionary:
 		var paint: Dictionary={}
 		# "dark" is the pre-0.5 rotor/skid slot; the helicopter migrates it.
@@ -43,12 +45,7 @@ static func clean(raw: Variant) -> Dictionary:
 			if medal is String and HangarCatalog.MEDALS.has(medal) and not medal in data.medals:
 				data.medals.append(medal)
 	data.garage=HangarCatalog.clean_garage(raw.get("garage"))
-	data.boards=Leaderboard.clean(raw.get("boards"))
-	var pilot=Leaderboard.clean_pilot(raw.get("pilot"))
-	if not pilot.is_empty():
-		data.pilot=pilot
-	if raw.get("endpoint") is String and raw.endpoint.length()<=2048:
-		data.endpoint=raw.endpoint
+	data.look=PilotFigure.clean(raw.get("look"))
 	if raw.get("best") is Dictionary:
 		for key in ["nl_test","nl_oefenen","eu_test","eu_oefenen"]:
 			var score: Variant=raw.best.get(key)
@@ -63,6 +60,102 @@ static func clean(raw: Variant) -> Dictionary:
 			if key is String and key.length()<=80 and typeof(value) in [TYPE_INT,TYPE_FLOAT] and is_finite(float(value)) and float(value)>0 and float(value)<604800:
 				data.records[key]=float(value)
 				count+=1
+	return data
+
+# The per-pilot part of the save, as a deep copy.
+static func snapshot(data: Dictionary) -> Dictionary:
+	var copy: Dictionary={}
+	for key in PROFILE_KEYS:
+		if data.has(key):
+			copy[key]=data[key].duplicate(true) if data[key] is Dictionary or data[key] is Array else data[key]
+	return copy
+
+static func profile_names(data: Dictionary) -> Array:
+	var names: Array=data.get("profiles",{}).keys()
+	names.sort_custom(func(a,b): return String(a).naturalnocasecmp_to(String(b))<0)
+	return names
+
+# Same name with other capitals counts as the same pilot.
+static func find_profile(data: Dictionary,name: String) -> String:
+	for existing in data.get("profiles",{}):
+		if String(existing).to_lower()==name.to_lower():
+			return existing
+	return ""
+
+# Stores the active pilot and puts the chosen one at the top level.
+static func switch_profile(data: Dictionary,name: String) -> bool:
+	var target=find_profile(data,name)
+	if target.is_empty():
+		return false
+	data.profiles[data.pilot]=snapshot(data)
+	var profile: Dictionary=clean_profile(data.profiles[target])
+	for key in PROFILE_KEYS:
+		if profile.has(key):
+			data[key]=profile[key]
+		else:
+			data.erase(key)
+	data.pilot=target
+	data.profiles[target]=snapshot(data)
+	return true
+
+# A fresh pilot starts at zero with the factory helicopter, and becomes active.
+static func add_profile(data: Dictionary,raw_name: Variant) -> String:
+	var name=Leaderboard.clean_pilot(raw_name)
+	if name.is_empty():
+		return ""
+	if not find_profile(data,name).is_empty() or data.profiles.size()>=MAX_PROFILES:
+		return ""
+	data.profiles[data.pilot]=snapshot(data)
+	data.profiles[name]=clean_profile({})
+	switch_profile(data,name)
+	return name
+
+# The last pilot cannot be removed. Removing the active one switches to the next.
+static func remove_profile(data: Dictionary,name: String) -> bool:
+	var target=find_profile(data,name)
+	if target.is_empty() or data.profiles.size()<=1:
+		return false
+	if target==data.pilot:
+		for other in profile_names(data):
+			if other!=target:
+				switch_profile(data,other)
+				break
+	data.profiles.erase(target)
+	return true
+
+static func clean(raw: Variant) -> Dictionary:
+	var data: Dictionary = defaults()
+	if not raw is Dictionary:
+		return data
+	for key in raw:
+		if not key in KNOWN_KEYS:
+			data[key]=raw[key]
+	if raw.get("mute") is bool:
+		data.mute=raw.mute
+	if raw.get("minimap_rotate") is bool:
+		data.minimap_rotate=raw.minimap_rotate
+	data.merge(clean_profile(raw),true)
+	data.boards=Leaderboard.clean(raw.get("boards"))
+	var pilot=Leaderboard.clean_pilot(raw.get("pilot"))
+	if not pilot.is_empty():
+		data.pilot=pilot
+	# Saves from before profiles hold one pilot: the top level becomes that profile.
+	data.profiles={}
+	if raw.get("profiles") is Dictionary:
+		for key in raw.profiles:
+			var name=Leaderboard.clean_pilot(key)
+			if name.is_empty() or not raw.profiles[key] is Dictionary or not find_profile(data,name).is_empty():
+				continue
+			if data.profiles.size()>=MAX_PROFILES-1 and name.to_lower()!=String(data.pilot).to_lower():
+				continue
+			data.profiles[name]=clean_profile(raw.profiles[key])
+	# The top level is the latest state of the active pilot.
+	var active=find_profile(data,data.pilot)
+	if not active.is_empty():
+		data.pilot=active
+	data.profiles[data.pilot]=snapshot(data)
+	if raw.get("endpoint") is String and raw.endpoint.length()<=2048:
+		data.endpoint=raw.endpoint
 	if raw.get("custom") is Array:
 		var valid_codes: Array=[]
 		var catalog=TopoCatalog.new()

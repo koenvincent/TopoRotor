@@ -1,6 +1,6 @@
 # Nieks TopoRadar
 
-Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland en Europa vliegt om opdrachten van school te oefenen. Met 274 locaties, de routes uit de TopoMaster-werkbladen Nederland (overzichtskaart, leerkaart en kaart A tot en met D), foto-import, eigen missielijsten, een leer-, oefen- en recordmodus, hints en lokaal bewaarde scores.
+Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland en Europa vliegt om opdrachten van school te oefenen. Met 311 locaties, de routes uit de TopoMaster-werkbladen Nederland (overzichtskaart, leerkaart en kaart A tot en met D), thema's (provincies, rivieren en water, gebieden en eilanden), spelersprofielen met een eigen piloot, foto-import, eigen missielijsten, een leer-, oefen- en recordmodus, hints en lokaal bewaarde scores.
 
 ## Download voor Android
 
@@ -65,7 +65,15 @@ Via **Hangar en upgrades** richt je je eigen helikopter in. Een draaiend 3D-voor
 
 Elke voltooide missie levert **vliegpunten** op: meer bij Oefenen en Records, extra voor elke plek die in één keer goed is, voor sterren en voor een nieuw record. Punten worden nooit uitgegeven, dus je raakt niets meer kwijt. Bij vaste puntengrenzen gaan nieuwe types, kleuren, accessoires en upgrades open; je rang loopt mee van Leerling-piloot tot Radarkapitein. Een paar items vragen een medaille: je eerste record (wimpel en Recordzilver), een foutloze Records-vlucht (lichtpakket en Goud) of een missie in Europa (Europa-blauw). Het overzicht na een missie noemt wat er nieuw open is.
 
-De **Ranglijst** (naast je sterren in het menu en na elke missie) bewaart per route en spelmodus de tien beste vluchten op dit apparaat: Records op tijd inclusief straftijd, Leren en Oefenen op vliegpunten. Stel bij de ranglijst de naam van de piloot in, zodat broers, zussen en ouders elk hun eigen plek krijgen.
+De **Ranglijst** (naast je sterren in het menu en na elke missie) bewaart per route en spelmodus de tien beste vluchten op dit apparaat: Records op tijd inclusief straftijd, Leren en Oefenen op vliegpunten. Alle piloten op het apparaat staan op dezelfde lijst, dus broers, zussen en ouders spelen tegen elkaar.
+
+### Piloten en je eigen karakter
+
+Met **Piloot: …** in het menu open je het pilotenscherm. Maak tot acht piloten aan, wissel met één tik of verwijder er een (met een tweede tik ter bevestiging). Elke piloot heeft eigen vliegpunten, medailles, hangar, kleuren, sterren en recordtijden; vluchten op de ranglijst blijven staan als een piloot weg is. Rechts stel je het karakter in: figuur (man of vrouw), huidskleur, kapsel en haarkleur, pet, vlieghelm, koptelefoon, muts of cowboyhoed, bril, zonnebril of vliegbril, snor, baard, sik of sproeten, en een outfit (vliegpak, bomberjack, hoodie, uniform of reddingsvest) in acht kleuren. **Verras me** kiest alles willekeurig. Je piloot staat ook naast de helikopter in de hangar. Oude voortgang wordt automatisch het profiel van de piloot die er al in stond.
+
+### Thema's
+
+**Thema's** in het menu start een missie met één soort topografie, in de gekozen spelmodus. Nederland: **Provincies** (12), **Rivieren en water** (27, met o.a. Hollands Diep, Haringvliet, Lauwersmeer, Merwede en het Twentekanaal), **Gebieden** (22, met o.a. Achterhoek, Betuwe, De Peel, Het Gooi en Zuid-Limburg) en **Eilanden** (15: de Waddeneilanden, de Zeeuwse en Zuid-Hollandse eilanden en Marken). Europa: hoofdsteden, landen, zeeën, rivieren en meren, gebergten en eilanden en grote steden. De thema's staan ook in de routekiezer, met eigen recordtijden en ranglijst. Een provincie telt nu overal binnen de provinciegrens, zoals een land in Europa, in plaats van binnen 25 km van één punt.
 
 ![Hangar met accessoires](docs/screenshots/preview-hangar-accessoires.png)
 

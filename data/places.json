@@ -1015,6 +1015,393 @@
     "radius_km": 4
   },
   {
+    "name": "Hollands Diep",
+    "lat": 51.69,
+    "lon": 4.55,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": "",
+    "radius_km": 7
+  },
+  {
+    "name": "Haringvliet",
+    "lat": 51.8,
+    "lon": 4.28,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": "",
+    "radius_km": 7
+  },
+  {
+    "name": "Grevelingen",
+    "lat": 51.75,
+    "lon": 3.97,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [
+      "Grevelingenmeer"
+    ],
+    "code": "",
+    "radius_km": 6
+  },
+  {
+    "name": "Veerse Meer",
+    "lat": 51.54,
+    "lon": 3.72,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": "",
+    "radius_km": 5
+  },
+  {
+    "name": "Lauwersmeer",
+    "lat": 53.35,
+    "lon": 6.2,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": "",
+    "radius_km": 5
+  },
+  {
+    "name": "Eems",
+    "lat": 53.4,
+    "lon": 6.88,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": "",
+    "radius_km": 8
+  },
+  {
+    "name": "Dollard",
+    "lat": 53.27,
+    "lon": 7.13,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": "",
+    "radius_km": 6
+  },
+  {
+    "name": "Ketelmeer",
+    "lat": 52.6,
+    "lon": 5.77,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": "",
+    "radius_km": 4
+  },
+  {
+    "name": "Gooimeer",
+    "lat": 52.34,
+    "lon": 5.2,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": "",
+    "radius_km": 4
+  },
+  {
+    "name": "Merwede",
+    "lat": 51.82,
+    "lon": 4.85,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [
+      "Boven-Merwede",
+      "Beneden-Merwede"
+    ],
+    "code": "",
+    "radius_km": 7
+  },
+  {
+    "name": "Twentekanaal",
+    "lat": 52.2,
+    "lon": 6.5,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": "",
+    "radius_km": 10
+  },
+  {
+    "name": "Julianakanaal",
+    "lat": 51.01,
+    "lon": 5.79,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": "",
+    "radius_km": 8
+  },
+  {
+    "name": "Achterhoek",
+    "lat": 51.97,
+    "lon": 6.5,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [],
+    "code": "",
+    "radius_km": 18
+  },
+  {
+    "name": "Betuwe",
+    "lat": 51.9,
+    "lon": 5.45,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [],
+    "code": "",
+    "radius_km": 14
+  },
+  {
+    "name": "De Peel",
+    "lat": 51.43,
+    "lon": 5.85,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [
+      "Peel"
+    ],
+    "code": "",
+    "radius_km": 14
+  },
+  {
+    "name": "Het Gooi",
+    "lat": 52.25,
+    "lon": 5.18,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [
+      "Gooi",
+      "Gooiland"
+    ],
+    "code": "",
+    "radius_km": 8
+  },
+  {
+    "name": "De Kempen",
+    "lat": 51.37,
+    "lon": 5.25,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [
+      "Kempen"
+    ],
+    "code": "",
+    "radius_km": 14
+  },
+  {
+    "name": "Zuid-Limburg",
+    "lat": 50.87,
+    "lon": 5.85,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [
+      "Heuvelland",
+      "Limburgs Heuvelland"
+    ],
+    "code": "",
+    "radius_km": 12
+  },
+  {
+    "name": "Noordoostpolder",
+    "lat": 52.71,
+    "lon": 5.76,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [],
+    "code": "",
+    "radius_km": 10
+  },
+  {
+    "name": "Westland",
+    "lat": 52.0,
+    "lon": 4.22,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [],
+    "code": "",
+    "radius_km": 7
+  },
+  {
+    "name": "West-Friesland",
+    "lat": 52.7,
+    "lon": 5.05,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [],
+    "code": "",
+    "radius_km": 10
+  },
+  {
+    "name": "Groene Hart",
+    "lat": 52.05,
+    "lon": 4.75,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [
+      "Het Groene Hart"
+    ],
+    "code": "",
+    "radius_km": 12
+  },
+  {
+    "name": "Utrechtse Heuvelrug",
+    "lat": 52.05,
+    "lon": 5.4,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [],
+    "code": "",
+    "radius_km": 12
+  },
+  {
+    "name": "Salland",
+    "lat": 52.36,
+    "lon": 6.25,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [],
+    "code": "",
+    "radius_km": 12
+  },
+  {
+    "name": "Hondsrug",
+    "lat": 52.9,
+    "lon": 6.8,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [],
+    "code": "",
+    "radius_km": 12
+  },
+  {
+    "name": "Gelderse Vallei",
+    "lat": 52.08,
+    "lon": 5.58,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [],
+    "code": "",
+    "radius_km": 9
+  },
+  {
+    "name": "Kop van Noord-Holland",
+    "lat": 52.88,
+    "lon": 4.82,
+    "region": "nl",
+    "kind": "gebied",
+    "aliases": [],
+    "code": "",
+    "radius_km": 12
+  },
+  {
+    "name": "Walcheren",
+    "lat": 51.53,
+    "lon": 3.58,
+    "region": "nl",
+    "kind": "eiland",
+    "aliases": [],
+    "code": "",
+    "radius_km": 9
+  },
+  {
+    "name": "Noord-Beveland",
+    "lat": 51.58,
+    "lon": 3.75,
+    "region": "nl",
+    "kind": "eiland",
+    "aliases": [],
+    "code": "",
+    "radius_km": 6
+  },
+  {
+    "name": "Zuid-Beveland",
+    "lat": 51.47,
+    "lon": 3.95,
+    "region": "nl",
+    "kind": "eiland",
+    "aliases": [],
+    "code": "",
+    "radius_km": 11
+  },
+  {
+    "name": "Schouwen-Duiveland",
+    "lat": 51.66,
+    "lon": 3.9,
+    "region": "nl",
+    "kind": "eiland",
+    "aliases": [],
+    "code": "",
+    "radius_km": 8
+  },
+  {
+    "name": "Tholen",
+    "lat": 51.56,
+    "lon": 4.12,
+    "region": "nl",
+    "kind": "eiland",
+    "aliases": [],
+    "code": "",
+    "radius_km": 6
+  },
+  {
+    "name": "Goeree-Overflakkee",
+    "lat": 51.76,
+    "lon": 4.15,
+    "region": "nl",
+    "kind": "eiland",
+    "aliases": [],
+    "code": "",
+    "radius_km": 9
+  },
+  {
+    "name": "Voorne-Putten",
+    "lat": 51.87,
+    "lon": 4.22,
+    "region": "nl",
+    "kind": "eiland",
+    "aliases": [],
+    "code": "",
+    "radius_km": 8
+  },
+  {
+    "name": "Hoeksche Waard",
+    "lat": 51.77,
+    "lon": 4.45,
+    "region": "nl",
+    "kind": "eiland",
+    "aliases": [],
+    "code": "",
+    "radius_km": 8
+  },
+  {
+    "name": "Rottumeroog",
+    "lat": 53.54,
+    "lon": 6.57,
+    "region": "nl",
+    "kind": "eiland",
+    "aliases": [],
+    "code": "",
+    "radius_km": 4
+  },
+  {
+    "name": "Marken",
+    "lat": 52.46,
+    "lon": 5.1,
+    "region": "nl",
+    "kind": "eiland",
+    "aliases": [],
+    "code": "",
+    "radius_km": 3
+  },
+  {
     "name": "Londen",
     "lat": 51.5074,
     "lon": -0.1278,
