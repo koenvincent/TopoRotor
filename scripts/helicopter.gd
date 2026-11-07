@@ -28,10 +28,10 @@ func part(mesh: Mesh, at: Vector3, size: Vector3, mat: Material, parent: Node3D)
 func _ready() -> void:
 	body = Node3D.new()
 	add_child(body)
-	var amber = material(Color("ffbf57"),.15)
-	var dark = material(Color("183947"),.3)
-	var glass = material(Color("397986"),.25)
-	var cream = material(Color("f4edcf"),.2)
+	var amber = material(Color("e67b34"),.15)
+	var dark = material(Color("263845"),.3)
+	var glass = material(Color("234c68"),.25)
+	var cream = material(Color("dce4dc"),.2)
 	var sphere = SphereMesh.new()
 	sphere.radial_segments = 16
 	sphere.rings = 8
@@ -68,6 +68,19 @@ func _ready() -> void:
 		part(BoxMesh.new(),Vector3(side*.91,.0,.25),Vector3(.035,.62,.85),cream,body)
 		part(BoxMesh.new(),Vector3(side*.94,.15,.25),Vector3(.04,.3,.55),glass,body)
 		part(sphere,Vector3(side*.95,.15,-.35),Vector3(.13,.13,.13),material(Color("e8654a") if side<0 else Color("9ed9a4")),body)
+	# Rescue explorer: twin turbines, reinforced nose, outriggers and hazard stripes.
+	for side in [-1,1]:
+		part(sphere,Vector3(side*.52,.85,.8),Vector3(.58,.48,1.6),dark,body)
+		part(CylinderMesh.new(),Vector3(side*.52,.96,1.45),Vector3(.22,.2,.22),cream,body)
+		part(BoxMesh.new(),Vector3(side*1.1,-.05,.7),Vector3(.65,.15,1.2),dark,body)
+		part(BoxMesh.new(),Vector3(side*.98,-.25,.1),Vector3(.04,.15,1.3),dark,body)
+		for i in 3:
+			var stripe=part(BoxMesh.new(),Vector3(side*.975,.05,-.05+i*.22),Vector3(.045,.36,.09),cream,body)
+			stripe.rotation.x=-.4
+		part(sphere,Vector3(side*.45,-.25,-1.08),Vector3(.21,.21,.13),cream,body)
+	part(BoxMesh.new(),Vector3(0,-.58,-1.02),Vector3(.5,.28,.35),dark,body)
+	part(CylinderMesh.new(),Vector3(0,1.06,1.4),Vector3(.055,.8,.055),dark,body)
+	part(BoxMesh.new(),Vector3(0,.25,3.6),Vector3(1.8,.08,.35),cream,body)
 	# Alpha falloff avoids a hard disc and needs no screen-space effects.
 	var shadow_mat = ShaderMaterial.new()
 	shadow_mat.shader = load("res://assets/shaders/aircraft_shadow.gdshader")
