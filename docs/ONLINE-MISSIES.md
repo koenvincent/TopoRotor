@@ -1,8 +1,8 @@
 # Online lesinhoud
 
 Open **Online missies** in de hangar. Plak een HTTPS-link naar een JSON-bestand,
-kies **Missies ophalen**, selecteer een pakket en start. De gekozen oefen-/testmodus
-en vrij vliegen/tijdrit gelden ook voor online missies.
+kies **Missies ophalen**, selecteer een pakket en start. De gekozen modus Leren, Oefenen of Records geldt ook voor online missies.
+Elke online route bewaart in Records zijn eigen beste tijd.
 
 Voorbeeld: `content/missions.json`. Zet dit bestand op een publiek bereikbare
 HTTPS-server, bijvoorbeeld GitHub Pages. Een private GitHub raw-link is zonder
