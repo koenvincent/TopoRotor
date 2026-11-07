@@ -229,6 +229,11 @@ func build_ui() -> void:
 	best_label=label("Klaar voor vertrek, piloot?",15,Color("b1c9c1"))
 	best_label.name="Best"
 	col.add_child(best_label)
+	var credits=LinkButton.new()
+	credits.text="Bronnen en licenties"
+	credits.add_theme_font_size_override("font_size",13)
+	credits.pressed.connect(show_credits)
+	col.add_child(credits)
 	hud=Control.new()
 	hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hud.mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -253,13 +258,13 @@ func build_ui() -> void:
 	hud.add_child(pause)
 	minimap=FlightMinimap.new()
 	minimap.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	minimap.position=Vector2(-234,88)
-	minimap.size=Vector2(210,180)
-	minimap.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	minimap.position=Vector2(-284,88)
+	minimap.size=Vector2(260,230)
+	minimap.mouse_filter=Control.MOUSE_FILTER_STOP
 	hud.add_child(minimap)
 	var height_panel=PanelContainer.new()
 	height_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	height_panel.position=Vector2(-234,280)
+	height_panel.position=Vector2(-234,330)
 	height_panel.size=Vector2(210,108)
 	height_panel.add_theme_stylebox_override("panel",style(Color(.035,.12,.16,.94),14))
 	hud.add_child(height_panel)
@@ -315,6 +320,18 @@ func build_ui() -> void:
 	status_panel.add_child(status_label)
 	hud.hide()
 	build_photo_dialog()
+
+func show_credits() -> AcceptDialog:
+	var dialog=AcceptDialog.new()
+	dialog.title="TopoRotor · bronnen en licenties"
+	dialog.dialog_text="Grensgegevens: Kadaster NL / PDOK, Bestuurlijke Gebieden 2026.\nCC BY 4.0: https://creativecommons.org/licenses/by/4.0/\nBron: https://api.pdok.nl/kadaster/brk-bestuurlijke-gebieden/ogc/v1\nGebundeld op 7 november 2026; uitgesneden en vereenvoudigd.\n\nLand-, water- en stadscontouren: Natural Earth, public domain.\nDe buurten en gebouwen zijn gestileerde modellen, geen echte stratenkaart.\nEigen code en modellen: MIT. Godot: MIT. DejaVu: fontlicentie.\nZie THIRD-PARTY.md voor bronverwijzingen en overige licenties."
+	ui.add_child(dialog)
+	dialog.get_label().autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	dialog.get_label().custom_minimum_size.x=600
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.popup_centered(Vector2i(660,360))
+	return dialog
 
 func load_world(new_region: String) -> void:
 	region=new_region
@@ -419,6 +436,7 @@ func _process(delta: float) -> void:
 	minimap.aircraft=helicopter.position
 	minimap.refresh_navigation()
 	world.refresh_labels(helicopter.position,show_overview,camera.size)
+	world.set_boundary_detail(camera.size)
 	if mission_index<mission.size():
 		var p: Dictionary=mission[mission_index]
 		var km=distance_km(p)
@@ -587,6 +605,7 @@ func position_menu_camera() -> void:
 	camera.size=330 if region=="nl" else 650
 	camera.position=view_target+Vector3(0,600,450)
 	camera.look_at(view_target,Vector3.UP)
+	world.set_boundary_detail(camera.size)
 
 func toggle_sound() -> void:
 	saved.mute=not saved.mute
@@ -1055,6 +1074,22 @@ func _notification(what: int) -> void:
 			status_label.text="Welkom terug, piloot! Je vlucht gaat verder."
 
 func smoke_test() -> void:
+	assert(world.province_regions.size()==12,"All Dutch provinces are bundled")
+	assert(world.boundary_data.municipality_count==342,"Official municipality layer is complete")
+	for level in ["national","provincial","municipal"]:
+		assert(not world.boundary_paths[level].is_empty(),"Boundary level has usable geometry: "+level)
+	var layouts: Dictionary={}
+	for place in catalog.places:
+		if place.kind=="stad" and place.region=="nl":
+			assert(world.dutch_scenery.city_stats.has(place.name),"Every Dutch city receives a city plan")
+			var stats: Dictionary=world.dutch_scenery.city_stats[place.name]
+			assert(stats.plots>0,"City plan is not empty: "+place.name)
+			layouts[stats.layout]=true
+	assert(layouts.size()==50,"Dutch cities do not repeat the same layout")
+	minimap.toggle_detail()
+	assert(minimap.local_view,"Minimap can show local municipality boundaries")
+	minimap.toggle_detail()
+	assert(not minimap.local_view,"Minimap can return to the country overview")
 	assert(world.dutch_scenery.landmarks.has("Amsterdam") and world.dutch_scenery.landmarks.has("Rotterdam") and world.dutch_scenery.landmarks.has("Utrecht"),"Dutch landmarks built at catalog anchors")
 	world.set_hints(true)
 	world.refresh_labels(helicopter.position,false)
@@ -1240,9 +1275,19 @@ func capture_preview() -> void:
 	change_height(1)
 	await get_tree().create_timer(1).timeout
 	get_viewport().get_texture().get_image().save_png("res://build/preview-flight-high.png")
+	minimap.toggle_detail()
+	await get_tree().create_timer(.3).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-boundaries-local.png")
+	minimap.toggle_detail()
 	return_menu()
 	await get_tree().create_timer(.5).timeout
 	get_viewport().get_texture().get_image().save_png("res://build/preview-hangar.png")
+	var credits=show_credits()
+	await get_tree().create_timer(.2).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-credits.png")
+	credits.hide()
+	credits.queue_free()
+	await get_tree().process_frame
 	open_photo_dialog()
 	import_photo("res://examples/demo-werkblad.png")
 	mission_text.text="Amsterdam\nRotterdam\nDen Haag\nUtrecht\nArnhem"
@@ -1254,7 +1299,7 @@ func capture_preview() -> void:
 	photo_open=false
 	photo_dialog.hide()
 	photo_backdrop.hide()
-	for city in ["amsterdam","utrecht","rotterdam"]:
+	for city in ["amsterdam","utrecht","rotterdam","den haag","groningen","arnhem","nijmegen","almere","maastricht","zwolle","sneek"]:
 		var place: Dictionary=catalog.lookup[city]
 		start_mission([place])
 		state="preview" # Freeze flight while photographing a detail view.
@@ -1265,10 +1310,11 @@ func capture_preview() -> void:
 		camera.look_at(center)
 		detail_label.text="Nederland · herkenningspunten van dichtbij"
 		world.refresh_labels(center,false,camera.size)
+		world.set_boundary_detail(camera.size)
 		minimap.aircraft=helicopter.position
 		minimap.refresh_navigation()
 		await get_tree().create_timer(.4).timeout
-		get_viewport().get_texture().get_image().save_png("res://build/preview-"+city+".png")
+		get_viewport().get_texture().get_image().save_png("res://build/preview-"+city.replace(" ","-")+".png")
 	# Shared camera/UI/helicopter changes also get a visual check in Europe.
 	load_world("eu")
 	start_mission([catalog.lookup.parijs])

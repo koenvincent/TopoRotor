@@ -2,7 +2,7 @@
 
 Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland en Europa vliegt om opdrachten van school te oefenen. Met 152 locaties, foto-import, eigen missielijsten, een leer-, oefen- en recordmodus, hints en lokaal bewaarde scores.
 
-**Status: gereviewd prototype, broncodeversie 0.3.0.** De eerdere Android-APK 0.1.0 bevat de onderstaande reparaties niet. Deze repository bevat broncode en graphics; er is nog geen nieuwe 0.3-APK gebouwd of op een Android-toestel getest.
+**Status: gereviewd prototype, broncodeversie 0.4.0.** De eerdere Android-APK 0.1.0 bevat de onderstaande reparaties niet. Deze repository bevat broncode en graphics; er is nog geen nieuwe 0.4-APK gebouwd of op een Android-toestel getest.
 
 ![TopoRotor vliegmissie](docs/screenshots/preview-flight.png)
 
@@ -22,6 +22,21 @@ Installeer **Godot 4.5.1 Standard** (geen .NET nodig), importeer `project.godot`
 ![Rotterdam met haven en brug](docs/screenshots/preview-rotterdam.png)
 
 De referentiestijl is vertaald naar eenvoudige hoekige 3D-modellen, warm licht en water met subtiele beweging. De detailbeelden hierboven gebruiken een vaste opnamecamera; de gewone vlucht heeft de instelbare vlieghoogtes. Modellen worden per kleur samengevoegd, zodat elk raam of elke boom geen afzonderlijke tekenaanroep nodig heeft. Alle graphics blijven lokaal en werken offline.
+
+Alle vijftig Nederlandse steden hebben nu een eigen wijkindeling, verschillende gevels, dakvormen, hoogtes en bebouwingsdichtheid. Historische centra, rivierstadjes, havens, groene woonsteden en moderne steden gebruiken verschillende typen bebouwing. Onder meer Arnhem/Nijmegen (verschillende boogbruggen), Leeuwarden (Oldehove), Groningen (Martinitorenmotief), Maastricht (Maasbrug en kerksilhouet), Den Haag (Hofvijver en hof) en Almere/Lelystad hebben een eigen centrum. De gebouwen, wegen en herkenningspunten blijven schematisch en uitvergroot; dit is geen nauwkeurig 3D-model van de echte stad. De beschikbare globale Natural Earth-bebouwde contouren begrenzen de gegenereerde woonwijken. Voor Sneek ontbreekt dekking en wordt een schematische indeling gebruikt.
+
+### Grenzen op landschap en minikaart
+
+- Op het landschap: neutrale lijnen, met een dikke landsgrens, gestreepte provinciegrenzen en fijnere gestippelde gemeentegrenzen. Gemeentegrenzen verschijnen bij laag/midden vliegen; op grote afstand blijft de kaart rustig. Gebieden op het landschap krijgen **geen provincie- of gemeentekleuren**.
+- Alleen de minikaart kleurt de twaalf provincies in. Landsgrenzen zijn goud, provinciegrenzen licht en gemeentegrenzen blauwgrijs. Een legenda verklaart de accenten.
+- **Tik of klik op de minikaart** om te wisselen tussen Nederland en de omgeving. De lokale weergave volgt de helikopter en maakt gemeentegrenzen beter leesbaar. Onderaan staat de huidige provincie.
+- De gebundelde Nederlandse grensdata omvat twaalf provincies en 342 gemeenten uit de officiële Kadaster/PDOK-laag van 2026. De lijnen zijn vereenvoudigd voor de game. Bronvermelding en licentie zijn ook bereikbaar via **Bronnen en licenties** in de hangar.
+
+![Verschillende stadsopbouw bij Arnhem en Nijmegen](docs/screenshots/preview-arnhem.png)
+
+![Moderne bebouwing in Almere](docs/screenshots/preview-almere.png)
+
+![Lokale minikaart met gekleurde provincies](docs/screenshots/preview-boundaries-local.png)
 
 De decoratieve akkers kunnen worden herbouwd met `uv run --with shapely python tools/build_nl_fields.py`. Shapely is alleen nodig voor dit ontwikkelhulpmiddel, niet voor het spel.
 
@@ -46,7 +61,7 @@ De ouder controleert altijd de herkende locaties. Een kopje zoals ‘Nederland�
 ## Geografie en leren
 
 - Landvragen controleren het landpolygoon op de kaart. Volgens de Nederlandse schooltopografie telt de Krim als Oekraïne, Noord-Cyprus als Cyprus en Åland als Finland.
-- Andere vragen controleren een referentiepunt met 6 km tolerantie in Nederland en 25 km in Europa. Provincies, rivieren, eilanden en meren hebben **geen volledige gebieds-/rivierdetectie**. Provinciegrenzen ontbreken.
+- Andere vragen controleren een referentiepunt met 6 km tolerantie in Nederland en 25 km in Europa. Provincies, rivieren, eilanden en meren hebben **geen volledige gebieds-/rivierdetectie**. De getekende provinciegrens verandert deze antwoordcontrole niet.
 - Natural Earth-contouren zijn grof, vooral rond delta's en kleine eilanden. Europa loopt circa 25°W–45°O en 34°–72°N.
 - Velden, bomen, gebouwen en bergen zijn gestileerde decoratie; geen echte hoogte- of landgebruiksdatabase.
 - Drie sterren: een foutloze Records-vlucht; twee bij maximaal twee fouten; anders één. Records bewaart daarnaast de beste tijd per route. Er is nog geen adaptief herhalen of langdurige voortgang per locatie.
