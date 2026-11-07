@@ -84,5 +84,5 @@ func _process(delta: float) -> void:
 	body.position.y = sin(time * 3.0) * .1
 
 func lean(direction: Vector2, delta: float) -> void:
-	body.rotation.z = lerp(body.rotation.z,-direction.x*.14,delta*5)
-	body.rotation.x = lerp(body.rotation.x,-direction.y*.12,delta*5)
+	body.rotation.z = lerp(body.rotation.z,-direction.x*.14,1.0-exp(-7.0*delta))
+	body.rotation.x = lerp(body.rotation.x,-direction.y*.12,1.0-exp(-7.0*delta))

@@ -101,3 +101,17 @@ De repository bevat geen signing key, tokens of APK's. Android installeert een u
 | `.github/workflows/ci.yml` | CI voor tests en dependency-audit |
 
 Eigen code en graphics: MIT. Zie [LICENSE](LICENSE), [THIRD-PARTY.md](THIRD-PARTY.md) en de font- en enginelicenties in `assets/`.
+
+## Nieuw: sneller vliegen, tijdrit en online missies
+
+Nederland vliegt nu met 10 in plaats van 4,5 wereldeenheden per seconde;
+Europa met 42 in plaats van 24. Besturing en bochten reageren vloeiend,
+en loslaten remt sneller af. Kies in de hangar **Vrij vliegen** of **Tijdrit**.
+Een tijdrit geeft 90 seconden per locatie voor de hele missie. Tijd pauzeert
+wanneer de app naar de achtergrond gaat. Bij nul eindigt de vlucht met het
+aantal gevonden locaties; een onvoltooide missie levert geen sterren op.
+
+Met **Online missies** kun je lespakketten laden en offline bewaren zonder een
+nieuwe APK. Zie [online missies](docs/ONLINE-MISSIES.md) voor het JSON-formaat.
+Zie [APK-builds](docs/ANDROID-BUILDS.md) voor de automatische Android-build,
+vaste signing key en downloaden via GitHub Releases.
