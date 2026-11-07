@@ -8,7 +8,7 @@ Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland 
 
 Open de link op je Android-telefoon of -tablet en kies `TopoRotor.apk` bij de gewenste release. Open het gedownloade bestand om de app te installeren en geef je browser of bestandsapp zo nodig toestemming. Zie de [installatie-instructies](docs/ANDROID-BUILDS.md#download-op-tablet) voor meer uitleg.
 
-**Status: gereviewd prototype, broncodeversie 0.4.0.** De eerdere Android-APK 0.1.0 bevat de onderstaande reparaties niet. Deze repository bevat broncode en graphics; er is nog geen nieuwe 0.4-APK gebouwd of op een Android-toestel getest.
+**Status: gereviewd prototype, versie 0.4.** Elke merge naar main bouwt automatisch een ondertekende APK en zet die bij [Releases](https://github.com/koenvincent/TopoRotor/releases) als nieuwste versie (`v0.4.<build>`). De eerdere Android-APK 0.1.0 bevat de onderstaande reparaties niet.
 
 ![TopoRotor vliegmissie](docs/screenshots/preview-flight.png)
 
