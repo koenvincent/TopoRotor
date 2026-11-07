@@ -34,9 +34,24 @@ func reset() -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	draw_circle(center,78,Color(.05,.16,.20,.7))
-	draw_arc(center,78,0,TAU,64,Color(.68,.85,.83,.5),2,true)
-	for d in [Vector2.UP,Vector2.RIGHT,Vector2.DOWN,Vector2.LEFT]:
-		draw_line(center+d*56,center+d*65,Color(.82,.9,.84,.7),2,true)
-	draw_circle(center+value*54,29,Color("ffc35c"))
-	draw_circle(center+value*54,21,Color("e5a445"))
+	draw_circle(center+Vector2(0,4),80,Color(0,0,0,.25))
+	draw_circle(center,80,Color(.03,.11,.14,.78))
+	draw_arc(center,80,0,TAU,72,Color(1,.76,.36,.55),2,true)
+	draw_arc(center,58,0,TAU,64,Color(.68,.85,.83,.22),1,true)
+	var ink=Color(.9,.94,.88,.85)
+	# Up/down chevrons: thrust along the nose. Curved arrows: turn left/right.
+	for dir in [-1,1]:
+		var tip=center+Vector2(0,dir*70)
+		draw_colored_polygon(PackedVector2Array([tip,tip+Vector2(-8,-dir*9),tip+Vector2(8,-dir*9)]),ink if dir<0 else Color(ink,.5))
+		# Left (dir -1) and right (dir 1) arcs, each with its arrowhead at the top end.
+		var middle=PI if dir<0 else 0.0
+		draw_arc(center,68,middle-.35,middle+.35,12,ink,3,true)
+		var end_angle=middle-dir*.35
+		var end=center+Vector2(cos(end_angle),sin(end_angle))*68
+		var tangent=Vector2(-sin(end_angle),cos(end_angle))*-dir
+		draw_colored_polygon(PackedVector2Array([end+tangent*9,end-tangent*2+tangent.orthogonal()*7,end-tangent*2-tangent.orthogonal()*7]),ink)
+	var knob=center+value*54
+	draw_circle(knob+Vector2(0,3),30,Color(0,0,0,.3))
+	draw_circle(knob,30,Color("c27f2b"))
+	draw_circle(knob+Vector2(0,-2),27,Color("ffc35c"))
+	draw_circle(knob+Vector2(-7,-9),8,Color(1,1,1,.25))

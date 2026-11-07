@@ -18,6 +18,7 @@ var world: TopoWorld:
 		province_sample=Vector2(INF,INF)
 		queue_redraw()
 var aircraft: Vector3 = Vector3.ZERO
+var heading: float = 0.0
 var goal: Vector3 = Vector3.ZERO
 var show_goal: bool = false
 var overlay: NavigationOverlay
@@ -149,6 +150,13 @@ func draw_navigation(canvas: Control) -> void:
 			canvas.draw_circle(goal_point,5,Color("ffc35c"))
 	var pos=map_point(Vector2(aircraft.x,aircraft.z))
 	if inset.has_point(pos):
-		canvas.draw_circle(pos,4,Color("f2f3d8"))
-		canvas.draw_arc(pos,8,0,TAU,24,Color("f2f3d8"),1,true)
+		# The flight camera turns with the helicopter; the map stays north-up and
+		# shows the nose direction instead.
+		var nose=Vector2(-sin(heading),-cos(heading))
+		var ahead=(map_point(Vector2(aircraft.x,aircraft.z)+nose*10.0)-pos).normalized()
+		if ahead.is_zero_approx():
+			ahead=Vector2.UP
+		var side=ahead.orthogonal()
+		canvas.draw_arc(pos,10,0,TAU,24,Color(.95,.95,.85,.55),1,true)
+		canvas.draw_colored_polygon(PackedVector2Array([pos+ahead*9,pos-ahead*5+side*5.5,pos-ahead*2,pos-ahead*5-side*5.5]),Color("f2f3d8"))
 	canvas.draw_string(ThemeDB.fallback_font,Vector2(size.x-28,24),"N",HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color("f1e9ca"))
