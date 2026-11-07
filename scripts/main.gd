@@ -1929,6 +1929,8 @@ func smoke_test() -> void:
 	assert(not world.lake_contains(world.project(5.4714,52.5185)),"Lelystad remains on land")
 	assert(world.lake_contains(world.project(5.33,52.8)),"IJsselmeer remains water")
 	assert(world.lake_contains(world.project(5.18,52.55)),"Markermeer remains water")
+	assert(world.lake_contains(world.project(catalog.lookup.houtribdijk.lon,catalog.lookup.houtribdijk.lat)),"Houtribdijk lies between IJsselmeer and Markermeer")
+	assert(catalog.lookup.houtribdijk in catalog.presets("nl",2),"Leerkaart includes the Houtribdijk drawn on the worksheet")
 	start_mission([catalog.lookup.arnhem])
 	assert(world.mat(Color.WHITE)==world.mat(Color.WHITE),"Materials are reused")
 	assert(world.mat(Color.WHITE)!=world.mat(Color.WHITE,false,true),"Cull variants stay separate")
