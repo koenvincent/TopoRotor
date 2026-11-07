@@ -1,4 +1,4 @@
-# Nieks TopoRotor
+# Nieks TopoRadar
 
 Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland en Europa vliegt om opdrachten van school te oefenen. Met 200 locaties, de routes uit de TopoMaster-werkbladen Nederland (overzichtskaart, leerkaart en kaart A tot en met D), foto-import, eigen missielijsten, een leer-, oefen- en recordmodus, hints en lokaal bewaarde scores.
 
@@ -8,11 +8,11 @@ Het app-icoon toont een reddingsheli die vanaf een gouden speld in Brabant over 
 
 **[Download de Android-app (APK)](https://github.com/koenvincent/TopoRotor/releases)**
 
-Open de link op je Android-telefoon of -tablet en kies `TopoRotor.apk` bij de gewenste release. Open het gedownloade bestand om de app te installeren en geef je browser of bestandsapp zo nodig toestemming. Zie de [installatie-instructies](docs/ANDROID-BUILDS.md#download-op-tablet) voor meer uitleg.
+Open de link op je Android-telefoon of -tablet en kies `TopoRotor.apk` bij de gewenste release. De app heet nu Nieks TopoRadar; bestandsnaam en app-id zijn gelijk gebleven, zodat de update over de vorige versie installeert en je scores bewaard blijven. Open het gedownloade bestand om de app te installeren en geef je browser of bestandsapp zo nodig toestemming. Zie de [installatie-instructies](docs/ANDROID-BUILDS.md#download-op-tablet) voor meer uitleg.
 
 **Status: gereviewd prototype, versie 0.4.** Elke merge naar main bouwt automatisch een ondertekende APK en zet die bij [Releases](https://github.com/koenvincent/TopoRotor/releases) als nieuwste versie (`v0.4.<build>`). De eerdere Android-APK 0.1.0 bevat de onderstaande reparaties niet.
 
-![TopoRotor vliegmissie](docs/screenshots/preview-flight.png)
+![TopoRadar vliegmissie](docs/screenshots/preview-flight.png)
 
 ## Starten
 
@@ -21,7 +21,7 @@ Installeer **Godot 4.5.1 Standard** (geen .NET nodig), importeer `project.godot`
 - Kies Nederland of Europa en tik een van de drie spelmodus-kaarten aan (Leren, Oefenen of Records) en start een vliegmissie. In de hangar cirkelt je eigen helikopter boven de kaart, en Duitsland, België en Frankrijk lopen nu door tot aan de rand in plaats van te stoppen bij een grijze rechthoek.
 - Sturen: joystick, WASD of pijltjes. Links/rechts draait de helikopter; omhoog/W vliegt vooruit en omlaag/S achteruit. De camera hangt achter de heli en draait soepel mee; achteruit gaat langzamer. Het kompas bovenin toont je koers. De overzichtskaart blijft noordgericht. De minikaart staat standaard ook noord boven; de heli is daarop een felrode stip met een witte punt die de neus aanwijst; met **Kompas: draait mee** (in de hangar, onder de vlieghoogtes of met toets **R**) draaien kompasrand en minikaart mee, zodat je neus altijd omhoog wijst. **Kompas: vast** houdt noord boven. De keuze wordt bewaard. N, O, Z en W staan op de rand van de minikaart en draaien mee. Menu en HUD schalen mee met brede telefoons en 4:3-tablets zonder scrollbalk. Antwoorden: ‘Hier is het!’ of spatie. M: overzicht.
 - Je begint **laag en dichtbij**. Gebruik **Lager / Hoger**, het muiswiel of **Q / E** om tussen drie vlieghoogtes te wisselen. Lager toont meer detail; hoger geeft meer zicht op de omgeving. Elke hoogte ligt een stap hoger dan in eerdere versies: Laag is het oude Midden, Midden het oude Hoog, en Hoog laat een groot deel van het land zien. Gemeentegrenzen verschijnen bij Laag en Midden. De overzichtskaart (M) blijft apart beschikbaar. Het spel controleert je positie; er is geen landingssimulatie.
-- **Doelzone:** zodra de modus het doel toont (Leren altijd, Oefenen als je dichtbij bent) zie je een gouden cirkel op de grond. Dat is precies het bereik waarin ‘Hier is het!’ goed telt; de minikaart toont dezelfde ring. Een lichtzuil en een zwevende markering wijzen het doel aan. Ben je binnen de cirkel, dan wordt alles groen, pulseert de antwoordknop en meldt de statusbalk ‘In de zone!’. Records toont nooit een zone. Landen worden op hun grens gecontroleerd en krijgen daarom wel de lichtzuil maar geen cirkel.
+- **Doelzone:** zodra de modus het doel toont (Leren altijd, Oefenen als je dichtbij bent) zie je een gouden cirkel op de grond. Dat is precies het bereik waarin ‘Hier is het!’ goed telt; de minikaart toont dezelfde ring. Een lichtzuil en een zwevende markering wijzen het doel aan. Ben je binnen de cirkel, dan wordt alles groen, pulseert de antwoordknop en meldt de statusbalk ‘In de zone!’. Records toont geen doelzone, maar wel de **radar** (zie hieronder). Landen worden op hun grens gecontroleerd en krijgen daarom wel de lichtzuil maar geen cirkel.
 - **Grondvizier:** de camera kijkt schuin, waardoor de heli iets boven zijn echte positie lijkt te hangen. Een vizier op de grond met een loodlijn naar de heli toont het punt dat het spel controleert.
 - **Effecten:** een goed antwoord geeft vuurwerk met fluitende pijlen, knallen en knetterende vonken, een schokgolf op de grond en een ‘GOED ZO!’-banner. Fout geeft een groot rood kruis met ‘MIS!’, een rood kruis op de grond, een rode flits, schudbeeld en een zoemer. Een voltooide missie eindigt met confetti, een fanfare en sterren die één voor één verschijnen. Verder: rotorstof bij laag vliegen, een bewegende rotorschijf, knipperende anti-botsingslichten en strobes, zachte glow en een vignet. Alle effectgeluiden worden bij het opstarten in code gesynthetiseerd; er zijn geen extra audiobestanden. ‘Geluid: uit’ dempt ook deze.
 ![Doelzone wordt groen als je binnen het bereik bent](docs/screenshots/preview-fx-inzone.png)
@@ -54,11 +54,22 @@ Alle vijftig Nederlandse steden hebben nu een eigen wijkindeling, verschillende 
 
 Elke Nederlandse stad heeft 1 tot 3 echte herkenningspunten, samen 102 stuks, in [`data/landmarks_nl.json`](data/landmarks_nl.json). Voorbeelden zijn het Centraal Station en het Rijksmuseum in Amsterdam, de Euromast en de Kubuswoningen in Rotterdam en de Sint-Bavo, Molen De Adriaan en de Amsterdamse Poort in Haarlem. Ook het Stadhuis en Molen De Roode Leeuw in Gouda, het Evoluon en het Philips Stadion in Eindhoven, de Lange Jaap in Den Helder, de schachtbok en het Glaspaleis in Heerlen en de hunebedden bij Emmen staan erin. Ze worden gebouwd uit een vaste set silhouetten in `scripts/landmark_kit.gd`: kerk, molen, poort, kasteel, stadion, vuurtoren, schip en meer. De woningen op die plek maken plaats. De posities volgen grofweg de echte ligging in de stad; maat en detail zijn uitvergroot. Namen staan alleen in het databestand en worden in het spel niet getoond, zodat Oefenen en Records geen doel verraden.
 
-### Spuitcabine
+### Hangar, unlocks en ranglijst
 
-Via **Helikopter spuiten** in de hangar kies je een van negen kleurschema's, zoals Politie, Traumageel of Nachtzwart. Met drie kleurkiezers stel je ook zelf de romp, strepen en rotor in. Een draaiend 3D-voorbeeld toont het resultaat direct. De keuze wordt opgeslagen in je voortgang; ongeldige kleuren vallen terug op de fabriekskleuren.
+Via **Hangar en upgrades** richt je je eigen helikopter in. Een draaiend 3D-voorbeeld toont elke keuze direct; alles wordt in je voortgang bewaard.
 
-![Spuitcabine](docs/screenshots/preview-paint.png)
+- **Type:** vijf helikopters: Redder (reddingsheli), Libel (lesheli met glazen bol), Pijlstaart (staartrotor in een ring), Tandem (twee grote rotoren) en Vliegende kraan (hoge poten).
+- **Kleuren:** 25 kleurschema's en een eigen kleur per onderdeel: romp, staart, strepen, rotor en motor, onderstel, ramen en accessoires.
+- **Accessoires:** zoeklicht, antennes, wimpel, camerabol, reddingslier, drijvers, stompvleugels en een slingerend vrachtkrat.
+- **Upgrades:** extra rotorbladen, een Turbo- en Superturbo-motor en een lichtpakket. De motor maakt je sneller bij Leren en Oefenen; bij Records vliegt iedereen even snel, zodat recordtijden eerlijk blijven.
+
+Elke voltooide missie levert **vliegpunten** op: meer bij Oefenen en Records, extra voor elke plek die in één keer goed is, voor sterren en voor een nieuw record. Punten worden nooit uitgegeven, dus je raakt niets meer kwijt. Bij vaste puntengrenzen gaan nieuwe types, kleuren, accessoires en upgrades open; je rang loopt mee van Leerling-piloot tot Radarkapitein. Een paar items vragen een medaille: je eerste record (wimpel en Recordzilver), een foutloze Records-vlucht (lichtpakket en Goud) of een missie in Europa (Europa-blauw). Het overzicht na een missie noemt wat er nieuw open is.
+
+De **Ranglijst** (naast je sterren in het menu en na elke missie) bewaart per route en spelmodus de tien beste vluchten op dit apparaat: Records op tijd inclusief straftijd, Leren en Oefenen op vliegpunten. Stel bij de ranglijst de naam van de piloot in, zodat broers, zussen en ouders elk hun eigen plek krijgen.
+
+![Hangar met accessoires](docs/screenshots/preview-hangar-accessoires.png)
+
+![Ranglijst per route](docs/screenshots/preview-ranglijst.png)
 
 ### Grenzen op landschap en minikaart
 
@@ -173,12 +184,19 @@ Besturing en bochten reageren vloeiend; loslaten remt sneller af.
   pas binnen 18 km in Nederland of 75 km in Europa, en verdwijnt weer buiten
   die afstand. Bij landvragen verschijnt het doel zodra je boven het juiste
   land vliegt. Kaartnamen blijven verborgen.
-- **Records:** geen doelmarker, kaartnamen of afstandshints. Een stopwatch meet
+- **Records:** geen doelmarker, kaartnamen of afstandshints. Wel een **radar**:
+  vlieg je binnen het antwoordbereik van een stad, dan verschijnt de blauwe
+  cirkel van die stad en wordt het grondvizier blauw. Zo zie je of je goed
+  genoeg boven de stad hangt voordat je op ‘Hier is het!’ drukt. De radar doet
+  dat bij elke stad (of elk water, eiland of provincie, net als het doel), dus
+  hij verklapt niet welke de goede is. Een stopwatch meet
   je tijd; elk fout antwoord telt als 10 seconden straftijd. Beste tijden worden
   lokaal per route bewaard. Dezelfde route heeft een vaste volgorde voor eerlijke
   herhalingen; andere missies hebben hun eigen record. Er is geen tijdslimiet.
 
 De H-toets kan de regels van Oefenen en Records niet omzeilen.
+
+![Radarcirkel bij Records](docs/screenshots/preview-radar.png)
 De stopwatch pauzeert als de app naar de achtergrond gaat.
 
 Met **Online missies** kun je lespakketten laden en offline bewaren zonder een

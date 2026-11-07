@@ -114,5 +114,5 @@ jobs:
           else
             tag="v0.4.$RUN_NUMBER"
           fi
-          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --target "$TARGET_SHA" --title "Nieks TopoRotor $tag" --generate-notes --latest
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --target "$TARGET_SHA" --title "Nieks TopoRadar $tag" --generate-notes --latest
           gh release upload "$tag" apk/TopoRotor.apk apk/TopoRotor.apk.sha256 --clobber

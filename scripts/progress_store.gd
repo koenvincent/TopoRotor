@@ -3,7 +3,8 @@ extends RefCounted
 
 # Schema version of progress.json. Files without a version field are treated as version 1.
 const VERSION := 1
-const KNOWN_KEYS = ["version","best","records","custom","endpoint","mute","paint","minimap_rotate"]
+const KNOWN_KEYS = ["version","best","records","custom","endpoint","mute","paint","minimap_rotate","points","medals","garage","boards","pilot"]
+const DEFAULT_PILOT = "Niek"
 
 # True when the file was written by a newer app with a schema this build does not understand.
 static func is_newer(raw: Variant) -> bool:
@@ -12,8 +13,11 @@ static func is_newer(raw: Variant) -> bool:
 	var v: Variant=raw.get("version")
 	return typeof(v) in [TYPE_INT,TYPE_FLOAT] and is_finite(float(v)) and float(v)>VERSION
 
+static func defaults() -> Dictionary:
+	return {"version":VERSION,"best":{},"records":{},"custom":[],"endpoint":"","mute":false,"points":0,"medals":[],"garage":HangarCatalog.DEFAULT_GARAGE.duplicate(true),"boards":{},"pilot":DEFAULT_PILOT}
+
 static func clean(raw: Variant) -> Dictionary:
-	var data: Dictionary = {"version":VERSION,"best":{},"records":{},"custom":[],"endpoint":"","mute":false}
+	var data: Dictionary = defaults()
 	if not raw is Dictionary:
 		return data
 	for key in raw:
@@ -25,11 +29,24 @@ static func clean(raw: Variant) -> Dictionary:
 		data.minimap_rotate=raw.minimap_rotate
 	if raw.get("paint") is Dictionary:
 		var paint: Dictionary={}
-		for part in RotorHelicopter.DEFAULT_PAINT:
+		# "dark" is the pre-0.5 rotor/skid slot; the helicopter migrates it.
+		for part in RotorHelicopter.DEFAULT_PAINT.keys()+["dark"]:
 			if RotorHelicopter.valid_hex(raw.paint.get(part)):
 				paint[part]=String(raw.paint[part]).to_lower()
 		if not paint.is_empty():
 			data.paint=paint
+	var points: Variant=raw.get("points")
+	if typeof(points) in [TYPE_INT,TYPE_FLOAT] and is_finite(float(points)) and float(points)>=0:
+		data.points=mini(int(points),HangarCatalog.MAX_POINTS)
+	if raw.get("medals") is Array:
+		for medal in raw.medals:
+			if medal is String and HangarCatalog.MEDALS.has(medal) and not medal in data.medals:
+				data.medals.append(medal)
+	data.garage=HangarCatalog.clean_garage(raw.get("garage"))
+	data.boards=Leaderboard.clean(raw.get("boards"))
+	var pilot=Leaderboard.clean_pilot(raw.get("pilot"))
+	if not pilot.is_empty():
+		data.pilot=pilot
 	if raw.get("endpoint") is String and raw.endpoint.length()<=2048:
 		data.endpoint=raw.endpoint
 	if raw.get("best") is Dictionary:
