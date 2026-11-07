@@ -53,6 +53,9 @@ var mission: Array = []
 var mission_index: int = 0
 var completed: Array = []
 var mistakes: int = 0
+var goal_mistakes: int = 0
+var pause_panel: PanelContainer
+var pause_backdrop: ColorRect
 var hints_used: bool = false
 var state: String = "menu"
 var region: String = "nl"
@@ -60,7 +63,7 @@ var exam: bool = false
 var show_hints: bool = true
 var flight_time: float = 0.0
 var velocity: Vector2 = Vector2.ZERO
-var saved: Dictionary = {"best":{},"records":{},"custom":[],"endpoint":"","mute":false}
+var saved: Dictionary = {"version":ProgressStore.VERSION,"best":{},"records":{},"custom":[],"endpoint":"","mute":false}
 var rotor_audio: AudioStreamPlayer
 var feedback_audio: AudioStreamPlayer
 var paused_from: String = "menu"
@@ -93,6 +96,7 @@ func _ready() -> void:
 	build_ui()
 	load_world("nl")
 	state="menu"
+	get_tree().quit_on_go_back=false
 	if is_test_mode:
 		call_deferred("smoke_test")
 	if is_capture_mode:
@@ -246,7 +250,7 @@ func build_ui() -> void:
 	topcol.add_child(title_label)
 	detail_label=label("",15)
 	topcol.add_child(detail_label)
-	var pause=button("Hangar",return_menu)
+	var pause=button("Pauze",pause_flight)
 	pause.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	pause.position=Vector2(-157,20)
 	pause.size=Vector2(133,52)
@@ -314,6 +318,24 @@ func build_ui() -> void:
 	status_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	status_panel.add_child(status_label)
 	hud.hide()
+	pause_backdrop=ColorRect.new()
+	pause_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pause_backdrop.color=Color(.015,.055,.07,.7)
+	ui.add_child(pause_backdrop)
+	pause_backdrop.hide()
+	pause_panel=PanelContainer.new()
+	pause_panel.position=Vector2(440,200)
+	pause_panel.size=Vector2(400,300)
+	pause_panel.add_theme_stylebox_override("panel",style(Color(.04,.13,.17,.97),24))
+	ui.add_child(pause_panel)
+	var pausecol=VBoxContainer.new()
+	pausecol.add_theme_constant_override("separation",14)
+	pause_panel.add_child(pausecol)
+	pausecol.add_child(label("PAUZE",16,Color("a8c8bf")))
+	pausecol.add_child(label("Je missie staat stil.",26,GOLD))
+	pausecol.add_child(button("Verder vliegen  →",resume_flight,true))
+	pausecol.add_child(button("Stoppen · terug naar de hangar",return_menu))
+	pause_panel.hide()
 	build_photo_dialog()
 
 func load_world(new_region: String) -> void:
@@ -332,7 +354,10 @@ func load_world(new_region: String) -> void:
 
 func update_best_label() -> void:
 	var best=float(saved.get("records",{}).get(record_key(catalog.presets(region)),0.0))
-	best_label.text="Records · beste standaardroute: %.1f sec" % best if best>0 else "Records · zet je eerste tijd neer!"
+	var practice=clampi(int(saved.best.get(region+"_oefenen",0)),0,3)
+	var records=clampi(int(saved.best.get(region+"_test",0)),0,3)
+	best_label.text="Oefenen: %s · Records: %s\n" % ["★".repeat(practice)+"☆".repeat(3-practice),"★".repeat(records)+"☆".repeat(3-records)]
+	best_label.text+="Beste standaardroute: %.1f sec" % best if best>0 else "Zet je eerste recordtijd neer!"
 
 func record_key(places: Array) -> String:
 	var route: Array=[]
@@ -390,6 +415,7 @@ func update_goal() -> void:
 	progress_label.text="%s  ·  MISSIE %02d / %02d" % [MODE_NAMES[game_mode],mission_index+1,mission.size()]
 	title_label.text=("Vlieg boven " if p.kind=="land" else "Vlieg naar ")+p.name
 	status_label.text="Zoek %s. Druk op ‘Hier is het!’ als je er bent." % p.name
+	goal_mistakes=0
 	answer_cooldown=0.0
 
 func _process(delta: float) -> void:
@@ -444,7 +470,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func go_back(allow_quit: bool) -> void:
 	if photo_open:
 		close_photo_dialog()
-	elif state=="flight" or state=="paused" or state=="summary":
+	elif state=="flight":
+		pause_flight()
+	elif state=="paused":
+		resume_flight()
+	elif state=="summary":
 		return_menu()
 	elif allow_quit:
 		get_tree().quit()
@@ -458,14 +488,28 @@ func distance_km(place: Dictionary) -> float:
 	var a=sin(dlat/2)*sin(dlat/2)+cos(lat1)*cos(lat2)*sin(dlon/2)*sin(dlon/2)
 	return 6371*2*atan2(sqrt(a),sqrt(max(0,1-a)))
 
+func hit_radius_km(place: Dictionary) -> float:
+	var custom_radius=place.get("radius_km",0)
+	if (custom_radius is float or custom_radius is int) and is_finite(float(custom_radius)) and custom_radius>0:
+		return float(custom_radius)
+	var nl=place.get("region",region)=="nl"
+	match place.get("kind",""):
+		"provincie":
+			return 25.0
+		"water":
+			return 25.0 if nl else 40.0
+		"eiland":
+			return 10.0 if nl else 25.0
+	return 6.0 if nl else 25.0
+
 func answer() -> void:
 	if state!="flight" or answer_cooldown>0 or photo_open:
 		return
 	var p: Dictionary=mission[mission_index]
 	# Countries without usable map geometry fall back to the catalog reference point.
-	var hit=(world.country_contains(p.code,helicopter.position) if world.has_country(p.code) else distance_km(p)<25) if p.kind=="land" else distance_km(p)<(6 if region=="nl" else 25)
+	var hit=(world.country_contains(p.code,helicopter.position) if world.has_country(p.code) else distance_km(p)<25) if p.kind=="land" else distance_km(p)<hit_radius_km(p)
 	if hit:
-		completed.append({"name":p.name,"hints":show_hints,"mistakes":mistakes})
+		completed.append({"name":p.name,"hints":show_hints,"mistakes":goal_mistakes})
 		if not saved.mute:
 			feedback_audio.play()
 		mission_index+=1
@@ -475,6 +519,7 @@ func answer() -> void:
 		answer_cooldown=.6
 	else:
 		mistakes+=1
+		goal_mistakes+=1
 		status_label.text="Nog niet op de juiste plek. Kijk nog eens naar de kaart."
 		answer_cooldown=1.0
 
@@ -527,12 +572,24 @@ func toggle_overview() -> void:
 	show_overview=not show_overview
 	joystick.reset()
 
+func mission_stars(first_try: int) -> int:
+	if mistakes==0 and exam and not hints_used:
+		return 3
+	return 2 if not completed.is_empty() and first_try*5>=completed.size()*4 else 1
+
 func finish_mission() -> void:
 	state="summary"
 	hud.hide()
 	world.target.hide()
 	rotor_audio.stop()
-	var stars=3 if mistakes==0 and exam and not hints_used else 2 if mistakes<=2 else 1
+	var first_try=0
+	var missed=PackedStringArray()
+	for c in completed:
+		if int(c.mistakes)==0:
+			first_try+=1
+		else:
+			missed.append("%s (%d×)" % [c.name,c.mistakes])
+	var stars=mission_stars(first_try)
 	if not custom_mission:
 		var key=region+("_test" if exam else "_oefenen")
 		saved.best[key]=max(int(saved.best.get(key,0)),stars)
@@ -561,13 +618,46 @@ func finish_mission() -> void:
 	col.add_child(label("Goed gevlogen, piloot!",32,GOLD))
 	col.add_child(label("★".repeat(stars)+"☆".repeat(3-stars),52,GOLD))
 	col.add_child(label("%d locaties gevonden · %d pogingen mis\nVliegtijd %02d:%02d" % [completed.size(),mistakes,int(flight_time)/60,int(flight_time)%60],21))
-	var tip=label(record_result if exam else "Leren: alle hulp. Oefenen: doel verschijnt pas dichtbij.",16,Color("b5cec4"))
+	if not missed.is_empty():
+		var shown=PackedStringArray()
+		for entry in missed.slice(0,3):
+			shown.append(entry if entry.length()<=40 else entry.left(39)+"…")
+		var extra=" … +%d meer" % (missed.size()-shown.size()) if missed.size()>shown.size() else ""
+		var missed_label=label("Nog oefenen: "+", ".join(shown)+extra,17,CREAM)
+		missed_label.tooltip_text="\n".join(missed)
+		missed_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+		col.add_child(missed_label)
+	var tip=label(record_result if exam else "Drie sterren: foutloze Records-vlucht. Twee: minstens 80% in één keer goed.",16,Color("b5cec4"))
 	tip.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(tip)
 	col.add_child(button("Dezelfde locaties opnieuw",func(): start_mission(mission,custom_mission),true))
 	col.add_child(button("Terug naar de hangar",return_menu))
 
+func pause_flight() -> void:
+	if state!="flight":
+		return
+	paused_from=state
+	state="paused"
+	velocity=Vector2.ZERO
+	joystick.reset()
+	rotor_audio.stop()
+	pause_backdrop.show()
+	pause_panel.show()
+
+func resume_flight() -> void:
+	if state!="paused":
+		return
+	state=paused_from
+	pause_backdrop.hide()
+	pause_panel.hide()
+	velocity=Vector2.ZERO
+	joystick.reset()
+	if not saved.mute:
+		rotor_audio.play()
+
 func return_menu() -> void:
+	pause_backdrop.hide()
+	pause_panel.hide()
 	state="menu"
 	rotor_audio.stop()
 	hud.hide()
@@ -595,9 +685,21 @@ func toggle_sound() -> void:
 
 func load_save() -> void:
 	if FileAccess.file_exists(save_path):
-		var raw: Variant=JSON.parse_string(FileAccess.get_file_as_string(save_path))
-		progress_readonly=ProgressStore.is_newer(raw)
-		if progress_readonly:
+		var json=JSON.new()
+		var raw: Variant=json.data if json.parse(FileAccess.get_file_as_string(save_path))==OK else null
+		if not raw is Dictionary:
+			var backup=save_path+".bak"
+			if FileAccess.file_exists(backup):
+				backup+=".%d" % Time.get_ticks_usec()
+			if DirAccess.rename_absolute(save_path,backup)!=OK:
+				progress_readonly=true
+				push_warning("Kon onleesbare voortgang niet veiligstellen; opslaan uitgeschakeld.")
+			else:
+				progress_readonly=false
+				push_warning("Onleesbare voortgang bewaard als "+backup+".")
+		else:
+			progress_readonly=ProgressStore.is_newer(raw)
+		if ProgressStore.is_newer(raw):
 			push_warning("Voortgang komt uit een nieuwere app-versie; het bestand wordt niet overschreven.")
 		saved=ProgressStore.clean(raw)
 	custom_places=saved.custom
@@ -653,7 +755,7 @@ func build_photo_dialog() -> void:
 	right.add_theme_constant_override("separation",9)
 	row.add_child(right)
 	right.add_child(label("2. Controleer de locaties",21))
-	var help=label("Eén naam per regel, of gescheiden met komma's.\nEigen punt: naam | breedtegraad | lengtegraad",14)
+	var help=label("Eén naam per regel, of gescheiden met komma's.\nEigen punt: naam | breedtegraad | lengtegraad (WGS84, bv. 52.123 | 5.456)",14)
 	right.add_child(help)
 	mission_text=TextEdit.new()
 	mission_text.custom_minimum_size=Vector2(650,180)
@@ -749,8 +851,9 @@ func import_photo(path: String) -> void:
 		return
 	var bytes=file.get_buffer(file.get_length())
 	file.close()
-	if not WorksheetImage.allowed_size(WorksheetImage.dimensions(bytes)):
-		import_status.text="Gebruik een JPG/PNG van maximaal 12 megapixel."
+	var image_size=WorksheetImage.dimensions(bytes)
+	if not WorksheetImage.allowed_size(image_size):
+		import_status.text="Kan deze foto niet lezen. Kies een andere JPG of PNG." if image_size.x<=0 or image_size.y<=0 else "Foto is %.1f MP; maximaal %d MP. Kies een lagere camera-resolutie." % [float(image_size.x)*float(image_size.y)/1000000.0,WorksheetImage.MAX_PIXELS/1000000]
 		return
 	var img=Image.new()
 	var error=img.load_png_from_buffer(bytes) if bytes[0]==137 else img.load_jpg_from_buffer(bytes)
@@ -889,7 +992,7 @@ func validate_custom() -> void:
 		import_status.text="Controleer %d regel%s: " % [result.unknown.size(),"" if result.unknown.size()==1 else "s"]+", ".join(shown)+(" (+%d meer)" % more if more>0 else "")
 		import_status.tooltip_text="\n".join(PackedStringArray(result.unknown))
 	else:
-		import_status.text="%d locaties herkend. Klaar om te vliegen." % result.found.size()
+		import_status.text="Voer eerst de locaties in." if result.found.is_empty() else "%d locaties herkend. Klaar om te vliegen." % result.found.size()
 		import_status.tooltip_text=""
 	launch_button.disabled=result.found.is_empty() or not result.unknown.is_empty()
 
@@ -914,7 +1017,7 @@ func launch_custom() -> void:
 	photo_dialog.hide()
 	photo_backdrop.hide()
 	photo_open=false
-	start_mission(custom_places)
+	start_mission(custom_places,true)
 
 func request_ocr() -> void:
 	if photo_bytes.is_empty():
@@ -1044,15 +1147,7 @@ func _notification(what: int) -> void:
 			joystick.reset()
 		velocity=Vector2.ZERO
 		if state=="flight":
-			state="paused"
-			rotor_audio.stop()
-			status_label.text="Vlucht gepauzeerd."
-	elif what==NOTIFICATION_APPLICATION_FOCUS_IN:
-		if state=="paused":
-			state="flight"
-			if not saved.mute:
-				rotor_audio.play()
-			status_label.text="Welkom terug, piloot! Je vlucht gaat verder."
+			pause_flight()
 
 func smoke_test() -> void:
 	assert(world.dutch_scenery.landmarks.has("Amsterdam") and world.dutch_scenery.landmarks.has("Rotterdam") and world.dutch_scenery.landmarks.has("Utrecht"),"Dutch landmarks built at catalog anchors")
@@ -1086,6 +1181,9 @@ func smoke_test() -> void:
 	assert(world.lake_contains(world.project(5.33,52.8)),"IJsselmeer remains water")
 	assert(world.lake_contains(world.project(5.18,52.55)),"Markermeer remains water")
 	start_mission([catalog.lookup.arnhem])
+	assert(world.mat(Color.WHITE)==world.mat(Color.WHITE),"Materials are reused")
+	assert(world.mat(Color.WHITE)!=world.mat(Color.WHITE,false,true),"Cull variants stay separate")
+	assert(not world.mat(Color.WHITE).vertex_color_use_as_albedo,"Field vertex colors do not leak into shared materials")
 	var flight_start=helicopter.position
 	var close_zoom=flight_zoom()
 	var low_altitude=flight_altitude()
@@ -1100,8 +1198,34 @@ func smoke_test() -> void:
 	assert(flight_zoom()==close_zoom,"Pilot can return to low search flight")
 	helicopter.position=world.project(5.8987,51.9851)+Vector3(0,9.0 if region=="nl" else 3.3,0)
 	assert(distance_km(mission[0])<.01,"Distance at target")
+	assert(hit_radius_km(catalog.lookup.arnhem)==6.0,"Dutch cities keep their tolerance in mixed missions")
+	assert(hit_radius_km({"kind":"provincie","region":"nl"})==25.0,"Province tolerance")
+	assert(hit_radius_km({"kind":"eiland","region":"nl"})==10.0,"Island tolerance")
+	assert(hit_radius_km({"radius_km":INF,"region":"nl","kind":"stad"})==6.0,"Nonfinite radius ignored")
+	var before_pause=flight_time
+	go_back(false)
+	_process(10.0)
+	assert(state=="paused" and pause_panel.visible and flight_time==before_pause,"Back pauses flight and stopwatch")
+	go_back(false)
+	assert(state=="flight" and not pause_panel.visible,"Back resumes paused flight")
 	answer()
 	assert(state=="summary" and completed.size()==1,"Mission completes on correct answer")
+	return_menu()
+	mode_select.select(GameMode.PRACTICE)
+	var stars_before=JSON.stringify(saved.best)
+	start_mission([catalog.lookup.amsterdam,catalog.lookup.arnhem])
+	helicopter.position=world.project(-20,35)
+	answer()
+	assert(goal_mistakes==1,"Wrong answer belongs to current goal")
+	for index in 2:
+		var target_place: Dictionary=mission[mission_index]
+		helicopter.position=world.project(target_place.lon,target_place.lat)
+		answer_cooldown=0
+		answer()
+	assert(completed[0].mistakes==1 and completed[1].mistakes==0,"Mistakes reset between goals")
+	assert(mission_stars(1)==1,"Half correct on first try earns one star")
+	assert(JSON.stringify(saved.best)==stars_before,"Custom missions preserve preset stars")
+	mode_select.select(GameMode.LEARN)
 	return_menu()
 	load_world("eu")
 	for place in catalog.places:
@@ -1115,6 +1239,8 @@ func smoke_test() -> void:
 	mission_text.text="Mijn dorp | 52.123 | 5.456\nAmsterdam"
 	var custom=parse_custom()
 	assert(custom.found.size()==2 and custom.unknown.is_empty(),"Custom coordinate import")
+	mission_text.text="Opa | 52,08 | 5,12"
+	assert(parse_custom().unknown.is_empty(),"Decimal comma coordinates accepted")
 	mission_text.text="Buiten | 90 | 100"
 	assert(not parse_custom().unknown.is_empty(),"Out of bounds coordinate rejected")
 	# Regression checks added during the 0.2 source review.
@@ -1128,6 +1254,11 @@ func smoke_test() -> void:
 	launch_custom()
 	assert(state=="flight" and region=="eu" and world.label_names.has("Eigen dorp"),"Mixed custom missions get visible map markers")
 	assert(world.label_names.has("Parijs"),"Known mission locations keep their marker")
+	assert(not world.helipads.has("Arnhem"),"Europe base map omits Arnhem scenery")
+	world.ensure_mission_markers([catalog.lookup.arnhem])
+	assert(world.label_names.has("Arnhem") and not world.helipads.has("Arnhem"),"Mission-only markers do not reveal targets with new scenery")
+	assert(hit_radius_km(catalog.lookup.arnhem)==6.0,"Dutch city keeps its radius on Europe map")
+	assert(WorksheetImage.allowed_size(Vector2i(6000,4000)),"24 MP photos accepted")
 	var img=Image.create(12,8,false,Image.FORMAT_RGB8)
 	var png=img.save_png_to_buffer()
 	assert(WorksheetImage.dimensions(png)==Vector2i(12,8),"PNG header validation")
@@ -1143,6 +1274,8 @@ func smoke_test() -> void:
 	assert(not WorksheetImage.allowed_size(Vector2i(5000,5000)),"Oversized pixel buffers rejected")
 	assert(WorksheetImage.dimensions(png.slice(0,12))==Vector2i.ZERO,"Truncated image rejected")
 	saved.best["nl_oefenen"]=2
+	var extra=ProgressStore.clean({"future_option":{"enabled":true}})
+	assert(extra.get("future_option",{}).get("enabled",false),"Unknown progress fields survive validation")
 	var old_best=JSON.stringify(saved.best)
 	var old_custom=saved.custom.size()
 	save_data()
@@ -1155,6 +1288,15 @@ func smoke_test() -> void:
 	if progress_existed:
 		assert(FileAccess.get_file_as_bytes("user://progress.json")==progress_before,"Smoke mode preserves existing progress bytes")
 	assert(JSON.stringify(saved.best)==old_best,"Saving does not mutate score values")
+	var prior_saved=saved.duplicate(true)
+	var broken=FileAccess.open(save_path,FileAccess.WRITE)
+	broken.store_string("{broken progress")
+	broken.close()
+	load_save()
+	assert(not FileAccess.file_exists(save_path) and FileAccess.get_file_as_string(save_path+".bak")=="{broken progress","Corrupt progress is backed up before replacement")
+	DirAccess.remove_absolute(save_path+".bak")
+	saved=prior_saved
+	custom_places=saved.custom
 	photo_open=true
 	mission_text.text="Arnhem"
 	ocr_input_snapshot="Amsterdam"
