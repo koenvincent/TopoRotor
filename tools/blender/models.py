@@ -26,6 +26,8 @@ import bpy
 from mathutils import Vector
 
 SLOTS = ["body", "tail", "trim", "rotor", "gear", "glass", "accent"]
+# Paint slots of the pilot's body; the game fills them from the pilot's look.
+PILOT_SLOTS = ["skin", "cloth", "pants", "shoe", "sole"]
 OUT = Path(__file__).resolve().parents[2] / "assets" / "models"
 
 
@@ -36,7 +38,7 @@ def G(x, y, z):
 
 def reset():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    for slot in SLOTS:
+    for slot in SLOTS + PILOT_SLOTS:
         m = bpy.data.materials.new(slot)
         m.diffuse_color = (.8, .8, .8, 1)
 
@@ -58,7 +60,7 @@ def finish(obj, subdiv=2, smooth=True):
 
 
 def add_slots(obj):
-    for slot in SLOTS:
+    for slot in SLOTS + PILOT_SLOTS:
         obj.data.materials.append(bpy.data.materials[slot])
 
 
@@ -110,7 +112,7 @@ def loft(name, sections, paint, segments=24, n=2.3, subdiv=2):
         nrm = face.normal
         godot_c = (c.x, c.z, -c.y)
         godot_n = (nrm.x, nrm.z, -nrm.y)
-        face.material_index = SLOTS.index(paint(godot_c, godot_n))
+        face.material_index = (SLOTS + PILOT_SLOTS).index(paint(godot_c, godot_n))
     bm.to_mesh(mesh)
     bm.free()
     return finish(obj, subdiv)
@@ -145,7 +147,7 @@ def plate(name, outline, thickness, slot, x=0.0, axis="x", bevel=.04, lean=0.0, 
         c = face.calc_center_median()
         nrm = face.normal
         pick = slot if isinstance(slot, str) else slot((c.x, c.z, -c.y), (nrm.x, nrm.z, -nrm.y))
-        face.material_index = SLOTS.index(pick)
+        face.material_index = (SLOTS + PILOT_SLOTS).index(pick)
     bm.to_mesh(mesh)
     bm.free()
     if lean:
@@ -386,11 +388,10 @@ def window_row(start, step, length, low, high):
 
 
 def build_tandem():
-    windows = window_row(-2.25, .9, .45, .18, .52)
     def paint(c, n):
         if c[2] < -3.25 and c[1] > -.12 and n[1] > -.4:
             return "glass"
-        return windows(c, n) or ("trim" if -.62 < c[1] < -.45 else "body")
+        return "trim" if -.62 < c[1] < -.45 else "body"
     loft("Fuselage", [(-3.98, .4, .38, -.22), (-3.78, 1.25, 1.0, -.12), (-3.4, 1.72, 1.5, 0), (-2.8, 1.8, 1.7, 0), (2.7, 1.8, 1.7, 0),
                       (3.25, 1.62, 1.5, .1), (3.55, 1.15, .95, .32), (3.68, .4, .3, .45)], paint, n=3.2)
     loft("RearPylon", [(1.9, .5, .3, .85), (2.3, 1.0, 1.0, 1.2), (3.4, 1.0, 1.3, 1.35), (3.72, .6, .8, 1.4), (3.86, .2, .3, 1.42)], "tail", n=2.8)
@@ -400,6 +401,8 @@ def build_tandem():
         x = side * 1.0
         loft(f"Sponson{side}", [(-1.6, .1, .1, -.55, x), (-1.3, .42, .5, -.55, x), (2.0, .42, .5, -.55, x), (2.3, .1, .1, -.5, x)], "trim", n=2.8)
         blob(f"Engine{side}", (side * .7, 1.3, 2.6), (.45, .45, 1.4), "rotor")
+        for i in range(5):
+            blob(f"Window{side}{i}", (side * .905, .36, -2.1 + i * .9), (.05, .3, .42), "glass")
         for wz in (-2.2, 2.0):
             strut(f"Strut{side}{wz}", (x, -.7, wz), (x, -1.0, wz), .06)
             wheel(f"Wheel{side}{wz}", (x, -1.05, wz), .28, .18)
@@ -558,14 +561,16 @@ def build_dakota():
     def paint(c, n):
         if c[2] < -3.3 and c[1] > .12 and n[1] > -.2:
             return "glass"
-        if -2.15 < c[2] < 1.4 and .14 < c[1] < .4 and abs(n[0]) > .7 and (c[2] + 2.15) % .65 < .32:
-            return "glass"
         if -.22 < c[1] < -.06:
             return "trim"
         return "tail" if c[2] > 3.0 else "body"
     loft("Fuselage", [(-4.08, .3, .3, -.06), (-3.86, .9, .95, 0), (-3.4, 1.36, 1.45, .02), (-2.6, 1.5, 1.6, .02), (1.2, 1.5, 1.6, .05),
                       (2.4, 1.15, 1.25, .16), (3.6, .62, .72, .33), (4.4, .26, .36, .42), (4.62, .12, .15, .43)], paint)
     wing("Wing", -.45, 11.0, 1.7, 1.0, -1.65, thick=.18)
+    # A row of round-cornered cabin windows on each side.
+    for side in (-1, 1):
+        for i in range(7):
+            blob(f"Window{side}{i}", (side * .745, .26, -2.25 + i * .6), (.05, .24, .3), "glass")
     plate("Stabiliser", [(-1.9, 3.5), (1.9, 3.6), (1.8, 4.3), (-1.8, 4.3)], .09, "tail", x=.4, axis="y")
     plate("Fin", [(3.0, .55), (4.35, .5), (4.55, 2.0), (4.2, 2.15), (3.8, 1.6)], .1, "tail")
     for side in (-1, 1):
@@ -630,9 +635,132 @@ def build_schaduw():
     wheel("NoseWheel", (0, -.5, -1.2), .14)
 
 
+# --- Scenery kit: unit pieces the map's houses, roofs and trees are made of ---
+# Each piece fills the same unit volume as the Godot primitive it replaces
+# (BoxMesh, PrismMesh, SphereMesh, a cone of radius 1 and height 1), so the
+# scenery code can scale and merge them exactly as before.
+
+def build_scenery():
+    import random
+    rnd = random.Random(1206)
+    # Block: a box with softly chamfered edges that catch the sun.
+    bpy.ops.mesh.primitive_cube_add(size=1)
+    block = bpy.context.active_object
+    block.name = "Block"
+    mod = block.modifiers.new("Bevel", "BEVEL")
+    mod.width = .06
+    mod.segments = 2
+    block.data.shade_smooth()
+    block.data.set_sharp_from_angle(angle=math.radians(30))
+    # Roof: a gable prism with chamfered ridge and eaves.
+    mesh = bpy.data.meshes.new("Roof")
+    roof = link(bpy.data.objects.new("Roof", mesh))
+    bm = bmesh.new()
+    pts = [(-.5, -.5), (.5, -.5), (0, .5)]
+    front = [bm.verts.new(G(x, y, -.5)) for x, y in pts]
+    back = [bm.verts.new(G(x, y, .5)) for x, y in pts]
+    bm.faces.new(front)
+    bm.faces.new(list(reversed(back)))
+    for i in range(3):
+        j = (i + 1) % 3
+        bm.faces.new((front[i], front[j], back[j], back[i]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(mesh)
+    bm.free()
+    mod = roof.modifiers.new("Bevel", "BEVEL")
+    mod.width = .04
+    mod.segments = 2
+    roof.data.shade_smooth()
+    roof.data.set_sharp_from_angle(angle=math.radians(30))
+    # Crown: a lumpy faceted ball for leafy trees.
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=.5)
+    crown = bpy.context.active_object
+    crown.name = "Crown"
+    for v in crown.data.vertices:
+        v.co *= 1.0 + rnd.uniform(-.09, .09)
+    # Pine: three stacked tiers inside the unit cone (radius 1, height 1).
+    tiers = []
+    for bottom, top, radius in ((-.5, .05, 1.0), (-.18, .3, .74), (.12, .5, .48)):
+        bpy.ops.mesh.primitive_cone_add(vertices=8, radius1=radius, radius2=0, depth=top - bottom, location=G(0, (top + bottom) / 2, 0))
+        tiers.append(bpy.context.active_object)
+    bpy.ops.object.select_all(action="DESELECT")
+    for tier in tiers:
+        tier.select_set(True)
+    bpy.context.view_layer.objects.active = tiers[0]
+    bpy.ops.object.join()
+    tiers[0].name = "Pine"
+    for obj in bpy.context.scene.objects:
+        obj.data.materials.clear()
+        obj.data.materials.append(bpy.data.materials["body"])
+
+
+# --- Pilots: a smooth vinyl-toy body; head, hair, hats and outfit details
+# stay in the game, which places them on this body. Body coordinates as in
+# scripts/pilot_figure.gd before BODY_SCALE: feet on y=0, shoulders at 1.62.
+
+def loft_y(name, sections, slot, segments=24, n=2.6, subdiv=2):
+    """Skin horizontal cross-sections (y, width, depth, centre_z) bottom to top."""
+    mesh = bpy.data.meshes.new(name)
+    obj = link(bpy.data.objects.new(name, mesh))
+    obj.data.materials.append(bpy.data.materials[slot])
+    bm = bmesh.new()
+    rings = []
+    for y, w, d, zc in sections:
+        row = []
+        for i in range(segments):
+            t = 2 * math.pi * i / segments
+            c, s_ = math.cos(t), math.sin(t)
+            x = w * .5 * math.copysign(abs(c) ** (2 / n), c)
+            z = zc + d * .5 * math.copysign(abs(s_) ** (2 / n), s_)
+            row.append(bm.verts.new(G(x, y, z)))
+        rings.append(row)
+    for a, b in zip(rings, rings[1:]):
+        for i in range(segments):
+            j = (i + 1) % segments
+            bm.faces.new((a[i], a[j], b[j], b[i]))
+    for cap in (rings[0], rings[-1]):
+        tip = bm.verts.new(sum((v.co for v in cap), Vector()) / len(cap))
+        for i in range(segments):
+            bm.faces.new((cap[i], cap[(i + 1) % segments], tip))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(mesh)
+    bm.free()
+    return finish(obj, subdiv)
+
+
+def pilot_body(woman):
+    s = .29 if woman else .34
+    if woman:
+        torso = [(.84, .3, .2, 0), (.88, .54, .31, 0), (.98, .58, .33, 0), (1.16, .5, .3, 0), (1.38, .55, .31, 0), (1.52, .58, .31, 0), (1.6, .48, .27, 0), (1.66, .24, .15, 0)]
+    else:
+        torso = [(.86, .34, .22, 0), (.9, .6, .32, 0), (1.05, .64, .34, 0), (1.35, .68, .35, 0), (1.52, .68, .34, 0), (1.6, .58, .3, 0), (1.66, .3, .18, 0)]
+    loft_y("Torso", torso, "cloth")
+    cylinder("Neck", (0, 1.58, 0), (0, 1.76, 0), .085, "skin")
+    blob("Hips", (0, .9, 0), (.48 if woman else .46, .22, .3), "pants")
+    for side in (-1, 1):
+        sx = side * s
+        blob(f"Shoulder{side}", (sx, 1.5, 0), (.2, .2, .2), "cloth")
+        tube(f"Arm{side}", [(sx + side * .02, 1.52, 0), (sx + side * .09, 1.22, -.01), (sx + side * .14, .97, 0)], .078, "cloth")
+        blob(f"Hand{side}", (sx + side * .15, .87, 0), (.19, .21, .19), "skin")
+        blob(f"Thumb{side}", (sx + side * .11, .9, -.08), (.07, .09, .07), "skin")
+        tube(f"Leg{side}", [(side * .12, .92, 0), (side * .125, .55, 0), (side * .125, .14, 0)], .1, "pants")
+        x = side * .125
+        loft(f"Shoe{side}", [(-.29, .08, .06, .08, x), (-.24, .22, .14, .09, x), (-.06, .25, .17, .1, x), (.1, .24, .17, .1, x), (.16, .12, .09, .1, x)], "shoe", n=2.4)
+        loft(f"Sole{side}", [(-.3, .1, .02, .025, x), (-.25, .24, .05, .025, x), (.12, .26, .05, .025, x), (.18, .12, .02, .025, x)], "sole", n=3)
+
+
+def build_pilot_man():
+    pilot_body(False)
+
+
+def build_pilot_woman():
+    pilot_body(True)
+
+
 BUILDERS = {"redder": build_redder, "libel": build_libel, "molen": build_molen, "pijl": build_pijl, "tandem": build_tandem,
             "wesp": build_wesp, "kraan": build_kraan, "coax": build_coax, "sport": build_sport, "zee": build_zee,
-            "dubbel": build_dubbel, "dakota": build_dakota, "valk": build_valk, "delta": build_delta, "schaduw": build_schaduw}
+            "dubbel": build_dubbel, "dakota": build_dakota, "valk": build_valk, "delta": build_delta, "schaduw": build_schaduw, "scenery": build_scenery,
+            "pilot_man": build_pilot_man, "pilot_woman": build_pilot_woman}
 
 
 

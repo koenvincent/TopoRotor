@@ -212,21 +212,35 @@ func rebuild() -> void:
 	body.scale=Vector3.ONE*BODY_SCALE
 	root.add_child(body)
 	root=body
-	# Legs and chunky sneakers with a pale sole.
-	for side in [-1,1]:
-		box(Vector3(side*.12,.5,0),Vector3(.2,.82,.23),pants)
-		box(Vector3(side*.125,.085,-.05),Vector3(.25,.15,.38),"2a2522")
-		box(Vector3(side*.125,.025,-.05),Vector3(.26,.05,.39),"f2f0ea")
-	# Torso: a woman's figure is narrower at the shoulders with a wider hip.
-	box(Vector3(0,1.25,0),Vector3(shoulder*2,.74,.34),cloth)
-	if woman:
-		box(Vector3(0,.95,0),Vector3(.56,.18,.33),cloth)
-	# Arms a little away from the body, with round mitten hands.
-	for side in [-1,1]:
-		box(Vector3(side*(shoulder+.09),1.24,0),Vector3(.16,.66,.18),cloth,Vector3(0,0,side*9))
-		ball(Vector3(side*(shoulder+.15),.87,0),Vector3(.19,.19,.19),skin)
+	# The smooth body comes from Blender (tools/blender/models.py); its parts
+	# carry slot names that take the look's skin, outfit and trouser colours.
+	var model="res://assets/models/pilot_%s.glb" % ("woman" if woman else "man")
+	if ResourceLoader.exists(model):
+		var shape: Node3D=(load(model) as PackedScene).instantiate()
+		shape.name="Shape"
+		body.add_child(shape)
+		var paint={"skin":skin,"cloth":cloth,"pants":pants,"shoe":"2a2522","sole":"f2f0ea"}
+		for node in shape.find_children("*","MeshInstance3D",true,false):
+			var part_mesh=node as MeshInstance3D
+			for surface in part_mesh.mesh.get_surface_count():
+				var source=part_mesh.mesh.surface_get_material(surface)
+				var slot: String=source.resource_name if source!=null else "cloth"
+				part_mesh.set_surface_override_material(surface,mat(paint.get(slot,cloth)))
+	else:
+		# Legs and chunky sneakers with a pale sole.
+		for side in [-1,1]:
+			box(Vector3(side*.12,.5,0),Vector3(.2,.82,.23),pants)
+			box(Vector3(side*.125,.085,-.05),Vector3(.25,.15,.38),"2a2522")
+			box(Vector3(side*.125,.025,-.05),Vector3(.26,.05,.39),"f2f0ea")
+		# Torso: a woman's figure is narrower at the shoulders with a wider hip.
+		box(Vector3(0,1.25,0),Vector3(shoulder*2,.74,.34),cloth)
+		if woman:
+			box(Vector3(0,.95,0),Vector3(.56,.18,.33),cloth)
+		for side in [-1,1]:
+			box(Vector3(side*(shoulder+.09),1.24,0),Vector3(.16,.66,.18),cloth,Vector3(0,0,side*9))
+			ball(Vector3(side*(shoulder+.15),.87,0),Vector3(.19,.19,.19),skin)
+		cylinder(Vector3(0,1.67,0),.09,.14,skin)
 	build_outfit(shoulder,cloth)
-	cylinder(Vector3(0,1.67,0),.09,.14,skin)
 	build_extra(shoulder)
 	root=figure_root
 	var head=Node3D.new()

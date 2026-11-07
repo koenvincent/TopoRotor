@@ -18,12 +18,33 @@ var city_stats: Dictionary = {}
 var landmark_data: Dictionary = {}
 var landmark_built: Dictionary = {}
 var kit: LandmarkKit
+# Blender pieces (tools/blender/models.py, "scenery"): chamfered blocks for
+# walls and big parts, bevelled gable roofs, faceted tree crowns and tiered
+# pines. Thin parts such as windows keep the plain box to stay light.
+var soft_block: Mesh = box
+var crown: Mesh = leaf
+var pine: Mesh = cone
+const SOFT_MIN = .3
+static var _kit: Dictionary = {}
+
+static func scenery_kit() -> Dictionary:
+	if _kit.is_empty() and ResourceLoader.exists("res://assets/models/scenery.glb"):
+		var scene: Node = (load("res://assets/models/scenery.glb") as PackedScene).instantiate()
+		for node in scene.find_children("*","MeshInstance3D",true,false):
+			_kit[node.name]=(node as MeshInstance3D).mesh
+		scene.free()
+	return _kit
 
 func _init(parent: Node3D) -> void:
 	world=parent
 	city_plans=JSON.parse_string(FileAccess.get_file_as_string("res://data/city_plans_nl.json")).cities
 	landmark_data=JSON.parse_string(FileAccess.get_file_as_string("res://data/landmarks_nl.json")).cities
 	kit=LandmarkKit.new(self)
+	var pieces: Dictionary=scenery_kit()
+	soft_block=pieces.get("Block",box)
+	roof=pieces.get("Roof",roof)
+	crown=pieces.get("Crown",leaf)
+	pine=pieces.get("Pine",cone)
 	rng.seed=1206
 	leaf.radial_segments=5
 	leaf.rings=2
@@ -61,7 +82,8 @@ func put_mesh(mesh: Mesh,origin: Vector3,basis: Basis,color: String) -> void:
 	surface(color).append_from(mesh,0,Transform3D(basis,origin))
 
 func block(pos: Vector3, dimensions: Vector3, color: String, angle: float=0) -> void:
-	piece(box,pos,dimensions,color,angle)
+	var soft=dimensions.x>SOFT_MIN and dimensions.y>SOFT_MIN and dimensions.z>SOFT_MIN
+	piece(soft_block if soft else box,pos,dimensions,color,angle)
 
 func beam(a: Vector3,b: Vector3,width: float,color: String) -> void:
 	if not surfaces.has(color):
@@ -109,12 +131,13 @@ func tree(pos: Vector3, scale_value: float=1) -> void:
 	piece(trunk,pos+Vector3(0,.65*scale_value,0),Vector3(scale_value,1.3*scale_value,scale_value),"67543c")
 	var foliage=["466634","58743a","344f32","718346"]
 	var shade=foliage[rng.randi_range(0,3)]
+	# Turned by position, not by the generator, so the map layout stays as it was.
+	var turn=fposmod(pos.x*12.9898+pos.z*78.233,TAU)
 	if rng.randf()<.35:
-		piece(cone,pos+Vector3(0,2*scale_value,0),Vector3(.9,2.8,.9)*scale_value,shade)
-		piece(cone,pos+Vector3(0,2.65*scale_value,0),Vector3(.65,1.8,.65)*scale_value,shade)
+		piece(pine,pos+Vector3(0,2.3*scale_value,0),Vector3(.95,3.3,.95)*scale_value,shade,turn)
 	else:
-		piece(leaf,pos+Vector3(0,1.9*scale_value,0),Vector3(2.1,1.8,1.9)*scale_value,shade,rng.randf()*TAU)
-		piece(leaf,pos+Vector3(.45,2.4,.12)*scale_value,Vector3(1.5,1.2,1.5)*scale_value,shade)
+		piece(crown,pos+Vector3(0,1.9*scale_value,0),Vector3(2.1,1.8,1.9)*scale_value,shade,rng.randf()*TAU)
+		piece(crown,pos+Vector3(.45,2.4,.12)*scale_value,Vector3(1.5,1.2,1.5)*scale_value,shade,turn)
 
 func forest(points: Array) -> void:
 	for point in points:
