@@ -17,7 +17,7 @@ var running: bool = true
 var time: float = 0.0
 # Hex strings without '#'. "dark" was the single rotor/skid slot before 0.5;
 # saved paint that still has it fills rotor and gear from it.
-const DEFAULT_PAINT = {"body":"e67b34","tail":"e67b34","trim":"dce4dc","rotor":"263845","gear":"263845","glass":"234c68","accent":"f2c14e"}
+const DEFAULT_PAINT = {"body":"e67b34","tail":"e67b34","trim":"dce4dc","rotor":"263845","gear":"263845","glass":"1d3446","accent":"f2c14e"}
 const PAINT_PARTS = [["body","Romp"],["tail","Staart"],["trim","Strepen"],["rotor","Rotor en motor"],["gear","Onderstel"],["glass","Ramen"],["accent","Accessoires"]]
 var paint_materials: Dictionary = {}
 var rotor_disc: MeshInstance3D
@@ -47,20 +47,25 @@ func glow_material(color: Color) -> StandardMaterial3D:
 	m.albedo_color = color
 	return m
 
-func material(color: Color, metal: float = 0.0) -> StandardMaterial3D:
-	var m = StandardMaterial3D.new()
-	m.albedo_color = color
-	m.metallic = metal
-	m.roughness = 0.65
-	m.metallic_specular = .3
-	return m
+# Lacquered model paint (see ToyLook). gloss 0 is matte, 1 tinted glass.
+func material(color: Color, gloss: float = .55) -> StandardMaterial3D:
+	return ToyLook.material(color, gloss)
 
+# A plain box becomes a rounded block at its real size, so edges catch the
+# light like a scale model; every other mesh is scaled to size.
 func part(mesh: Mesh, at: Vector3, size: Vector3, mat: Material, parent: Node3D) -> MeshInstance3D:
 	var p = MeshInstance3D.new()
-	p.mesh = mesh
+	if ghost and parent == body and not keep:
+		p.mesh = mesh
+		phantoms.append(p)
+		return p
+	if mesh is BoxMesh and (mesh as BoxMesh).size == Vector3.ONE:
+		p.mesh = ToyLook.rounded_box(size)
+	else:
+		p.mesh = mesh
+		p.scale = size
 	p.material_override = mat
 	p.position = at
-	p.scale = size
 	parent.add_child(p)
 	return p
 
@@ -79,13 +84,29 @@ func tube(at: Vector3, radius: float, length: float, slot: String, axis: String 
 		p.rotation.z = PI / 2
 	return p
 
+# A tapered tube from one point to another: tail booms that slim down
+# towards the tail, plane tails and skid legs.
+func taper(from: Vector3, to: Vector3, r_from: float, r_to: float, slot: String) -> MeshInstance3D:
+	var mesh = CylinderMesh.new()
+	mesh.bottom_radius = r_from
+	mesh.top_radius = r_to
+	mesh.height = from.distance_to(to)
+	mesh.radial_segments = 32
+	mesh.rings = 1
+	var p = part(mesh, (from + to) * .5, Vector3.ONE, paint_materials[slot], body)
+	var axis = (to - from).normalized()
+	if absf(axis.dot(Vector3.UP)) < .9999:
+		p.basis = Basis(Quaternion(Vector3.UP, axis))
+	elif axis.y < 0:
+		p.rotation.x = PI
+	return p
+
 func _ready() -> void:
-	sphere = SphereMesh.new()
-	sphere.radial_segments = 16
-	sphere.rings = 8
-	var metal = {"body":.15,"tail":.15,"trim":.2,"rotor":.3,"gear":.3,"glass":.25,"accent":.2}
+	sphere = ToyLook.sphere()
+	# Lacquered body and accessories, satin trim and mechanics, shiny glass.
+	var gloss = {"body":.75,"tail":.75,"trim":.6,"rotor":.4,"gear":.4,"glass":1.0,"accent":.75}
 	for slot in DEFAULT_PAINT:
-		paint_materials[slot] = material(Color(DEFAULT_PAINT[slot]), metal[slot])
+		paint_materials[slot] = material(Color(DEFAULT_PAINT[slot]), gloss[slot])
 	# Alpha falloff avoids a hard disc and needs no screen-space effects.
 	var shadow_mat = ShaderMaterial.new()
 	shadow_mat.shader = load("res://assets/shaders/aircraft_shadow.gdshader")
@@ -123,7 +144,13 @@ func rebuild() -> void:
 	var builders = {"redder":build_redder,"libel":build_libel,"molen":build_molen,"pijl":build_pijl,"tandem":build_tandem,"wesp":build_wesp,
 		"kraan":build_kraan,"coax":build_coax,"sport":build_sport,"dubbel":build_dubbel,"zee":build_zee,"dakota":build_dakota,
 		"valk":build_valk,"delta":build_delta,"schaduw":build_schaduw}
-	var anchors: Dictionary = fill_anchors(builders.get(config.model, build_redder).call())
+	var builder: Callable = builders.get(config.model, build_redder)
+	ghost = airframe(config.model)
+	var anchors: Dictionary = fill_anchors(builder.call())
+	ghost = false
+	for phantom in phantoms:
+		phantom.free()
+	phantoms.clear()
 	rotor = rotors[0] if not rotors.is_empty() else null
 	tail_rotor = tail_rotors[0] if not tail_rotors.is_empty() else null
 	rotor_disc = body.get_node_or_null("RotorDisc0")
@@ -172,7 +199,9 @@ func add_propeller(at: Vector3, span: float, blades: int, slot: String = "rotor"
 	disc_mesh.size = Vector2.ONE * (span + .1)
 	var disc_mat = ShaderMaterial.new()
 	disc_mat.shader = load("res://assets/shaders/rotor_disc.gdshader")
+	keep = true
 	var disc = part(disc_mesh, at + Vector3(0,0,-.03), Vector3.ONE, disc_mat, body)
+	keep = false
 	disc.rotation.x = PI / 2
 	disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return p
@@ -208,7 +237,9 @@ func add_rotor(at: Vector3, span: float, blades: int, spin: float = 1.0) -> void
 		var arm = Node3D.new()
 		arm.rotation.y = i * TAU / count
 		r.add_child(arm)
-		part(BoxMesh.new(), Vector3(span * .25, 0, 0), Vector3(span * .5, .045, .22), paint_materials.rotor, arm)
+		part(BoxMesh.new(), Vector3(span * .22, 0, 0), Vector3(span * .44, .045, .22), paint_materials.rotor, arm)
+		# Painted tips, as on real rotor blades, so the spin shows.
+		part(BoxMesh.new(), Vector3(span * .47, 0, 0), Vector3(span * .06, .047, .222), paint_materials.accent, arm)
 	part(sphere, Vector3.ZERO, Vector3(.48,.19,.48), paint_materials.trim, r)
 	rotors.append(r)
 	rotor_spin.append(spin)
@@ -217,7 +248,9 @@ func add_rotor(at: Vector3, span: float, blades: int, spin: float = 1.0) -> void
 	disc_mesh.size = Vector2.ONE * (span + .2)
 	var disc_mat = ShaderMaterial.new()
 	disc_mat.shader = load("res://assets/shaders/rotor_disc.gdshader")
+	keep = true
 	var disc = part(disc_mesh, at - Vector3(0,.02,0), Vector3.ONE, disc_mat, body)
+	keep = false
 	disc.name = "RotorDisc%d" % (rotors.size() - 1)
 	disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
@@ -232,20 +265,59 @@ func add_tail_rotor(at: Vector3, span: float, blades: int) -> void:
 		part(BoxMesh.new(), Vector3(0, span * .25, 0), Vector3(.055, span * .5, .12), paint_materials.rotor, arm)
 	tail_rotors.append(t)
 
+# Skids like the real thing: round tubes with an upturned nose, on curved
+# cross tubes that run from the belly out to the skid.
 func skids(x: float, y: float, z: float, length: float, leg_z: Array, leg_top: float) -> void:
 	for side in [-1,1]:
-		box(Vector3(side * x, y, z), Vector3(.12,.12,length), "gear")
+		var back = Vector3(side * x, y, z + length * .5)
+		var front = Vector3(side * x, y, z - length * .42)
+		taper(back, front, .06, .06, "gear")
+		taper(front, front + Vector3(0, .2, -.22), .06, .05, "gear")
+		ball(back, Vector3(.12,.12,.12), "gear")
+		ball(front, Vector3(.12,.12,.12), "gear")
 		for lz in leg_z:
-			var leg = box(Vector3(side * (x - .27), (y + leg_top) * .5, lz), Vector3(.1, absf(leg_top - y) + .1, .1), "trim")
-			leg.rotation.z = -side * .5
+			var top = Vector3(side * (x - .45), leg_top, lz)
+			var knee = Vector3(side * x, lerpf(y, leg_top, .25), lz)
+			taper(top, knee, .05, .05, "gear")
+			taper(knee, Vector3(side * x, y, lz), .05, .055, "gear")
+			ball(knee, Vector3(.1,.1,.1), "gear")
+
+# Airframes modelled in Blender (tools/blender/models.py) replace the
+# procedural body where they exist. Their faces carry paint-slot names as
+# material names, so the hangar's colours land on the right parts; rotors
+# stay procedural, because the rotor upgrade adds blades.
+const MODEL_DIR = "res://assets/models/"
+
+# While a Blender airframe stands in for the body, the procedural builder
+# still runs for its rotors, propellers and anchors, but its body parts are
+# phantoms that never enter the tree (freed at the end of rebuild).
+var ghost: bool = false
+var keep: bool = false
+var phantoms: Array[Node] = []
+
+static func has_airframe(id: String) -> bool:
+	return ResourceLoader.exists(MODEL_DIR + id + ".glb")
+
+func airframe(id: String) -> bool:
+	if not has_airframe(id):
+		return false
+	var frame: Node3D = (load(MODEL_DIR + id + ".glb") as PackedScene).instantiate()
+	frame.name = "Airframe"
+	body.add_child(frame)
+	for mesh_node in frame.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance = mesh_node as MeshInstance3D
+		for surface in mesh_instance.mesh.get_surface_count():
+			var source = mesh_instance.mesh.surface_get_material(surface)
+			var slot = source.resource_name if source != null else "body"
+			mesh_instance.set_surface_override_material(surface, paint_materials.get(slot, paint_materials.body))
+	return true
 
 func build_redder() -> Dictionary:
 	ball(Vector3(0,0,0),Vector3(1.9,1.45,2.5),"body")
 	ball(Vector3(0,.22,-.65),Vector3(1.78,1.15,1.65),"glass")
 	box(Vector3(0,.16,-.9),Vector3(.07,1.35,1.25),"rotor")
 	box(Vector3(0,-.1,-1),Vector3(1.6,.08,.06),"rotor")
-	var boom = box(Vector3(0,.05,2.1),Vector3(.3,.3,3.6),"tail")
-	boom.rotation.x = -.07
+	taper(Vector3(0,-.08,.3),Vector3(0,.18,3.9),.3,.11,"tail")
 	box(Vector3(0,.6,3.75),Vector3(.16,1.4,.8),"tail")
 	box(Vector3(0,.15,3.0),Vector3(1.7,.1,.5),"trim")
 	skids(1.1,-.83,0,3.5,[-.65,.75],-.07)
@@ -297,8 +369,7 @@ func build_pijl() -> Dictionary:
 	ball(Vector3(0,0,.2),Vector3(1.7,1.35,3.4),"body")
 	ball(Vector3(0,.2,-.85),Vector3(1.5,1.0,1.6),"glass")
 	ball(Vector3(0,.8,.7),Vector3(1.0,.5,1.8),"trim")
-	var boom = box(Vector3(0,.25,2.75),Vector3(.45,.42,3.0),"tail")
-	boom.rotation.x = -.08
+	taper(Vector3(0,.12,1.25),Vector3(0,.37,4.25),.26,.13,"tail")
 	for side in [-1,1]:
 		box(Vector3(side*.83,.0,.35),Vector3(.04,.18,2.2),"trim")
 		box(Vector3(side*.8,.2,-.1),Vector3(.04,.36,.7),"glass")
@@ -348,8 +419,7 @@ func build_kraan() -> Dictionary:
 	box(Vector3(0,1.0,.5),Vector3(1.1,.5,1.8),"trim")
 	for side in [-1,1]:
 		box(Vector3(side*.36,.55,.6),Vector3(.02,.14,3.6),"trim")
-	var boom = box(Vector3(0,.72,3.6),Vector3(.35,.4,2.6),"tail")
-	boom.rotation.x = -.05
+	taper(Vector3(0,.65,2.3),Vector3(0,.79,4.9),.21,.1,"tail")
 	box(Vector3(0,1.3,4.8),Vector3(.12,1.4,.7),"tail")
 	box(Vector3(0,.9,4.6),Vector3(1.4,.07,.3),"trim")
 	for side in [-1,1]:
@@ -437,8 +507,7 @@ func build_wesp() -> Dictionary:
 		wheel(Vector3(side*.62,-.92,-.6),.2)
 	box(Vector3(0,-.6,-1.1),Vector3(.25,.2,.25),"rotor")
 	tube(Vector3(0,-.65,-1.5),.04,.7,"rotor")
-	var boom = box(Vector3(0,.25,2.6),Vector3(.3,.35,3.2),"tail")
-	boom.rotation.x = -.05
+	taper(Vector3(0,.17,1.0),Vector3(0,.33,4.2),.2,.09,"tail")
 	box(Vector3(0,.85,4.1),Vector3(.12,1.1,.6),"tail")
 	box(Vector3(0,.3,3.9),Vector3(1.6,.07,.35),"trim")
 	wheel(Vector3(0,-.2,3.9),.12)
@@ -457,7 +526,7 @@ func build_coax() -> Dictionary:
 	ball(Vector3(0,-.05,-1.3),Vector3(1.6,1.4,1.2),"body")
 	ball(Vector3(0,.25,-1.45),Vector3(1.4,.8,.9),"glass")
 	ball(Vector3(0,.95,.4),Vector3(1.0,.5,1.4),"rotor")
-	box(Vector3(0,.2,2.4),Vector3(.4,.4,2.6),"tail")
+	taper(Vector3(0,.15,1.1),Vector3(0,.25,3.7),.24,.12,"tail")
 	box(Vector3(0,.25,3.6),Vector3(2.0,.08,.5),"trim")
 	for side in [-1,1]:
 		box(Vector3(side*1.0,.6,3.6),Vector3(.08,.9,.6),"tail")
@@ -480,8 +549,7 @@ func build_coax() -> Dictionary:
 func plane_body(floats: bool) -> void:
 	ball(Vector3(0,0,-.3),Vector3(1.2,1.3,3.2),"body")
 	ball(Vector3(0,-.1,-1.7),Vector3(.95,.95,1.0),"trim")
-	var cone = box(Vector3(0,.15,1.9),Vector3(.55,.6,2.6),"body")
-	cone.rotation.x = -.05
+	taper(Vector3(0,.05,.5),Vector3(0,.25,3.25),.5,.14,"body")
 	ball(Vector3(0,.45,-.6),Vector3(1.05,.7,1.4),"glass")
 	box(Vector3(0,.78,-.4),Vector3(9.0,.12,1.3),"body")
 	box(Vector3(0,.2,3.1),Vector3(3.0,.08,.75),"tail")
@@ -566,8 +634,7 @@ func build_dubbel() -> Dictionary:
 func build_dakota() -> Dictionary:
 	ball(Vector3(0,0,-.5),Vector3(1.5,1.6,7.0),"body")
 	ball(Vector3(0,.35,-3.5),Vector3(1.0,.5,.7),"glass")
-	var cone = box(Vector3(0,.3,3.2),Vector3(.7,.8,2.0),"body")
-	cone.rotation.x = -.08
+	taper(Vector3(0,.18,2.0),Vector3(0,.42,4.25),.68,.2,"body")
 	box(Vector3(0,-.45,-.8),Vector3(11.0,.14,1.6),"body")
 	box(Vector3(0,.4,3.9),Vector3(3.8,.08,.9),"tail")
 	fin(Vector3(0,1.2,3.8),1.7,1.5,"tail")
@@ -695,7 +762,7 @@ func smoke_trail(at: Vector3, rainbow: bool) -> void:
 		colours.set_offset(1, 5.0 / 6.0)
 		puff.color_initial_ramp = colours
 	else:
-		puff.color = paint_materials.accent.albedo_color.lightened(.35)
+		puff.color = ToyLook.color_of(paint_materials.accent).lightened(.35)
 		puff.set_meta("tint", true)
 	puff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	body.add_child(puff)
@@ -770,8 +837,7 @@ func build_accessory(id: String, a: Dictionary) -> void:
 				bob.position = a.top + Vector3(-.35 + i * .35, lift, .35)
 				bob.set_meta("y", bob.position.y)
 				body.add_child(bob)
-				var balloon = material(Color(colours[i]), .1)
-				balloon.roughness = .25
+				var balloon = material(Color(colours[i]), .95)
 				part(sphere, Vector3.ZERO, Vector3(.45,.55,.45), balloon, bob)
 				part(CylinderMesh.new(), Vector3(0,-lift * .5 - .1,0), Vector3(.012,lift * .5,.012), white, bob)
 				bobbers.append(bob)
@@ -826,8 +892,7 @@ func build_accessory(id: String, a: Dictionary) -> void:
 			(rim.mesh as TorusMesh).outer_radius = 1.0
 			swings.append(hang)
 		"zonnepaneel":
-			var panel = material(Color("1c3a6a"), .4)
-			panel.roughness = .25
+			var panel = material(Color("1c3a6a"), .95)
 			part(BoxMesh.new(), a.top + Vector3(0,.12,.15), Vector3(1.0,.04,.7), panel, body)
 			for i in 3:
 				box(a.top + Vector3(-.25 + i * .25,.145,.15), Vector3(.015,.01,.7), "trim")
@@ -864,8 +929,7 @@ func build_accessory(id: String, a: Dictionary) -> void:
 					var spark = part(sphere, at + Vector3(0,0,-.42), Vector3(.1,.1,.1), glow_material(colours[i]), body)
 					twinkles.append(spark)
 		"kroon":
-			var gold = material(Color("e8c33a"), .6)
-			gold.roughness = .3
+			var gold = material(Color("e8c33a"), 1.0)
 			var at: Vector3 = a.crown
 			var ring = CylinderMesh.new()
 			ring.top_radius = .3
@@ -986,7 +1050,7 @@ static func normalize_paint(paint: Dictionary) -> Dictionary:
 func apply_paint(paint: Dictionary) -> void:
 	var full = normalize_paint(paint)
 	for slot in full:
-		paint_materials[slot].albedo_color = Color(full[slot])
+		ToyLook.recolor(paint_materials[slot], Color(full[slot]))
 	# Plain smoke has the accessory colour, a little lighter.
 	if is_instance_valid(body):
 		for child in body.get_children():
@@ -994,7 +1058,7 @@ func apply_paint(paint: Dictionary) -> void:
 				child.color = Color(full.accent).lightened(.35)
 
 func paint_hex(slot: String) -> String:
-	return paint_materials[slot].albedo_color.to_html(false)
+	return ToyLook.color_of(paint_materials[slot]).to_html(false)
 
 func _process(delta: float) -> void:
 	ground_shadow.global_position.y=.09
