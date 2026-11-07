@@ -22,6 +22,20 @@ class BigCross:
 				draw_circle(a, layer[1] * .5, layer[0])
 				draw_circle(b, layer[1] * .5, layer[0])
 
+# Rotating sunburst behind the hit banner.
+class Burst:
+	extends Control
+	var color: Color = Color(1, .79, .29, .5)
+	func _draw() -> void:
+		var c = size * .5
+		var reach = maxf(size.x, size.y) * .5
+		for i in 16:
+			var a0 = TAU * i / 16.0
+			var a1 = a0 + TAU / 32.0
+			var tone = Color(color.r, color.g, color.b, color.a * (1.0 if i % 2 == 0 else .55))
+			draw_colored_polygon(PackedVector2Array([c, c + Vector2(cos(a0), sin(a0)) * reach, c + Vector2(cos(a1), sin(a1)) * reach]), tone)
+		draw_circle(c, reach * .22, Color(1, .95, .75, color.a * .6))
+
 var vignette: ColorRect
 var vignette_material: ShaderMaterial
 var cross: BigCross
@@ -31,6 +45,9 @@ var banner_title: Label
 var banner_detail: Label
 var confetti: CPUParticles2D
 var font: Font
+var burst: Burst
+var streak_label: Label
+var burst_tween: Tween
 var flash_tween: Tween
 var cross_tween: Tween
 var banner_tween: Tween
@@ -49,7 +66,17 @@ func _init() -> void:
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	font = load("res://assets/interface.ttf")
+	font = UiFonts.font("display")
+	burst = Burst.new()
+	burst.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(burst)
+	burst.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	burst.offset_left = -260
+	burst.offset_right = 260
+	burst.offset_top = -62
+	burst.offset_bottom = 458
+	burst.pivot_offset = Vector2(260, 260)
+	burst.hide()
 	# The holder is anchored; the cross inside it can shake around x=0.
 	var holder = Control.new()
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -65,7 +92,7 @@ func _ready() -> void:
 	cross.pivot_offset = Vector2(150, 150)
 	holder.add_child(cross)
 	cross.hide()
-	cross_label = big_label("MIS!", 54, RED)
+	cross_label = big_label("MIS!", 76, RED, Color("5c0010"))
 	add_child(cross_label)
 	cross_label.set_anchors_preset(Control.PRESET_CENTER)
 	cross_label.offset_left = -300
@@ -82,12 +109,34 @@ func _ready() -> void:
 	banner.offset_left = -360
 	banner.offset_right = 360
 	banner.offset_top = 128
-	banner.offset_bottom = 268
+	banner.offset_bottom = 318
 	banner.pivot_offset = Vector2(360, 70)
-	banner_title = big_label("GOED ZO!", 74, GOLD)
+	banner_title = big_label("GOED ZO!", 92, GOLD, Color("8a3205"))
 	banner.add_child(banner_title)
-	banner_detail = big_label("", 28, Color("fff6dc"))
+	banner_detail = big_label("", 30, Color("fff6dc"))
+	banner_detail.add_theme_font_override("font", UiFonts.font("black"))
+	var plate = StyleBoxFlat.new()
+	plate.bg_color = Color(.02, .08, .11, .82)
+	plate.set_corner_radius_all(14)
+	plate.border_color = Color(GOLD, .7)
+	plate.set_border_width_all(2)
+	plate.content_margin_left = 22
+	plate.content_margin_right = 22
+	plate.content_margin_top = 2
+	plate.content_margin_bottom = 4
+	banner_detail.add_theme_stylebox_override("normal", plate)
+	banner_detail.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	banner.add_child(banner_detail)
+	streak_label = big_label("", 26, Color("0b2530"), Color(0, 0, 0, 0))
+	streak_label.add_theme_font_override("font", UiFonts.font("black"))
+	streak_label.add_theme_constant_override("outline_size", 0)
+	var streak_plate = plate.duplicate()
+	streak_plate.bg_color = GREEN
+	streak_plate.border_color = Color("1f8a4c")
+	streak_plate.border_width_bottom = 4
+	streak_label.add_theme_stylebox_override("normal", streak_plate)
+	streak_label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	banner.add_child(streak_label)
 	banner.hide()
 	confetti = CPUParticles2D.new()
 	confetti.emitting = false
@@ -122,17 +171,20 @@ func place_confetti() -> void:
 	confetti.position = Vector2(size.x * .5, -20)
 	confetti.emission_rect_extents = Vector2(size.x * .5, 10)
 
-func big_label(text: String, size_px: int, color: Color) -> Label:
+# Arcade lettering: thick dark outline plus a solid extruded shadow in a deep
+# shade of the text colour, so GOED ZO! and MIS! read like stickers.
+func big_label(text: String, size_px: int, color: Color, extrude: Color = Color(0, 0, 0, .5)) -> Label:
 	var l = Label.new()
 	l.text = text
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.add_theme_font_override("font", font)
 	l.add_theme_font_size_override("font_size", size_px)
 	l.add_theme_color_override("font_color", color)
-	l.add_theme_color_override("font_outline_color", Color("08161b"))
-	l.add_theme_constant_override("outline_size", maxi(6, size_px / 6))
-	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, .5))
-	l.add_theme_constant_override("shadow_offset_y", 4)
+	l.add_theme_color_override("font_outline_color", Color("06161c"))
+	l.add_theme_constant_override("outline_size", maxi(6, size_px / 5))
+	l.add_theme_color_override("font_shadow_color", extrude)
+	l.add_theme_constant_override("shadow_offset_y", maxi(4, size_px / 11))
+	l.add_theme_constant_override("shadow_outline_size", maxi(6, size_px / 5))
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
 
@@ -179,13 +231,27 @@ func hide_miss() -> void:
 	cross.hide()
 	cross_label.hide()
 
-func show_hit(title_text: String, detail: String) -> void:
+func show_hit(title_text: String, detail: String, streak: int = 0) -> void:
 	banners_shown += 1
 	if banner_tween:
 		banner_tween.kill()
+	if burst_tween:
+		burst_tween.kill()
 	banner_title.text = title_text
 	banner_detail.text = detail
+	streak_label.text = "%d× OP RIJ!" % streak if streak >= 2 else ""
+	streak_label.visible = streak >= 2
 	banner.show()
+	burst.show()
+	burst.queue_redraw()
+	burst.modulate.a = 0.0
+	burst.scale = Vector2.ONE * .3
+	burst_tween = create_tween().set_parallel(true)
+	burst_tween.tween_property(burst, "modulate:a", 1.0, .12)
+	burst_tween.tween_property(burst, "scale", Vector2.ONE, .4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	burst_tween.tween_property(burst, "rotation", burst.rotation + .9, 1.7)
+	burst_tween.chain().tween_property(burst, "modulate:a", 0.0, .35)
+	burst_tween.chain().tween_callback(burst.hide)
 	banner.modulate.a = 0.0
 	banner.scale = Vector2.ONE * .4
 	flash(GOLD, .45, .9)
@@ -205,9 +271,10 @@ func celebrate() -> void:
 	flash(GREEN, .4, 1.2)
 
 func clear() -> void:
-	for t in [flash_tween, cross_tween, banner_tween]:
+	for t in [flash_tween, cross_tween, banner_tween, burst_tween]:
 		if t:
 			t.kill()
+	burst.hide()
 	vignette_material.set_shader_parameter("flash_color", Color(1, 0, 0, 0))
 	cross.hide()
 	cross_label.hide()

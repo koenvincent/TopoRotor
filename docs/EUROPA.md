@@ -1,7 +1,10 @@
 # Europa: routes en miniatuurwereld
 
-Kies Europa en vervolgens een kort rondje, de 43 hoofdsteden uit de catalogus
-of de 50 landen (inclusief de opgenomen transcontinentale landen en Kosovo).
+Kies Europa en vervolgens een van de twaalf routes (`data/routes_eu.json`):
+een kort rondje, de 43 hoofdsteden, de 50 landen (inclusief de opgenomen
+transcontinentale landen en Kosovo), zeeën en oceaan, rivieren en meren,
+gebergten en eilanden, grote steden, West-, Noord-, Midden- en Zuid-Europa en
+de Leerkaart Europa met een mix van alles.
 Leren, Oefenen en Records gelden voor elke route, ook online en eigen missies.
 Het record geldt steeds voor precies de gekozen route.
 
@@ -10,7 +13,41 @@ Het record geldt steeds voor precies de gekozen route.
   boven het land vliegt. H en overzicht onthullen geen verborgen kaartnamen.
 - Records verbergt markers, namen en afstand en telt 10 seconden straf per fout.
 
+## Topografie (0.5)
+
+Europa is net zo uitgebreid als Nederland. Naast landen en hoofdsteden bevat
+de catalogus nu 13 zeeën en de oceaan, 14 rivieren, 6 meren, 11 gebergten en
+landstreken, 4 schiereilanden/regio's, 6 eilanden en 20 grote steden (onder
+meer Barcelona, Milaan, München, Istanbul, Napels en Sint-Petersburg). Elke
+plek heeft een eigen antwoordstraal (`radius_km`) rond een kenmerkend punt;
+dat is geen echte gebieds- of rivierdetectie. De Noordzee en de Rijn staan
+per regio in de catalogus: op de Nederlandkaart geldt het Nederlandse punt,
+in Europa het Europese. Kaartnamen krijgen atlaskleuren: water blauw,
+gebergten bruin, eilanden groen, landen paars.
+
 ## Graphics
+
+Elke hoofdstad en grote stad heeft 1 tot 3 echte herkenningspunten uit
+`data/landmarks_eu.json` (136 in totaal): onder meer de Eiffeltoren en
+Arc de Triomphe, Big Ben, Tower Bridge en de London Eye, het Atomium, de
+Sagrada Família, de Blauwe Moskee en de Bosporusbrug, het Kremlin, het
+Colosseum, de Dom van Keulen, het Boedapester parlement, de Vesuvius en de
+Hallgrímskirkja. Europa-eigen silhouetten staan in `scripts/europe_scenery.gd`;
+de Nederlandse landmark-kit wordt in Europa op 1,8× schaal hergebruikt.
+Naburige steden (Wenen en Bratislava, Tallinn en Helsinki) delen de grond
+tussen hun ankers, zodat wijken en herkenningspunten niet in elkaar schuiven;
+huizen boven zee worden overgeslagen.
+
+Het landschap kreeg extra berggordels (Apennijnen, Dinarische Alpen,
+Kaukasus, Schotse Hooglanden, Balkangebergte), een taiga-gordel in het
+noorden, olijfgaarden en wijngaarden in het zuiden, schepen op de zeeën,
+vuurtorens op kapen en windparken in de Noordzee en de Oostzee. Landchecks
+gebruiken nu per landpolygoon een bounding box; de Europese wereld bouwt
+daardoor sneller ondanks de extra inhoud (lokaal gemeten: 534 → 322 ms).
+
+### Eerdere basis
+
+
 
 Alle 43 opgenomen hoofdsteden krijgen een wijk met huizen, straten, bomen en
 centraal helikopterplatform. De stijlen verschillen tussen zuidelijke,
@@ -47,6 +84,12 @@ ook door de OCR-service gelezen; deze moet tegelijk opnieuw worden uitgerold
 als je de optionele OCR gebruikt.
 
 ## Voorbeelden
+
+![Istanbul met Blauwe Moskee, Hagia Sophia en Bosporusbrug](screenshots/preview-europe-istanbul.png)
+
+![Wenen en Bratislava delen de grond](screenshots/preview-europe-wenen.png)
+
+![Alpen van hoog, met steden, meren en windparken](screenshots/preview-europe-alpen.png)
 
 ![Parijs](screenshots/preview-europe-parijs.png)
 
