@@ -12,7 +12,7 @@ static func is_newer(raw: Variant) -> bool:
 	return typeof(v) in [TYPE_INT,TYPE_FLOAT] and is_finite(float(v)) and float(v)>VERSION
 
 static func clean(raw: Variant) -> Dictionary:
-	var data: Dictionary = {"version":VERSION,"best":{},"custom":[],"endpoint":"","mute":false}
+	var data: Dictionary = {"version":VERSION,"best":{},"records":{},"custom":[],"endpoint":"","mute":false}
 	if not raw is Dictionary:
 		return data
 	if raw.get("mute") is bool:
@@ -24,6 +24,15 @@ static func clean(raw: Variant) -> Dictionary:
 			var score: Variant=raw.best.get(key)
 			if typeof(score) in [TYPE_INT,TYPE_FLOAT] and is_finite(float(score)) and score>=0 and score<=3 and float(score)==floor(float(score)):
 				data.best[key]=int(score)
+	if raw.get("records") is Dictionary:
+		var count=0
+		for key in raw.records:
+			if count>=1000:
+				break
+			var value: Variant=raw.records[key]
+			if key is String and key.length()<=80 and typeof(value) in [TYPE_INT,TYPE_FLOAT] and is_finite(float(value)) and float(value)>0 and float(value)<604800:
+				data.records[key]=float(value)
+				count+=1
 	if raw.get("custom") is Array:
 		var valid_codes: Array=[]
 		var catalog=TopoCatalog.new()

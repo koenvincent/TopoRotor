@@ -15,10 +15,10 @@ var detail_label: Label
 var progress_label: Label
 var status_label: Label
 var region_select: OptionButton
-var clock_select: OptionButton
-var timed: bool = false
-var time_limit: float = 0.0
-var timed_out: bool = false
+enum GameMode { LEARN, PRACTICE, RECORDS }
+var game_mode: int = GameMode.LEARN
+var record_result: String = ""
+const MODE_NAMES = ["LEREN", "OEFENEN", "RECORDS"]
 var content_http: HTTPRequest
 var content_status: Label
 var content_url: LineEdit
@@ -60,7 +60,7 @@ var exam: bool = false
 var show_hints: bool = true
 var flight_time: float = 0.0
 var velocity: Vector2 = Vector2.ZERO
-var saved: Dictionary = {"best":{},"custom":[],"endpoint":"","mute":false}
+var saved: Dictionary = {"best":{},"records":{},"custom":[],"endpoint":"","mute":false}
 var rotor_audio: AudioStreamPlayer
 var feedback_audio: AudioStreamPlayer
 var paused_from: String = "menu"
@@ -213,15 +213,12 @@ func build_ui() -> void:
 	region_select.item_selected.connect(func(index): load_world("nl" if index==0 else "eu"))
 	col.add_child(region_select)
 	mode_select=OptionButton.new()
-	mode_select.add_item("Oefenen · kaartnamen en hints")
-	mode_select.add_item("Testvlucht · zonder kaartnamen")
+	mode_select.add_item("Leren · alle aanwijzingen")
+	mode_select.add_item("Oefenen · hulp als je dichtbij bent")
+	mode_select.add_item("Records · zonder hints, op snelheid")
+	mode_select.item_selected.connect(func(_index): update_best_label())
 	mode_select.custom_minimum_size.y=48
 	col.add_child(mode_select)
-	clock_select=OptionButton.new()
-	clock_select.add_item("Vrij vliegen · zonder tijdslimiet")
-	clock_select.add_item("Tijdrit · 90 seconden per locatie")
-	clock_select.custom_minimum_size.y=44
-	col.add_child(clock_select)
 	col.add_child(button("Online missies",open_online_content))
 	col.add_child(button("Start vliegmissie  →",func(): start_mission(),true))
 	col.add_child(button("Foto / eigen topo-opdrachten",open_photo_dialog))
@@ -334,30 +331,39 @@ func load_world(new_region: String) -> void:
 	update_best_label()
 
 func update_best_label() -> void:
-	var practice=clampi(int(saved.best.get(region+"_oefenen",0)),0,3)
-	var test=clampi(int(saved.best.get(region+"_test",0)),0,3)
-	if practice==0 and test==0:
-		best_label.text="Klaar voor vertrek, piloot?"
-		return
-	best_label.text="Beste: oefenen %s · test %s" % ["★".repeat(practice)+"☆".repeat(3-practice),"★".repeat(test)+"☆".repeat(3-test)]
+	var best=float(saved.get("records",{}).get(record_key(catalog.presets(region)),0.0))
+	best_label.text="Records · beste standaardroute: %.1f sec" % best if best>0 else "Records · zet je eerste tijd neer!"
+
+func record_key(places: Array) -> String:
+	var route: Array=[]
+	for place in places:
+		route.append([place.name,place.lat,place.lon])
+	route.sort_custom(func(a,b): return JSON.stringify(a)<JSON.stringify(b))
+	return region+"_"+JSON.stringify(route).sha256_text()
+
 
 func start_mission(custom: Array = [],as_custom: bool = true) -> void:
 	if is_instance_valid(summary):
 		summary.queue_free()
 	custom_mission=as_custom and not custom.is_empty()
 	mission=custom.duplicate() if not custom.is_empty() else catalog.presets(region)
-	mission.shuffle()
+	game_mode=mode_select.selected
+	if game_mode==GameMode.RECORDS:
+		# Same start and route order make repeat record attempts comparable.
+		mission.sort_custom(func(a,b): return a.name<b.name)
+	else:
+		mission.shuffle()
 	world.ensure_mission_markers(mission)
 	mission_index=0
 	completed=[]
 	mistakes=0
 	flight_time=0
-	timed=clock_select.selected==1
-	time_limit=90.0*mission.size()
-	timed_out=false
-	exam=mode_select.selected==1
-	show_hints=not exam
-	hint_button.text="Hints verbergen" if show_hints else "Hint / kaartnamen"
+	record_result=""
+	exam=game_mode==GameMode.RECORDS
+	show_hints=game_mode==GameMode.LEARN
+	hint_button.visible=game_mode==GameMode.LEARN
+	hint_button.text="Alle aanwijzingen aan"
+	hint_button.disabled=true
 	hints_used=false
 	show_overview=false
 	camera_level=0
@@ -379,11 +385,9 @@ func update_goal() -> void:
 		return
 	var p: Dictionary=mission[mission_index]
 	world.target.position=world.project(p.lon,p.lat)
-	world.target.visible=show_hints
-	world.set_hints(show_hints)
 	minimap.goal=world.target.position
-	minimap.show_goal=show_hints
-	progress_label.text="%s  ·  MISSIE %02d / %02d" % ["TESTVLUCHT" if exam else "OEFENVLUCHT",mission_index+1,mission.size()]
+	refresh_mode_hints()
+	progress_label.text="%s  ·  MISSIE %02d / %02d" % [MODE_NAMES[game_mode],mission_index+1,mission.size()]
 	title_label.text=("Vlieg boven " if p.kind=="land" else "Vlieg naar ")+p.name
 	status_label.text="Zoek %s. Druk op ‘Hier is het!’ als je er bent." % p.name
 	answer_cooldown=0.0
@@ -392,11 +396,6 @@ func _process(delta: float) -> void:
 	if state!="flight" or photo_open:
 		return
 	flight_time+=delta
-	if timed and flight_time>=time_limit:
-		flight_time=time_limit
-		timed_out=true
-		finish_mission()
-		return
 	answer_cooldown=max(0,answer_cooldown-delta)
 	keyboard=Vector2(float(Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT))-float(Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT)),float(Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN))-float(Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP)))
 	var direction=(keyboard+joystick.value).limit_length()
@@ -416,15 +415,15 @@ func _process(delta: float) -> void:
 	camera.position=camera.position.lerp(cam_goal,min(delta*3,1.0))
 	camera.look_at(Vector3(world.bounds.get_center().x,0,world.bounds.get_center().y) if show_overview else helicopter.position,Vector3.UP)
 	camera.size=lerp(camera.size,(max(world.bounds.size.x,world.bounds.size.y)*1.03 if show_overview else flight_zoom()),min(delta*3,1.0))
+	refresh_mode_hints()
 	minimap.aircraft=helicopter.position
 	minimap.refresh_navigation()
 	world.refresh_labels(helicopter.position,show_overview,camera.size)
 	if mission_index<mission.size():
 		var p: Dictionary=mission[mission_index]
 		var km=distance_km(p)
-		var nav="Afstand: %d km" % km if show_hints else "Gebruik de kustlijnen, rivieren en grenzen."
-		var clock_seconds=int(ceil(max(0.0,time_limit-flight_time))) if timed else int(flight_time)
-		detail_label.text="%s  ·  %s %02d:%02d  ·  %d gevonden" % [nav,"Nog" if timed else "Vliegtijd",clock_seconds/60,clock_seconds%60,completed.size()]
+		var nav="Afstand: %d km" % km if game_mode==GameMode.LEARN else "Je bent dichtbij!" if show_hints else "Zoek zelf de juiste plek."
+		detail_label.text="%s  ·  %s %.1f sec  ·  %d gevonden" % [nav,"Recordtijd" if exam else "Vliegtijd",flight_time+mistakes*10.0 if exam else flight_time,completed.size()]
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -479,16 +478,23 @@ func answer() -> void:
 		status_label.text="Nog niet op de juiste plek. Kijk nog eens naar de kaart."
 		answer_cooldown=1.0
 
-func toggle_hint() -> void:
-	if state!="flight":
+func refresh_mode_hints() -> void:
+	if mission_index>=mission.size():
 		return
-	show_hints=not show_hints
-	if show_hints:
-		hints_used=true
-	world.set_hints(show_hints)
+	var place: Dictionary=mission[mission_index]
+	var nearby=distance_km(place)<(18.0 if region=="nl" else 75.0)
+	if place.kind=="land" and world.has_country(place.code):
+		nearby=world.country_contains(place.code,helicopter.position)
+	show_hints=game_mode==GameMode.LEARN or (game_mode==GameMode.PRACTICE and nearby)
+	# Only learning reveals map names. Practice reveals just the nearby goal.
+	world.set_hints(game_mode==GameMode.LEARN)
 	world.target.visible=show_hints
 	minimap.show_goal=show_hints
-	hint_button.text="Hints verbergen" if show_hints else "Hint / kaartnamen"
+
+func toggle_hint() -> void:
+	# Keyboard shortcuts cannot bypass the selected mode's rules.
+	if state=="flight":
+		refresh_mode_hints()
 
 func flight_altitude() -> float:
 	return FLIGHT_ALTITUDES[camera_level] if region=="nl" else FLIGHT_ALTITUDES[camera_level]*.6
@@ -527,10 +533,22 @@ func finish_mission() -> void:
 	world.target.hide()
 	rotor_audio.stop()
 	var stars=3 if mistakes==0 and exam and not hints_used else 2 if mistakes<=2 else 1
-	if not custom_mission and not timed_out:
+	if not custom_mission:
 		var key=region+("_test" if exam else "_oefenen")
 		saved.best[key]=max(int(saved.best.get(key,0)),stars)
 		save_data()
+	if game_mode==GameMode.RECORDS:
+		var score=flight_time+mistakes*10.0
+		var key=record_key(mission)
+		if not saved.has("records"):
+			saved.records={}
+		var previous=float(saved.records.get(key,0.0))
+		if previous<=0 or score<previous:
+			saved.records[key]=score
+			record_result="Nieuw record: %.1f sec (+%d sec straf)!" % [score,mistakes*10]
+			save_data()
+		else:
+			record_result="Tijd %.1f sec · record %.1f sec" % [score,previous]
 	summary=PanelContainer.new()
 	summary.position=Vector2(340,110)
 	summary.size=Vector2(600,500)
@@ -539,11 +557,11 @@ func finish_mission() -> void:
 	var col=VBoxContainer.new()
 	col.add_theme_constant_override("separation",18)
 	summary.add_child(col)
-	col.add_child(label("TIJD IS OM" if timed_out else "MISSIE VOLTOOID",16,Color("a8c8bf")))
-	col.add_child(label("Probeer het nog eens, piloot!" if timed_out else "Goed gevlogen, piloot!",32,GOLD))
-	col.add_child(label("%d / %d gevonden" % [completed.size(),mission.size()] if timed_out else "★".repeat(stars)+"☆".repeat(3-stars),52,GOLD))
+	col.add_child(label("MISSIE VOLTOOID",16,Color("a8c8bf")))
+	col.add_child(label("Goed gevlogen, piloot!",32,GOLD))
+	col.add_child(label("★".repeat(stars)+"☆".repeat(3-stars),52,GOLD))
 	col.add_child(label("%d locaties gevonden · %d pogingen mis\nVliegtijd %02d:%02d" % [completed.size(),mistakes,int(flight_time)/60,int(flight_time)%60],21))
-	var tip=label("Drie sterren: een foutloze testvlucht zonder hints.",16,Color("b5cec4"))
+	var tip=label(record_result if exam else "Leren: alle hulp. Oefenen: doel verschijnt pas dichtbij.",16,Color("b5cec4"))
 	tip.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(tip)
 	col.add_child(button("Dezelfde locaties opnieuw",func(): start_mission(mission,custom_mission),true))
@@ -1149,17 +1167,42 @@ func smoke_test() -> void:
 	photo_open=false
 	return_menu()
 	feedback_audio.stop()
-	clock_select.select(1)
+	load_world("nl")
+	mode_select.select(GameMode.LEARN)
 	start_mission([catalog.lookup.amsterdam])
-	var scores_before_timeout=JSON.stringify(saved.best)
-	flight_time=time_limit-.01
-	_process(.02)
-	assert(state=="summary" and timed_out and completed.is_empty(),"Expired time trial ends without awarding completion")
-	assert(JSON.stringify(saved.best)==scores_before_timeout,"Timeout does not award stars")
-	clock_select.select(0)
+	assert(minimap.show_goal and world.target.visible,"Learning reveals the target")
+	mode_select.select(GameMode.PRACTICE)
 	start_mission([catalog.lookup.amsterdam])
-	_process(100.0)
-	assert(state=="flight" and not timed_out,"Untimed flight has no deadline")
+	assert(not minimap.show_goal and not world.target.visible,"Practice hides distant target")
+	toggle_hint()
+	assert(not minimap.show_goal,"H cannot reveal distant practice target")
+	helicopter.position=world.project(catalog.lookup.amsterdam.lon,catalog.lookup.amsterdam.lat)
+	refresh_mode_hints()
+	assert(minimap.show_goal and world.target.visible,"Practice reveals nearby target")
+	helicopter.position=world.project(SPAWN.x,SPAWN.y)
+	refresh_mode_hints()
+	assert(not minimap.show_goal,"Practice hides target again when leaving range")
+	mode_select.select(GameMode.RECORDS)
+	start_mission([catalog.lookup.amsterdam])
+	helicopter.position=world.project(catalog.lookup.amsterdam.lon,catalog.lookup.amsterdam.lat)
+	refresh_mode_hints()
+	toggle_hint()
+	assert(not minimap.show_goal and not world.target.visible,"Records never reveals target, even nearby or via H")
+	for marker in world.labels:
+		assert(not marker.visible,"Records hides all map names")
+	flight_time=12.5
+	mistakes=1
+	answer()
+	var race_key=record_key(mission)
+	assert(state=="summary" and saved.records[race_key]==22.5,"Record adds ten seconds per wrong answer")
+	start_mission([catalog.lookup.amsterdam])
+	helicopter.position=world.project(catalog.lookup.amsterdam.lon,catalog.lookup.amsterdam.lat)
+	flight_time=30
+	answer()
+	assert(saved.records[race_key]==22.5,"Slower attempt cannot overwrite record")
+	var cleaned=ProgressStore.clean({"records":{race_key:22.5,"bad":-1}})
+	assert(cleaned.records.get(race_key)==22.5 and not cleaned.records.has("bad"),"Record validation preserves only valid results")
+	mode_select.select(GameMode.LEARN)
 	return_menu()
 	open_online_content()
 	assert(apply_online_content(FileAccess.get_file_as_string("res://content/missions.json")),"Online lesson example validates")
