@@ -1,8 +1,14 @@
 # TopoRotor
 
-Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland en Europa vliegt om opdrachten van school te oefenen. Met 152 locaties, foto-import, eigen missielijsten, een leer-, oefen- en recordmodus, hints en lokaal bewaarde scores.
+Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland en Europa vliegt om opdrachten van school te oefenen. Met 169 locaties, foto-import, eigen missielijsten, een leer-, oefen- en recordmodus, hints en lokaal bewaarde scores.
 
-**Status: gereviewd prototype, broncodeversie 0.3.0.** De eerdere Android-APK 0.1.0 bevat de onderstaande reparaties niet. Deze repository bevat broncode en graphics; er is nog geen nieuwe 0.3-APK gebouwd of op een Android-toestel getest.
+## Download voor Android
+
+**[Download de Android-app (APK)](https://github.com/koenvincent/TopoRotor/releases)**
+
+Open de link op je Android-telefoon of -tablet en kies `TopoRotor.apk` bij de gewenste release. Open het gedownloade bestand om de app te installeren en geef je browser of bestandsapp zo nodig toestemming. Zie de [installatie-instructies](docs/ANDROID-BUILDS.md#download-op-tablet) voor meer uitleg.
+
+**Status: gereviewd prototype, broncodeversie 0.4.0.** De eerdere Android-APK 0.1.0 bevat de onderstaande reparaties niet. Deze repository bevat broncode en graphics; er is nog geen nieuwe 0.4-APK gebouwd of op een Android-toestel getest.
 
 ![TopoRotor vliegmissie](docs/screenshots/preview-flight.png)
 
@@ -11,7 +17,7 @@ Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland 
 Installeer **Godot 4.5.1 Standard** (geen .NET nodig), importeer `project.godot` en druk F5. Alle kaartdata, 3D-graphics, fonts en geluiden zijn meegeleverd. Er zijn geen online kaarttegels of game-accounts nodig.
 
 - Kies Nederland of Europa, Leren, Oefenen of Records en start een vliegmissie.
-- Sturen: joystick, WASD of pijltjes. Antwoorden: ‘Hier is het!’ of spatie. M: overzicht.
+- Sturen: joystick, WASD of pijltjes. Links/rechts draait de helikopter; omhoog/W vliegt vooruit en omlaag/S achteruit. De camera draait soepel mee, de overzichtskaart blijft noordgericht. Antwoorden: ‘Hier is het!’ of spatie. M: overzicht.
 - Je begint **laag en dichtbij**. Gebruik **Lager / Hoger**, het muiswiel of **Q / E** om tussen drie vlieghoogtes te wisselen. Lager toont meer detail; hoger geeft meer zicht op de omgeving. De overzichtskaart (M) blijft apart beschikbaar. Het spel controleert je positie; er is geen landingssimulatie.
 - ‘Pauze’, Escape of de Android-terugknop pauzeert de vlucht. Kies verder vliegen of stoppen naar de hangar. Naar de achtergrond schakelen pauzeert ook; hervatten doe je zelf. De terugknop sluit eerst een geopende foto.
 
@@ -22,6 +28,21 @@ Installeer **Godot 4.5.1 Standard** (geen .NET nodig), importeer `project.godot`
 ![Rotterdam met haven en brug](docs/screenshots/preview-rotterdam.png)
 
 De referentiestijl is vertaald naar eenvoudige hoekige 3D-modellen, warm licht en water met subtiele beweging. De detailbeelden hierboven gebruiken een vaste opnamecamera; de gewone vlucht heeft de instelbare vlieghoogtes. Modellen worden per kleur samengevoegd, zodat elk raam of elke boom geen afzonderlijke tekenaanroep nodig heeft. Alle graphics blijven lokaal en werken offline.
+
+Alle vijftig Nederlandse steden hebben nu een eigen wijkindeling, verschillende gevels, dakvormen, hoogtes en bebouwingsdichtheid. Historische centra, rivierstadjes, havens, groene woonsteden en moderne steden gebruiken verschillende typen bebouwing. Onder meer Arnhem/Nijmegen (verschillende boogbruggen), Leeuwarden (Oldehove), Groningen (Martinitorenmotief), Maastricht (Maasbrug en kerksilhouet), Den Haag (Hofvijver en hof) en Almere/Lelystad hebben een eigen centrum. De gebouwen, wegen en herkenningspunten blijven schematisch en uitvergroot; dit is geen nauwkeurig 3D-model van de echte stad. De beschikbare globale Natural Earth-bebouwde contouren begrenzen de gegenereerde woonwijken. Voor Sneek ontbreekt dekking en wordt een schematische indeling gebruikt.
+
+### Grenzen op landschap en minikaart
+
+- Op het landschap: neutrale lijnen, met een dikke landsgrens, gestreepte provinciegrenzen en fijnere gestippelde gemeentegrenzen. Gemeentegrenzen verschijnen bij laag/midden vliegen; op grote afstand blijft de kaart rustig. Gebieden op het landschap krijgen **geen provincie- of gemeentekleuren**.
+- Alleen de minikaart kleurt de twaalf provincies in. Landsgrenzen zijn goud, provinciegrenzen licht en gemeentegrenzen blauwgrijs. Een legenda verklaart de accenten.
+- **Tik of klik op de minikaart** om te wisselen tussen Nederland en de omgeving. De lokale weergave volgt de helikopter en maakt gemeentegrenzen beter leesbaar. Onderaan staat de huidige provincie.
+- De gebundelde Nederlandse grensdata omvat twaalf provincies en 342 gemeenten uit de officiële Kadaster/PDOK-laag van 2026. De lijnen zijn vereenvoudigd voor de game. Bronvermelding en licentie zijn ook bereikbaar via **Bronnen en licenties** in de hangar.
+
+![Verschillende stadsopbouw bij Arnhem en Nijmegen](docs/screenshots/preview-arnhem.png)
+
+![Moderne bebouwing in Almere](docs/screenshots/preview-almere.png)
+
+![Lokale minikaart met gekleurde provincies](docs/screenshots/preview-boundaries-local.png)
 
 De decoratieve akkers kunnen worden herbouwd met `uv run --with shapely python tools/build_nl_fields.py`. Shapely is alleen nodig voor dit ontwikkelhulpmiddel, niet voor het spel.
 
@@ -46,11 +67,11 @@ De ouder controleert altijd de herkende locaties. Een kopje zoals ‘Nederland�
 ## Geografie en leren
 
 - Landvragen controleren het landpolygoon op de kaart. Volgens de Nederlandse schooltopografie telt de Krim als Oekraïne, Noord-Cyprus als Cyprus en Åland als Finland.
-- Andere vragen controleren een referentiepunt met tolerantie per locatie: Nederlandse steden 6 km (ook in Europa-missies), Europese steden 25 km, Nederlandse eilanden 10 km, Europese eilanden 25 km, provincies 25 km, Nederlandse wateren 25 km en Europese wateren 40 km. Een positief, eindig `radius_km` kan dit overschrijven. Provincies, rivieren, eilanden en meren hebben **geen volledige gebieds-/rivierdetectie**. Provinciegrenzen ontbreken.
+- Andere vragen controleren een referentiepunt met tolerantie per locatie: Nederlandse steden 6 km (ook in Europa-missies), Europese steden 25 km, Nederlandse eilanden 10 km, Europese eilanden 25 km, provincies 25 km, Nederlandse wateren 25 km en Europese wateren 40 km. Een positief, eindig `radius_km` kan dit overschrijven. Provincies, rivieren, eilanden en meren hebben **geen volledige gebieds-/rivierdetectie**. De getekende provinciegrens verandert deze antwoordcontrole niet.
 - Natural Earth-contouren zijn grof, vooral rond delta's en kleine eilanden. Europa loopt circa 25°W–45°O en 34°–72°N.
 - Velden, bomen, gebouwen en bergen zijn gestileerde decoratie; geen echte hoogte- of landgebruiksdatabase.
 - Drie sterren: een foutloze Records-vlucht; twee als minstens 80% van de locaties in één keer goed is; anders één. De samenvatting toont welke locaties nog oefening vragen. Eigen missies overschrijven de presetsterren niet. Records bewaart daarnaast de beste tijd per route. Er is nog geen adaptief herhalen of langdurige voortgang per locatie.
-- Nederland heeft een kleurrijke miniatuurwereld met grachtenpanden in Amsterdam, de Domtoren, een Rotterdamse haven met vereenvoudigde Erasmusbrug, duinen en gemengd bos. Steden staan op hun cataloguscoördinaten; gebouwen en landschapselementen zijn uitvergroot en symbolisch. Dit is geen nauwkeurige stratenkaart. Europa behoudt de eenvoudigere decoratie.
+- Nederland heeft een kleurrijke miniatuurwereld met grachtenpanden in Amsterdam, de Domtoren, een Rotterdamse haven met vereenvoudigde Erasmusbrug, duinen en gemengd bos. Steden staan op hun cataloguscoördinaten; gebouwen en landschapselementen zijn uitvergroot en symbolisch. Dit is geen nauwkeurige stratenkaart. Europa heeft nu eigen stadswijken, regionale bouwstijlen, herkenningspunten, bossen en berggordels; zie [Europa](docs/EUROPA.md).
 - Het IJsselmeer/Markermeer is opnieuw uitgesneden met gedetailleerdere meergeometrie; Flevoland, Almere en Lelystad blijven op land.
 - Vliegen in Nederland is rustiger gemaakt zodat je tijd hebt om te zoeken. Kindertests en prestaties op echte Android-toestellen blijven nodig.
 
@@ -135,3 +156,14 @@ Met **Online missies** kun je lespakketten laden en offline bewaren zonder een
 nieuwe APK. Zie [online missies](docs/ONLINE-MISSIES.md) voor het JSON-formaat.
 Zie [APK-builds](docs/ANDROID-BUILDS.md) voor de automatische Android-build,
 vaste signing key en downloaden via GitHub Releases.
+
+## Europese routes en nieuwe graphics
+
+Europa biedt een kort rondje, **43 hoofdsteden** en **50 landen**. Alle routes
+werken met Leren, Oefenen en Records. Meer variatie door zuidelijke, noordelijke
+en continentale stadswijken, eigen herkenningspunten, bossen en besneeuwde
+bergketens. De helikopter heeft een stoerdere reddingsuitvoering en Europa
+heeft bewegend water en licht op het landschap.
+
+Zie [Europese wereld en data](docs/EUROPA.md) voor de kaartuitsnede, decoratie,
+brondata en de punttolerantie voor Vaticaanstad.
