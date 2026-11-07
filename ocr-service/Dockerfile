@@ -8,4 +8,6 @@ COPY ocr-service /app/ocr-service
 RUN useradd --create-home --uid 10001 toporotor
 USER 10001:10001
 EXPOSE 8080
-CMD ["uvicorn", "app:app", "--app-dir", "/app/ocr-service", "--host", "0.0.0.0", "--port", "8080", "--no-access-log", "--limit-concurrency", "4"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/ready', timeout=3)"]
+CMD ["uvicorn", "app:app", "--app-dir", "/app/ocr-service", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
