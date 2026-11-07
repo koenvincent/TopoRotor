@@ -10,6 +10,7 @@ var labels: Array[Label3D] = []
 var label_names: Dictionary = {}
 var marker_labels: Dictionary = {}
 var hints_enabled: bool = false
+var europe_scenery: EuropeScenery
 var dutch_scenery: DutchScenery
 var water_material: ShaderMaterial
 var target: Node3D
@@ -64,7 +65,7 @@ func build(new_region: String, catalog: TopoCatalog) -> void:
 	sea.mesh = box_mesh
 	sea.position = Vector3(bounds.get_center().x,-1.8,bounds.get_center().y)
 	sea.material_override = mat(Color("286375"),true)
-	if region == "nl":
+	if region in ["nl","eu"]:
 		water_material = ShaderMaterial.new()
 		water_material.shader = load("res://assets/shaders/water.gdshader")
 		sea.material_override = water_material
@@ -116,6 +117,9 @@ func build(new_region: String, catalog: TopoCatalog) -> void:
 		if region == "nl":
 			line(points,Color("c1c9ac"),.09,1.0)
 		line(points,Color("377f94"),.12,.65 if region=="nl" else .38)
+	if region=="eu":
+		europe_scenery=EuropeScenery.new(self)
+		europe_scenery.landscape()
 	rng.seed = 1206
 	for p in catalog.places:
 		if (region == "nl" and p.region != "nl") or (region == "eu" and p.region == "nl" and p.name != "Amsterdam") :
@@ -125,8 +129,7 @@ func build(new_region: String, catalog: TopoCatalog) -> void:
 		dutch_scenery.bake()
 		build_boundaries()
 	if region=="eu":
-		for p in [Vector2(7.5,46),Vector2(9.5,46.5),Vector2(11.5,47),Vector2(13,47),Vector2(1,42.7),Vector2(23,42.5),Vector2(8,60)]:
-			mountain(project(p.x,p.y))
+		europe_scenery.bake()
 	target = Node3D.new()
 	add_child(target)
 	var ring_mesh = TorusMesh.new()
@@ -160,9 +163,9 @@ func land_polygon(points: PackedVector2Array, color: Color, y: float) -> void:
 			st.add_vertex(Vector3(p.x,y,p.y))
 	var mesh = MeshInstance3D.new()
 	mesh.mesh = st.commit()
-	var land_mat = mat(color,region != "nl")
+	var land_mat = mat(color,false)
 	land_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mesh.material_override = water_material if region == "nl" and color == Color("377f94") else land_mat
+	mesh.material_override = water_material if color == Color("377f94") else land_mat
 	add_child(mesh)
 
 func line(points: PackedVector2Array,color: Color,y: float,width: float,closed: bool=false) -> void:
@@ -206,15 +209,7 @@ func make_city(pos: Vector3,place_name: String="") -> void:
 	if region == "nl":
 		dutch_scenery.town(pos,place_name)
 		return
-	for i in 4:
-		var mesh = MeshInstance3D.new()
-		var b = BoxMesh.new()
-		var h = rng.randf_range(.8,2.2)
-		b.size = Vector3(rng.randf_range(.6,1.1),h,rng.randf_range(.6,1.1))
-		mesh.mesh = b
-		mesh.material_override = mat(Color("e5dfc4") if i%2==0 else Color("d2ba91"))
-		mesh.position = pos+Vector3(rng.randf_range(-3,3),h/2,rng.randf_range(-3,3))
-		add_child(mesh)
+	europe_scenery.town(pos,place_name)
 
 func make_pad(pos: Vector3,place_name: String) -> void:
 	var node = Node3D.new()
@@ -355,7 +350,11 @@ func add_place_marker(p: Dictionary) -> void:
 	labels.append(label)
 
 func refresh_labels(focus: Vector3, overview: bool, view_size: float=46.0) -> void:
-	if region != "nl":
+	if region=="eu":
+		for marker in labels:
+			var distance=Vector2(marker.position.x-focus.x,marker.position.z-focus.z).length()
+			marker.pixel_size=.045*clampf(view_size/95.0,.6,2.0)
+			marker.visible=hints_enabled and (distance<60.0 or overview and marker.get_meta("kind","")=="land")
 		return
 	# Limit visible names spatially, without sorting every frame.
 	for marker in labels:

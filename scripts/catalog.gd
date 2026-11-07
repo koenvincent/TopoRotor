@@ -39,7 +39,15 @@ func parse_list(text: String) -> Dictionary:
 			unknown.append(name)
 	return {"found":found,"unknown":unknown}
 
-func presets(region: String) -> Array:
+func presets(region: String, scope: int=0) -> Array:
+	if region=="eu" and scope>0:
+		var all_places: Array=[]
+		for place in places:
+			if scope==1 and place.kind=="stad" and (place.region=="eu" or place.name=="Amsterdam"):
+				all_places.append(place)
+			elif scope==2 and place.kind=="land":
+				all_places.append(place)
+		return all_places
 	var names = ["Utrecht","Amsterdam","Den Haag","Rotterdam","Middelburg","Den Bosch","Maastricht","Arnhem","Zwolle","Assen","Groningen","Leeuwarden"] if region == "nl" else ["Brussel","Parijs","Londen","Madrid","Rome","Wenen","Berlijn","Warschau","Kopenhagen","Stockholm"]
 	var result: Array = []
 	for name in names:

@@ -1,6 +1,12 @@
 # TopoRotor
 
-Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland en Europa vliegt om opdrachten van school te oefenen. Met 152 locaties, foto-import, eigen missielijsten, een leer-, oefen- en recordmodus, hints en lokaal bewaarde scores.
+Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland en Europa vliegt om opdrachten van school te oefenen. Met 169 locaties, foto-import, eigen missielijsten, een leer-, oefen- en recordmodus, hints en lokaal bewaarde scores.
+
+## Download voor Android
+
+**[Download de Android-app (APK)](https://github.com/koenvincent/TopoRotor/releases)**
+
+Open de link op je Android-telefoon of -tablet en kies `TopoRotor.apk` bij de gewenste release. Open het gedownloade bestand om de app te installeren en geef je browser of bestandsapp zo nodig toestemming. Zie de [installatie-instructies](docs/ANDROID-BUILDS.md#download-op-tablet) voor meer uitleg.
 
 **Status: gereviewd prototype, broncodeversie 0.4.0.** De eerdere Android-APK 0.1.0 bevat de onderstaande reparaties niet. Deze repository bevat broncode en graphics; er is nog geen nieuwe 0.4-APK gebouwd of op een Android-toestel getest.
 
@@ -11,7 +17,7 @@ Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland 
 Installeer **Godot 4.5.1 Standard** (geen .NET nodig), importeer `project.godot` en druk F5. Alle kaartdata, 3D-graphics, fonts en geluiden zijn meegeleverd. Er zijn geen online kaarttegels of game-accounts nodig.
 
 - Kies Nederland of Europa, Leren, Oefenen of Records en start een vliegmissie.
-- Sturen: joystick, WASD of pijltjes. Antwoorden: ‘Hier is het!’ of spatie. M: overzicht.
+- Sturen: joystick, WASD of pijltjes. Links/rechts draait de helikopter; omhoog/W vliegt vooruit en omlaag/S achteruit. De camera draait soepel mee, de overzichtskaart blijft noordgericht. Antwoorden: ‘Hier is het!’ of spatie. M: overzicht.
 - Je begint **laag en dichtbij**. Gebruik **Lager / Hoger**, het muiswiel of **Q / E** om tussen drie vlieghoogtes te wisselen. Lager toont meer detail; hoger geeft meer zicht op de omgeving. De overzichtskaart (M) blijft apart beschikbaar. Het spel controleert je positie; er is geen landingssimulatie.
 - ‘Hangar’ beëindigt een vlucht. Naar de achtergrond schakelen pauzeert de vlucht; bij terugkeer gaat hij verder. De Android-terugknop sluit eerst de foto of vlucht.
 
@@ -65,7 +71,7 @@ De ouder controleert altijd de herkende locaties. Een kopje zoals ‘Nederland�
 - Natural Earth-contouren zijn grof, vooral rond delta's en kleine eilanden. Europa loopt circa 25°W–45°O en 34°–72°N.
 - Velden, bomen, gebouwen en bergen zijn gestileerde decoratie; geen echte hoogte- of landgebruiksdatabase.
 - Drie sterren: een foutloze Records-vlucht; twee bij maximaal twee fouten; anders één. Records bewaart daarnaast de beste tijd per route. Er is nog geen adaptief herhalen of langdurige voortgang per locatie.
-- Nederland heeft een kleurrijke miniatuurwereld met grachtenpanden in Amsterdam, de Domtoren, een Rotterdamse haven met vereenvoudigde Erasmusbrug, duinen en gemengd bos. Steden staan op hun cataloguscoördinaten; gebouwen en landschapselementen zijn uitvergroot en symbolisch. Dit is geen nauwkeurige stratenkaart. Europa behoudt de eenvoudigere decoratie.
+- Nederland heeft een kleurrijke miniatuurwereld met grachtenpanden in Amsterdam, de Domtoren, een Rotterdamse haven met vereenvoudigde Erasmusbrug, duinen en gemengd bos. Steden staan op hun cataloguscoördinaten; gebouwen en landschapselementen zijn uitvergroot en symbolisch. Dit is geen nauwkeurige stratenkaart. Europa heeft nu eigen stadswijken, regionale bouwstijlen, herkenningspunten, bossen en berggordels; zie [Europa](docs/EUROPA.md).
 - Het IJsselmeer/Markermeer is opnieuw uitgesneden met gedetailleerdere meergeometrie; Flevoland, Almere en Lelystad blijven op land.
 - Vliegen in Nederland is rustiger gemaakt zodat je tijd hebt om te zoeken. Kindertests en prestaties op echte Android-toestellen blijven nodig.
 
@@ -139,3 +145,14 @@ Met **Online missies** kun je lespakketten laden en offline bewaren zonder een
 nieuwe APK. Zie [online missies](docs/ONLINE-MISSIES.md) voor het JSON-formaat.
 Zie [APK-builds](docs/ANDROID-BUILDS.md) voor de automatische Android-build,
 vaste signing key en downloaden via GitHub Releases.
+
+## Europese routes en nieuwe graphics
+
+Europa biedt een kort rondje, **43 hoofdsteden** en **50 landen**. Alle routes
+werken met Leren, Oefenen en Records. Meer variatie door zuidelijke, noordelijke
+en continentale stadswijken, eigen herkenningspunten, bossen en besneeuwde
+bergketens. De helikopter heeft een stoerdere reddingsuitvoering en Europa
+heeft bewegend water en licht op het landschap.
+
+Zie [Europese wereld en data](docs/EUROPA.md) voor de kaartuitsnede, decoratie,
+brondata en de punttolerantie voor Vaticaanstad.
