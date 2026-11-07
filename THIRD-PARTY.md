@@ -6,7 +6,7 @@
 - **Tesseract OCR** (optionele service, direct via stdin/stdout aangeroepen): Apache 2.0. https://github.com/tesseract-ocr/tesseract
 - **FastAPI**: MIT; **Uvicorn**: BSD-3-Clause; **Pillow 13**: MIT-CMU. Dit zijn optionele pip-/Docker-afhankelijkheden, niet de Android-app. Hun distributies bevatten de betreffende licenties.
 
-Helikoptermesh, logo, stedendecoratie, landschapsdecoratie, rotor- en succesgeluid zijn voor dit project gemaakt. De catalogus bevat handmatig samengestelde WGS84-punten op stads-/gebiedsniveau; geen adresgeocoder.
+Helikoptermesh, logo, stedendecoratie, landschapsdecoratie, rotor- en succesgeluid zijn voor dit project gemaakt. De effectgeluiden (vuurwerk, zoemer, fanfare, whoosh) en effectshaders worden in eigen code gegenereerd (`scripts/sfx_bank.gd`, `assets/shaders/`). De catalogus bevat handmatig samengestelde WGS84-punten op stads-/gebiedsniveau; geen adresgeocoder.
 
 Nederlandse meeruitsnede bijgewerkt op 7 november 2026 uit **Natural Earth 1:10m lakes**, feature `IJsselmeer` (`ne_id=1159126631`), [bronbestand op revisie ace5fed0eaf3c6c03c951e75b439ba8fffbc218e](https://github.com/nvkelso/natural-earth-vector/blob/ace5fed0eaf3c6c03c951e75b439ba8fffbc218e/geojson/ne_10m_lakes.geojson). Public domain. Vereenvoudigd met behoud van polders/eilanden; ontwikkelimport via `tools/import_nl_lakes.py`.
 

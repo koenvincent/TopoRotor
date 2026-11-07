@@ -138,18 +138,10 @@ func build(new_region: String, catalog: TopoCatalog) -> void:
 		build_boundaries()
 	if region=="eu":
 		europe_scenery.bake()
+	# The goal's visuals (range circle, beacon) come from FlightFx; this node
+	# carries the position and the visibility decided by the game mode.
 	target = Node3D.new()
 	add_child(target)
-	var ring_mesh = TorusMesh.new()
-	ring_mesh.inner_radius = 3.8
-	ring_mesh.outer_radius = 4.2
-	ring_mesh.rings = 24
-	ring_mesh.ring_segments = 8
-	var ring = MeshInstance3D.new()
-	ring.mesh = ring_mesh
-	ring.material_override = mat(Color("ffe08b"),true)
-	ring.position.y = .35
-	target.add_child(ring)
 	target.visible = false
 
 func land_polygon(points: PackedVector2Array, color: Color, y: float) -> void:
