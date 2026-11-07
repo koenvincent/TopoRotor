@@ -56,20 +56,32 @@ Elke Nederlandse stad heeft 1 tot 3 echte herkenningspunten, samen 102 stuks, in
 
 ### Hangar, unlocks en ranglijst
 
-Via **Hangar en upgrades** richt je je eigen helikopter in. Een draaiend 3D-voorbeeld toont elke keuze direct; alles wordt in je voortgang bewaard.
+Via **Hangar en upgrades** richt je je eigen toestel in. Een draaiend 3D-voorbeeld toont elke keuze direct; alles wordt in je voortgang bewaard.
 
-- **Type:** vijf helikopters: Redder (reddingsheli), Libel (lesheli met glazen bol), Pijlstaart (staartrotor in een ring), Tandem (twee grote rotoren) en Vliegende kraan (hoge poten).
+- **Type:** vijftien toestellen in drie groepen. **Helikopters:** Redder, Libel, Molentje (gyrokopter), Pijlstaart, Tandem, Wesp (gevechtsheli), Vliegende kraan en Tegendraaier (twee rotoren boven elkaar). **Vliegtuigen:** Sportvlieger, Dubbeldekker, Watervliegtuig en Dakota. **Straaljagers:** Valk, Deltajager en Schaduw (stealth). Alle types vliegen even snel, zodat recordtijden eerlijk blijven; vliegtuigen en straaljagers hellen verder over in een bocht en klinken hoger. Een straaljager heeft altijd een naverbrander.
 - **Kleuren:** 25 kleurschema's en een eigen kleur per onderdeel: romp, staart, strepen, rotor en motor, onderstel, ramen en accessoires.
-- **Accessoires:** zoeklicht, antennes, wimpel, camerabol, reddingslier, drijvers, stompvleugels en een slingerend vrachtkrat.
+- **Accessoires:** 28 stuks, die op elk toestel passen: Nederlandse vlag, zoeklicht, stripogen, antennes, zwaailichten, wielen, wimpel, megafoon, camerabol, haaienbek, reddingslier, draaiende radarschotel, ballonnen, extra tanks, drijvers, knipperende lichtslinger, bagagekoffer, stompvleugels, ski's, rookspoor, meetneus, vrachtkrat, bluskorf, zonnepaneel, sleepbanner, vuurwerkpods, regenboogrook (medaille foutloos) en een gouden kroon (medaille huiswerk).
 - **Upgrades:** extra rotorbladen, een Turbo- en Superturbo-motor en een lichtpakket. De motor maakt je sneller bij Leren en Oefenen; bij Records vliegt iedereen even snel, zodat recordtijden eerlijk blijven.
 
-Elke voltooide missie levert **vliegpunten** op: meer bij Oefenen en Records, extra voor elke plek die in één keer goed is, voor sterren en voor een nieuw record. Punten worden nooit uitgegeven, dus je raakt niets meer kwijt. Bij vaste puntengrenzen gaan nieuwe types, kleuren, accessoires en upgrades open; je rang loopt mee van Leerling-piloot tot Radarkapitein. Een paar items vragen een medaille: je eerste record (wimpel en Recordzilver), een foutloze Records-vlucht (lichtpakket en Goud) of een missie in Europa (Europa-blauw). Het overzicht na een missie noemt wat er nieuw open is.
+Elke voltooide missie levert **vliegpunten** op: meer bij Oefenen en Records, extra voor elke plek die in één keer goed is, voor sterren en voor een nieuw record. Punten worden nooit uitgegeven, dus je raakt niets meer kwijt. Bij vaste puntengrenzen gaan nieuwe types, kleuren, accessoires en upgrades open; je rang loopt mee van Leerling-piloot tot Luchtvaartlegende (5000 punten). Een paar items vragen een medaille: je eerste record, een foutloze Records-vlucht, een missie in Europa, twee huiswerkopdrachten in één vlucht of alle zes huiswerkopdrachten gevlogen. Het overzicht na een missie noemt wat er nieuw open is.
+
+![Alle vijftien toestellen van bovenaf](docs/screenshots/preview-toestellen.png)
+
+![Een straaljager met regenboogrook](docs/screenshots/preview-flight-straaljager.png)
 
 De **Ranglijst** (naast je sterren in het menu en na elke missie) bewaart per route en spelmodus de tien beste vluchten op dit apparaat: Records op tijd inclusief straftijd, Leren en Oefenen op vliegpunten. Alle piloten op het apparaat staan op dezelfde lijst, dus broers, zussen en ouders spelen tegen elkaar.
 
 ### Piloten en je eigen karakter
 
-Met **Piloot: …** in het menu open je het pilotenscherm. Maak tot acht piloten aan, wissel met één tik of verwijder er een (met een tweede tik ter bevestiging). Elke piloot heeft eigen vliegpunten, medailles, hangar, kleuren, sterren en recordtijden; vluchten op de ranglijst blijven staan als een piloot weg is. Rechts stel je het karakter in: figuur (man of vrouw), huidskleur, kapsel en haarkleur, pet, vlieghelm, koptelefoon, muts of cowboyhoed, bril, zonnebril of vliegbril, snor, baard, sik of sproeten, en een outfit (vliegpak, bomberjack, hoodie, uniform of reddingsvest) in acht kleuren. **Verras me** kiest alles willekeurig. Je piloot staat ook naast de helikopter in de hangar. Oude voortgang wordt automatisch het profiel van de piloot die er al in stond.
+Met **Piloot: …** in het menu open je het pilotenscherm. Maak tot acht piloten aan, wissel met één tik of verwijder er een (met een tweede tik ter bevestiging). Elke piloot heeft eigen vliegpunten, medailles, hangar, kleuren, sterren en recordtijden; vluchten op de ranglijst blijven staan als een piloot weg is. Rechts stel je het karakter in: figuur, huidskleur, kapsel, haarkleur, iets op je hoofd, bril, gezicht, outfit, outfitkleur en een extra. De oude keuzes zijn vrij; 57 nieuwe verdien je met vliegpunten of medailles, net als in de hangar. Bijvoorbeeld kapsels (kuif, bob, afro, twee knotjes, hanenkam, dreadlocks, wilde manen), haarkleuren (wit, groen, paars, oranje, turquoise, goud), hoofddeksels (baret, bandana, propellerpet, brandweerhelm, piratenhoed, ruimtehelm, kroon), brillen (sterren, hartjes, skibril, ooglap), gezichten (blosjes, krulsnor, wangstrepen, witte baard), outfits (voetbalshirt, piratenshirt, brandweerpak, smoking, superheld met cape, ruimtepak, ridderharnas), tien extra outfitkleuren, drie fantasiehuidskleuren en extra's (sjaal, rugzak, landkaart, verrekijker, parachute, teddybeer, papegaai, vliegmedaille, vlag). Elk onderdeel toont hoeveel er al vrij is, en onderaan staat wat je als volgende verdient. Pijltjes slaan wat nog op slot zit over. **Verras me** kiest uit alles wat vrij is. Je piloot staat ook naast de helikopter in de hangar. Oude voortgang wordt automatisch het profiel van de piloot die er al in stond.
+
+![Een piloot met vrijgespeelde looks](docs/screenshots/preview-piloot-looks.png)
+
+### Huiswerk
+
+**Huiswerk** in het menu toont de zes opdrachten uit de TopoMaster-werkbladen, elk met een naam die zegt wat je leert: **Provincies en hoofdsteden** (overzichtskaart), **Rivieren, meren en dijken** (leerkaart), **De Randstad en Zeeland** (kaart A), **Het Noorden en de Wadden** (kaart B), **Het Oosten en de Veluwe** (kaart C) en **Het Zuiden: Brabant en Limburg** (kaart D). Tik er één aan, of meer tegelijk: die vlieg je dan als één missie, waarin plekken die op twee kaarten staan één keer voorkomen. Een opdracht die je hebt gevlogen krijgt een vinkje. De opdrachten staan ook in de routekiezer, als ‘Huiswerk · …’.
+
+![Huiswerk](docs/screenshots/preview-huiswerk.png)
 
 ### Thema's
 

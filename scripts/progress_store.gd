@@ -3,13 +3,13 @@ extends RefCounted
 
 # Schema version of progress.json. Files without a version field are treated as version 1.
 const VERSION := 1
-const KNOWN_KEYS = ["version","best","records","custom","endpoint","mute","paint","minimap_rotate","points","medals","garage","boards","pilot","look","profiles"]
+const KNOWN_KEYS = ["version","best","records","custom","endpoint","mute","paint","minimap_rotate","points","medals","garage","boards","pilot","look","profiles","homework"]
 const DEFAULT_PILOT = "Niek"
 # Pilot profiles on one device. Each keeps its own points, medals, hangar,
 # paint, stars, record times and pilot look; the leaderboard is shared, so
 # the pilots compete on the same lists. The active profile also lives at the
 # top level of the save, which is what the rest of the game reads.
-const PROFILE_KEYS = ["points","medals","garage","paint","best","records","look"]
+const PROFILE_KEYS = ["points","medals","garage","paint","best","records","look","homework"]
 const MAX_PROFILES = 8
 
 # True when the file was written by a newer app with a schema this build does not understand.
@@ -20,13 +20,13 @@ static func is_newer(raw: Variant) -> bool:
 	return typeof(v) in [TYPE_INT,TYPE_FLOAT] and is_finite(float(v)) and float(v)>VERSION
 
 static func defaults() -> Dictionary:
-	var data: Dictionary={"version":VERSION,"best":{},"records":{},"custom":[],"endpoint":"","mute":false,"points":0,"medals":[],"garage":HangarCatalog.DEFAULT_GARAGE.duplicate(true),"boards":{},"pilot":DEFAULT_PILOT,"look":PilotFigure.DEFAULT_LOOK.duplicate()}
+	var data: Dictionary={"version":VERSION,"best":{},"records":{},"custom":[],"endpoint":"","mute":false,"points":0,"medals":[],"garage":HangarCatalog.DEFAULT_GARAGE.duplicate(true),"boards":{},"pilot":DEFAULT_PILOT,"look":PilotFigure.DEFAULT_LOOK.duplicate(),"homework":[]}
 	data.profiles={DEFAULT_PILOT:snapshot(data)}
 	return data
 
 # Progress of one pilot, validated. Paint is only present when it was set.
 static func clean_profile(raw: Variant) -> Dictionary:
-	var data: Dictionary={"points":0,"medals":[],"garage":HangarCatalog.DEFAULT_GARAGE.duplicate(true),"best":{},"records":{},"look":PilotFigure.DEFAULT_LOOK.duplicate()}
+	var data: Dictionary={"points":0,"medals":[],"garage":HangarCatalog.DEFAULT_GARAGE.duplicate(true),"best":{},"records":{},"look":PilotFigure.DEFAULT_LOOK.duplicate(),"homework":[]}
 	if not raw is Dictionary:
 		return data
 	if raw.get("paint") is Dictionary:
@@ -44,6 +44,11 @@ static func clean_profile(raw: Variant) -> Dictionary:
 		for medal in raw.medals:
 			if medal is String and HangarCatalog.MEDALS.has(medal) and not medal in data.medals:
 				data.medals.append(medal)
+	# Ids of the homework assignments this pilot has flown, each once.
+	if raw.get("homework") is Array:
+		for id in raw.homework.slice(0,40):
+			if id is String and id.length()<=40 and not id.is_empty() and not id in data.homework:
+				data.homework.append(id)
 	data.garage=HangarCatalog.clean_garage(raw.get("garage"))
 	data.look=PilotFigure.clean(raw.get("look"))
 	if raw.get("best") is Dictionary:

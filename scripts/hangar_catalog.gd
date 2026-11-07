@@ -1,34 +1,68 @@
 class_name HangarCatalog
 extends RefCounted
 
-# Everything the hangar can offer: helicopter types, paint schemes,
-# accessories and upgrades, plus the rules for earning them. Items unlock at a
-# total of flight points (never spent, so nothing can be lost again) or with a
-# medal for a special achievement.
+# Everything the hangar can offer: helicopters, aeroplanes and jets, paint
+# schemes, accessories, upgrades and pilot looks, plus the rules for earning
+# them. Items unlock at a total of flight points (never spent, so nothing can
+# be lost again) or with a medal for a special achievement.
 
+# Every type flies the same way in the game, so records stay comparable; the
+# kind only changes the model, the banking and the engine sound.
+const KINDS = [["heli","HELIKOPTERS"],["vliegtuig","VLIEGTUIGEN"],["jet","STRAALJAGERS"]]
 const MODELS = [
-	{"id":"redder","name":"Redder","about":"Reddingsheli met twee turbines.","points":0},
-	{"id":"libel","name":"Libel","about":"Lichte lesheli met een glazen bol.","points":150},
-	{"id":"pijl","name":"Pijlstaart","about":"Snelle heli met een staartrotor in een ring.","points":450},
-	{"id":"tandem","name":"Tandem","about":"Vrachtheli met twee grote rotoren.","points":900},
-	{"id":"kraan","name":"Vliegende kraan","about":"Kraanheli op hoge poten.","points":1500},
+	{"id":"redder","kind":"heli","name":"Redder","about":"Reddingsheli met twee turbines.","points":0},
+	{"id":"libel","kind":"heli","name":"Libel","about":"Lichte lesheli met een glazen bol.","points":150},
+	{"id":"molen","kind":"heli","name":"Molentje","about":"Gyrokopter met een duwpropeller.","points":300},
+	{"id":"pijl","kind":"heli","name":"Pijlstaart","about":"Snelle heli met een staartrotor in een ring.","points":450},
+	{"id":"tandem","kind":"heli","name":"Tandem","about":"Vrachtheli met twee grote rotoren.","points":900,"preview":.72},
+	{"id":"wesp","kind":"heli","name":"Wesp","about":"Smalle gevechtsheli met twee cockpits.","points":1250},
+	{"id":"kraan","kind":"heli","name":"Vliegende kraan","about":"Kraanheli op hoge poten.","points":1500},
+	{"id":"coax","kind":"heli","name":"Tegendraaier","about":"Twee rotoren boven elkaar, geen staartrotor.","points":2000},
+	{"id":"sport","kind":"vliegtuig","name":"Sportvlieger","about":"Eenmotorig lesvliegtuig met hoge vleugel.","points":600,"preview":.8},
+	{"id":"dubbel","kind":"vliegtuig","name":"Dubbeldekker","about":"Oud stuntvliegtuig met twee vleugels.","points":1050,"preview":.8},
+	{"id":"zee","kind":"vliegtuig","name":"Watervliegtuig","about":"Landt op het water met twee drijvers.","points":1400,"preview":.78},
+	{"id":"dakota","kind":"vliegtuig","name":"Dakota","about":"Tweemotorig transportvliegtuig.","points":1800,"preview":.66},
+	{"id":"valk","kind":"jet","name":"Valk","about":"Wendbare straaljager met één motor.","points":2300,"preview":.8},
+	{"id":"delta","kind":"jet","name":"Deltajager","about":"Driehoekige vleugel en kleine neusvinnen.","points":3000,"preview":.8},
+	{"id":"schaduw","kind":"jet","name":"Schaduw","about":"Platte stealthjager met schuine staartvinnen.","points":4000,"preview":.78},
 ]
 
+# "kind" limits an accessory to some aircraft kinds; without it, it fits all.
 const ACCESSORIES = [
+	{"id":"vlag","name":"Nederlandse vlag","points":40},
 	{"id":"zoeklicht","name":"Zoeklicht","points":60},
+	{"id":"ogen","name":"Stripogen","points":80},
 	{"id":"antennes","name":"Antennes","points":100},
+	{"id":"zwaailichten","name":"Zwaailichten","points":140},
+	{"id":"wielen","name":"Wielen","points":180},
 	{"id":"wimpel","name":"Wimpel","medal":"eerste_record"},
+	{"id":"megafoon","name":"Megafoon","points":220},
 	{"id":"camera","name":"Camerabol","points":250},
+	{"id":"haaienbek","name":"Haaienbek","points":300},
 	{"id":"lier","name":"Reddingslier","points":350},
+	{"id":"radar","name":"Radarschotel","points":400},
+	{"id":"ballonnen","name":"Ballonnen","points":450},
+	{"id":"tanks","name":"Extra tanks","points":520},
 	{"id":"drijvers","name":"Drijvers","points":600},
+	{"id":"lichtslinger","name":"Lichtslinger","points":650},
+	{"id":"koffer","name":"Bagagekoffer","points":700},
 	{"id":"vleugels","name":"Stompvleugels","points":750},
+	{"id":"skis","name":"Ski's","points":800},
+	{"id":"rookspoor","name":"Rookspoor","points":900},
+	{"id":"meetneus","name":"Meetneus","points":1000},
 	{"id":"krat","name":"Vrachtkrat","points":1100},
+	{"id":"bluskorf","name":"Bluskorf","points":1200},
+	{"id":"zonnepaneel","name":"Zonnepaneel","points":1300},
+	{"id":"banner","name":"Sleepbanner","points":1600},
+	{"id":"vuurwerk","name":"Vuurwerkpods","points":2000},
+	{"id":"regenboog","name":"Regenboogrook","medal":"foutloos"},
+	{"id":"kroon","name":"Gouden kroon","medal":"huiswerk"},
 ]
 
 # Level 0 is always available. Motor only changes Leren and Oefenen, so
 # record times stay comparable.
 const UPGRADES = [
-	{"id":"rotor","name":"Rotor","about":"Extra rotorbladen.","levels":[{"name":"Standaard","points":0},{"name":"+1 blad","points":200},{"name":"+2 bladen","points":700}]},
+	{"id":"rotor","name":"Rotor en propeller","about":"Extra rotor- of propellerbladen. Een straaljager krijgt een langere vlam.","levels":[{"name":"Standaard","points":0},{"name":"+1 blad","points":200},{"name":"+2 bladen","points":700}]},
 	{"id":"motor","name":"Motor","about":"Sneller bij Leren en Oefenen. Bij Records vliegt iedereen even snel.","levels":[{"name":"Standaard","points":0},{"name":"Turbo","points":300},{"name":"Superturbo","points":1000}]},
 	{"id":"lights","name":"Lichtpakket","about":"Extra landingslampen en flitsers.","levels":[{"name":"Standaard","points":0},{"name":"Extra lampen","medal":"foutloos"}]},
 ]
@@ -37,9 +71,11 @@ const MEDALS = {
 	"eerste_record":"Eerste record gevlogen",
 	"foutloos":"Foutloze Records-vlucht (drie sterren)",
 	"europa":"Een missie in Europa voltooid",
+	"combi":"Twee huiswerkopdrachten in één vlucht",
+	"huiswerk":"Alle zes huiswerkopdrachten gevlogen",
 }
 
-const RANKS = [[0,"Leerling-piloot"],[150,"Piloot"],[450,"Gezagvoerder"],[900,"Reddingspiloot"],[1500,"Topopiloot"],[2500,"Radarkapitein"]]
+const RANKS = [[0,"Leerling-piloot"],[150,"Piloot"],[450,"Gezagvoerder"],[900,"Reddingspiloot"],[1500,"Topopiloot"],[2500,"Radarkapitein"],[3500,"Straaljagerpiloot"],[5000,"Luchtvaartlegende"]]
 
 # body, trim and dark are required; tail defaults to body, glass and accent to
 # the factory values. The first nine are the original free schemes.
@@ -115,7 +151,7 @@ static func rank(points: int) -> String:
 static func all_items() -> Array:
 	var items: Array=[]
 	for m in MODELS:
-		items.append(["heli "+m.name,m])
+		items.append([{"heli":"heli ","vliegtuig":"vliegtuig ","jet":"straaljager "}[m.kind]+m.name,m])
 	for a in ACCESSORIES:
 		items.append([a.name,a])
 	for u in UPGRADES:
@@ -123,7 +159,18 @@ static func all_items() -> Array:
 			items.append(["%s %s" % [u.name,u.levels[level].name],u.levels[level]])
 	for s in SCHEMES:
 		items.append(["kleur "+s.name,s])
+	# Pilot looks: an option with a third element is earned like a hangar item.
+	for entry in PilotFigure.ATTRIBUTES:
+		for option in entry[2]:
+			if option.size()>2:
+				items.append(["%s %s" % [String(entry[1]).to_lower(),option[1]],option[2]])
 	return items
+
+static func model_kind(id: String) -> String:
+	return String(find(MODELS,id).get("kind","heli"))
+
+static func models_of(kind: String) -> Array:
+	return MODELS.filter(func(m): return m.kind==kind)
 
 # The cheapest item still locked behind points, or {} when everything is earned.
 static func next_unlock(points: int) -> Dictionary:
