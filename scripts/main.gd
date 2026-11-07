@@ -469,14 +469,13 @@ func build_menu() -> void:
 	col.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	col.add_theme_constant_override("separation",8)
 	menu.add_child(col)
-	var brand=HBoxContainer.new()
-	brand.add_theme_constant_override("separation",12)
-	col.add_child(brand)
-	brand.add_child(title("TopoRotor",54))
+	# The badge sits above the title: "Nieks TopoRotor" next to the badge would
+	# be wider than the menu panel.
 	var badge=label("VLIEGAVONTUUR",12,INK)
 	badge.add_theme_stylebox_override("normal",chip(GOLD))
-	badge.size_flags_vertical=Control.SIZE_SHRINK_CENTER
-	brand.add_child(badge)
+	badge.size_flags_horizontal=Control.SIZE_SHRINK_BEGIN
+	col.add_child(badge)
+	col.add_child(title("Nieks TopoRotor",46))
 	var intro=label("Vlieg je topografie-huiswerk tegemoet.",18,Color("d9e6df"))
 	intro.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(intro)
@@ -684,7 +683,7 @@ func compact_card() -> StyleBoxFlat:
 
 func show_credits() -> AcceptDialog:
 	var dialog=AcceptDialog.new()
-	dialog.title="TopoRotor · bronnen en licenties"
+	dialog.title="Nieks TopoRotor · bronnen en licenties"
 	dialog.dialog_text="Grensgegevens: Kadaster NL / PDOK, Bestuurlijke Gebieden 2026.\nCC BY 4.0: https://creativecommons.org/licenses/by/4.0/\nBron: https://api.pdok.nl/kadaster/brk-bestuurlijke-gebieden/ogc/v1\nGebundeld op 7 november 2026; uitgesneden en vereenvoudigd.\n\nLand-, water- en stadscontouren: Natural Earth, public domain.\nDe buurten en gebouwen zijn gestileerde modellen, geen echte stratenkaart.\nEigen code en modellen: MIT. Godot: MIT. DejaVu: fontlicentie.\nZie THIRD-PARTY.md voor bronverwijzingen en overige licenties."
 	ui.add_child(dialog)
 	dialog.get_label().autowrap_mode=TextServer.AUTOWRAP_WORD_SMART

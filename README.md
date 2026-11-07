@@ -1,4 +1,4 @@
-# TopoRotor
+# Nieks TopoRotor
 
 Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland en Europa vliegt om opdrachten van school te oefenen. Met 169 locaties, foto-import, eigen missielijsten, een leer-, oefen- en recordmodus, hints en lokaal bewaarde scores.
 
