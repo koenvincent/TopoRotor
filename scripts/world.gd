@@ -16,6 +16,13 @@ var water_material: ShaderMaterial
 var target: Node3D
 var helipads: Dictionary = {}
 var country_polys: Dictionary = {}
+# Full outlines of the neighbouring countries for the 2D maps (minimap and
+# locator card). The Dutch map file clips them to its own extent, which reads
+# as grey slabs once a map shows more than that rectangle.
+var neighbour_polys: Dictionary = {}
+const NEIGHBOURS = ["BEL","DEU","FRA","LUX","GBR"]
+# Muted land for the neighbours so the Netherlands stays the brightest shape.
+const NEIGHBOUR_LAND = Color("838e76")
 var lake_polys: Array = []
 var boundary_data: Dictionary = {}
 var boundary_paths: Dictionary = {}
@@ -80,6 +87,9 @@ func build(new_region: String, catalog: TopoCatalog) -> void:
 	add_child(sea)
 	var colors = [Color("94b68a"),Color("a7b998"),Color("b3bea0"),Color("8eae87"),Color("bac4a1")] if region == "nl" else [Color("84b494"),Color("93b89b"),Color("a4c2a0"),Color("7da98d"),Color("b0c59f")]
 	var index = 0
+	# Segments shared by two countries are land borders: they get no beach
+	# or shelf line (those read as white and cyan stripes inside the land).
+	var file_borders = shared_segments(map_data.countries)
 	for country in map_data.countries:
 		var rings: Array = []
 		for polygon in country.polygons:
@@ -90,11 +100,14 @@ func build(new_region: String, catalog: TopoCatalog) -> void:
 			if ring.size()>3 and ring[0].is_equal_approx(ring[-1]):
 				ring.remove_at(ring.size()-1)
 			rings.append(ring)
-			land_polygon(ring,colors[index%colors.size()],0)
+			var neighbour = region == "nl" and country.code != "NLD"
+			land_polygon(ring,NEIGHBOUR_LAND if neighbour else colors[index%colors.size()],0)
 			if region == "nl":
-				coast_wall(ring)
-				line(ring,Color("517f7e"),-.67,2.2,true)
-				line(ring,Color("d9d7ad"),.045,.32,true)
+				# Edges along the map file's rectangle are a cut, not a coast.
+				for run in coast_runs(ring,func(a,b): return not (on_bounds_edge(a) and on_bounds_edge(b)) and not file_borders.has(segment_key(a,b))):
+					coast_wall(run,false)
+					line(run,Color("517f7e"),-.67,2.2)
+					line(run,Color("d9d7ad"),.045,.32)
 			else:
 				line(ring,Color("d7d5a9"),.16,.55,true)
 		var code = COUNTRY_MERGE.get(country.code,country.code)
@@ -104,6 +117,10 @@ func build(new_region: String, catalog: TopoCatalog) -> void:
 		index += 1
 	if region == "eu":
 		reassign_crimea()
+	neighbour_polys = {}
+	if region == "nl":
+		load_neighbours()
+		build_neighbour_land()
 	if region == "nl":
 		dutch_scenery=DutchScenery.new(self)
 		dutch_scenery.landscape()
@@ -186,12 +203,14 @@ func line(points: PackedVector2Array,color: Color,y: float,width: float,closed: 
 	mesh.material_override = m
 	add_child(mesh)
 
-func coast_wall(points: PackedVector2Array) -> void:
+func coast_wall(points: PackedVector2Array,closed: bool=true,top: float=0.0) -> void:
+	if points.size()<2:
+		return
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in points.size():
-		var a = Vector3(points[i].x,0,points[i].y)
-		var b = Vector3(points[(i+1)%points.size()].x,0,points[(i+1)%points.size()].y)
+	for i in (points.size() if closed else points.size()-1):
+		var a = Vector3(points[i].x,top,points[i].y)
+		var b = Vector3(points[(i+1)%points.size()].x,top,points[(i+1)%points.size()].y)
 		var down = Vector3(0,-.95,0)
 		for v in [a,b,b+down,a,b+down,a+down]:
 			st.add_vertex(v)
@@ -258,6 +277,120 @@ func reassign_crimea() -> void:
 				country_polys["UKR"] = []
 			country_polys["UKR"].append(rus[i])
 			rus.remove_at(i)
+
+# Neighbour outlines from the Europe map, in this map's projection. 2D only:
+# the 3D landscape keeps the detailed, clipped Dutch map.
+func load_neighbours() -> void:
+	var europe = JSON.parse_string(FileAccess.get_file_as_string("res://data/map_eu.json"))
+	if not europe is Dictionary or not europe.get("countries") is Array:
+		return
+	for country in europe.countries:
+		if not country.get("code","") in NEIGHBOURS:
+			continue
+		var rings: Array = []
+		for polygon in country.polygons:
+			var ring = PackedVector2Array()
+			for p in polygon:
+				var v = project(p[0],p[1])
+				ring.append(Vector2(v.x,v.z))
+			if ring.size()>3 and ring[0].is_equal_approx(ring[-1]):
+				ring.remove_at(ring.size()-1)
+			if ring.size()>2:
+				rings.append(ring)
+		neighbour_polys[country.code] = rings
+
+# Germany, Belgium, France and the UK continue past the Dutch map file, so
+# the hangar and overview no longer end in a grey rectangle. They sit just
+# next to the clipped (more detailed) shapes, which cover the rectangle;
+# coasts are only added outside it so no cliff is drawn twice.
+func build_neighbour_land() -> void:
+	var frame=PackedVector2Array([bounds.position,Vector2(bounds.end.x,bounds.position.y),bounds.end,Vector2(bounds.position.x,bounds.end.y)])
+	var borders: Dictionary = {}
+	for code in neighbour_polys:
+		for ring in neighbour_polys[code]:
+			for i in ring.size():
+				var key=segment_key(ring[i],ring[(i+1)%ring.size()])
+				borders[key]=borders.get(key,0)+1
+	for code in neighbour_polys:
+		for ring in neighbour_polys[code]:
+			# Only the part outside the map rectangle: inside it the clipped,
+			# detailed shapes already exist, so both meet at ground level.
+			for part in Geometry2D.clip_polygons(ring,frame):
+				if not Geometry2D.is_polygon_clockwise(part) or part.size()<3:
+					land_polygon(part,NEIGHBOUR_LAND,0)
+			for run in coast_runs(ring,func(a,b): return not bounds.has_point(a) and not bounds.has_point(b) and borders.get(segment_key(a,b),0)<2):
+				# The Europe file does not tell coast from land border, so no
+				# cliff or beach line here: on a border they show as light
+				# stripes. The shallow-water band only shows along the sea.
+				line(run,Color("517f7e"),-.67,2.2)
+
+func segment_key(a: Vector2,b: Vector2) -> String:
+	var first="%.2f,%.2f" % [a.x,a.y]
+	var second="%.2f,%.2f" % [b.x,b.y]
+	return first+"|"+second if first<second else second+"|"+first
+
+# Projected segments that occur in more than one ring of a map file.
+func shared_segments(countries: Array) -> Dictionary:
+	var count: Dictionary = {}
+	for country in countries:
+		for polygon in country.polygons:
+			var ring=PackedVector2Array()
+			for point in polygon:
+				var v=project(point[0],point[1])
+				ring.append(Vector2(v.x,v.z))
+			for i in ring.size():
+				var key=segment_key(ring[i],ring[(i+1)%ring.size()])
+				count[key]=count.get(key,0)+1
+	var shared: Dictionary = {}
+	for key in count:
+		if count[key]>1:
+			shared[key]=true
+	return shared
+
+# The map file was simplified after clipping, so cut edges wander up to
+# ~0.01 degrees from the rectangle; one world unit covers that.
+func on_bounds_edge(p: Vector2) -> bool:
+	var e=1.0
+	return absf(p.x-bounds.position.x)<e or absf(p.x-bounds.end.x)<e or absf(p.y-bounds.position.y)<e or absf(p.y-bounds.end.y)<e
+
+# Open runs of a closed ring made of the segments that keep(a, b) accepts.
+func coast_runs(ring: PackedVector2Array,keep: Callable) -> Array:
+	var n=ring.size()
+	var runs: Array=[]
+	if n<2:
+		return runs
+	var start=-1
+	for i in n:
+		if not keep.call(ring[i],ring[(i+1)%n]):
+			start=i
+			break
+	if start<0:
+		var closed=ring.duplicate()
+		closed.append(ring[0])
+		return [closed]
+	var current=PackedVector2Array()
+	for k in n:
+		var i=(start+1+k)%n
+		var a=ring[i]
+		var b=ring[(i+1)%n]
+		if keep.call(a,b):
+			if current.is_empty():
+				current.append(a)
+			current.append(b)
+		elif current.size()>1:
+			runs.append(current)
+			current=PackedVector2Array()
+		else:
+			current=PackedVector2Array()
+	if current.size()>1:
+		runs.append(current)
+	return runs
+
+func country_at(position3: Vector3) -> String:
+	for code in country_polys:
+		if country_contains(code,position3):
+			return code
+	return ""
 
 func has_country(code: String) -> bool:
 	return not country_polys.get(code,[]).is_empty()
@@ -356,14 +489,16 @@ func refresh_labels(focus: Vector3, overview: bool, view_size: float=46.0) -> vo
 		for marker in labels:
 			var distance=Vector2(marker.position.x-focus.x,marker.position.z-focus.z).length()
 			marker.pixel_size=.045*clampf(view_size/95.0,.6,2.0)
-			marker.visible=hints_enabled and (distance<60.0 or overview and marker.get_meta("kind","")=="land")
+			marker.visible=hints_enabled and (distance<60.0*maxf(1.0,view_size/95.0) or overview and marker.get_meta("kind","")=="land")
 		return
-	# Limit visible names spatially, without sorting every frame.
+	# Limit visible names spatially, without sorting every frame. Higher
+	# flight sees further, so names reach further too.
+	var reach=maxf(1.0,view_size/46.0)
 	for marker in labels:
 		marker.pixel_size=.035*clampf(view_size/46.0,.4,2.0)
 		var distance = Vector2(marker.position.x-focus.x,marker.position.z-focus.z).length()
 		var is_city = marker.get_meta("kind","") in ["stad","eigen punt"]
-		marker.visible = hints_enabled and (distance < (32.0 if is_city else 18.0))
+		marker.visible = hints_enabled and (distance < (32.0 if is_city else 18.0)*reach)
 		if overview:
 			marker.visible = hints_enabled and is_city and marker.text in ["Amsterdam","Rotterdam","Den Haag","Utrecht","Arnhem","Groningen","Maastricht","Leeuwarden","Zwolle"]
 
@@ -439,7 +574,8 @@ func boundary_mesh(paths: Array,width: float,height: float,dash: float,gap: floa
 
 func set_boundary_detail(view_size: float) -> void:
 	if is_instance_valid(municipal_boundary):
-		municipal_boundary.visible=view_size<=40.0
+		# Laag and Midden (zoom 38 and 64) show municipalities, Hoog stays calm.
+		municipal_boundary.visible=view_size<=70.0
 
 func province_at(position3: Vector3) -> String:
 	var point=Vector2(position3.x,position3.z)
