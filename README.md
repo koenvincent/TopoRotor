@@ -4,6 +4,8 @@ Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland 
 
 ## Download voor Android
 
+Het app-icoon toont een reddingsheli die vanaf een gouden speld in Brabant over Nederland vliegt, binnen een kompasring. Android krijgt ook een adaptief icoon (voor- en achtergrondlaag). Bouw ze opnieuw met `python3 tools/build_icon.py`.
+
 **[Download de Android-app (APK)](https://github.com/koenvincent/TopoRotor/releases)**
 
 Open de link op je Android-telefoon of -tablet en kies `TopoRotor.apk` bij de gewenste release. Open het gedownloade bestand om de app te installeren en geef je browser of bestandsapp zo nodig toestemming. Zie de [installatie-instructies](docs/ANDROID-BUILDS.md#download-op-tablet) voor meer uitleg.
@@ -16,7 +18,7 @@ Open de link op je Android-telefoon of -tablet en kies `TopoRotor.apk` bij de ge
 
 Installeer **Godot 4.5.1 Standard** (geen .NET nodig), importeer `project.godot` en druk F5. Alle kaartdata, 3D-graphics, fonts en geluiden zijn meegeleverd. Er zijn geen online kaarttegels of game-accounts nodig.
 
-- Kies Nederland of Europa, Leren, Oefenen of Records en start een vliegmissie.
+- Kies Nederland of Europa en tik een van de drie spelmodus-kaarten aan (Leren, Oefenen of Records) en start een vliegmissie. In de hangar cirkelt je eigen helikopter boven de kaart, en Duitsland, België en Frankrijk lopen nu door tot aan de rand in plaats van te stoppen bij een grijze rechthoek.
 - Sturen: joystick, WASD of pijltjes. Links/rechts draait de helikopter; omhoog/W vliegt vooruit en omlaag/S achteruit. De camera hangt achter de heli en draait soepel mee; achteruit gaat langzamer. Het kompas bovenin toont je koers. De overzichtskaart blijft noordgericht. De minikaart staat standaard ook noord boven; de heli is daarop een felrode stip met een witte punt die de neus aanwijst; met **Kompas: draait mee** (in de hangar, onder de vlieghoogtes of met toets **R**) draaien kompasrand en minikaart mee, zodat je neus altijd omhoog wijst. **Kompas: vast** houdt noord boven. De keuze wordt bewaard. N, O, Z en W staan op de rand van de minikaart en draaien mee. Menu en HUD schalen mee met brede telefoons en 4:3-tablets zonder scrollbalk. Antwoorden: ‘Hier is het!’ of spatie. M: overzicht.
 - Je begint **laag en dichtbij**. Gebruik **Lager / Hoger**, het muiswiel of **Q / E** om tussen drie vlieghoogtes te wisselen. Lager toont meer detail; hoger geeft meer zicht op de omgeving. Elke hoogte ligt een stap hoger dan in eerdere versies: Laag is het oude Midden, Midden het oude Hoog, en Hoog laat een groot deel van het land zien. Gemeentegrenzen verschijnen bij Laag en Midden. De overzichtskaart (M) blijft apart beschikbaar. Het spel controleert je positie; er is geen landingssimulatie.
 - **Doelzone:** zodra de modus het doel toont (Leren altijd, Oefenen als je dichtbij bent) zie je een gouden cirkel op de grond. Dat is precies het bereik waarin ‘Hier is het!’ goed telt; de minikaart toont dezelfde ring. Een lichtzuil en een zwevende markering wijzen het doel aan. Ben je binnen de cirkel, dan wordt alles groen, pulseert de antwoordknop en meldt de statusbalk ‘In de zone!’. Records toont nooit een zone. Landen worden op hun grens gecontroleerd en krijgen daarom wel de lichtzuil maar geen cirkel.

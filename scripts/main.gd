@@ -13,6 +13,11 @@ var minimap: FlightMinimap
 var locator: LocatorCard
 var map_turn_button: Button
 var menu_turn_button: Button
+var mode_tiles: Array = []
+var menu_shade: TextureRect
+var menu_flight_time: float = 0.0
+const MENU_HELI_SCALE = 8.5
+const FLIGHT_HELI_SCALE = 1.25
 var title_label: Label
 var detail_label: Label
 var progress_label: Label
@@ -460,7 +465,27 @@ func title(text: String,size_px: int) -> Label:
 	return l
 
 func build_menu() -> void:
+	# A soft dark gradient behind the panel keeps it readable over the bright
+	# map and gives the hangar some depth.
+	menu_shade=TextureRect.new()
+	var shade=GradientTexture2D.new()
+	var ramp=Gradient.new()
+	ramp.set_color(0,Color(.01,.05,.07,.82))
+	ramp.set_color(1,Color(.01,.05,.07,0))
+	ramp.add_point(.45,Color(.01,.05,.07,.45))
+	shade.gradient=ramp
+	shade.fill_from=Vector2(0,.5)
+	shade.fill_to=Vector2(1,.5)
+	shade.width=256
+	shade.height=4
+	menu_shade.texture=shade
+	menu_shade.stretch_mode=TextureRect.STRETCH_SCALE
+	menu_shade.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+	menu_shade.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	ui.add_child(menu_shade)
+	pin(menu_shade,Rect2(0,0,.62,1),0,0,0,0)
 	menu=PanelContainer.new()
+	menu.visibility_changed.connect(func(): menu_shade.visible=menu.visible)
 	var menu_style=card(PANEL,26)
 	menu_style.content_margin_left=28
 	menu_style.content_margin_right=28
@@ -478,22 +503,36 @@ func build_menu() -> void:
 	col.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	col.add_theme_constant_override("separation",8)
 	menu.add_child(col)
-	# The badge sits above the title: "Nieks TopoRotor" next to the badge would
-	# be wider than the menu panel.
-	var badge=label("VLIEGAVONTUUR",12,INK)
+	# Brand row: the app icon as logo, then badge, name and tagline.
+	var brand=HBoxContainer.new()
+	brand.add_theme_constant_override("separation",14)
+	col.add_child(brand)
+	var logo=TextureRect.new()
+	logo.texture=load("res://assets/icon.svg")
+	logo.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+	logo.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	logo.custom_minimum_size=Vector2(84,84)
+	logo.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+	brand.add_child(logo)
+	var brand_text=VBoxContainer.new()
+	brand_text.add_theme_constant_override("separation",0)
+	brand_text.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	brand.add_child(brand_text)
+	var badge=label("VLIEGAVONTUUR",11,INK)
 	badge.add_theme_stylebox_override("normal",chip(GOLD))
 	badge.size_flags_horizontal=Control.SIZE_SHRINK_BEGIN
-	col.add_child(badge)
-	col.add_child(title("Nieks TopoRotor",46))
-	var intro=label("Vlieg je topografie-huiswerk tegemoet.",18,Color("d9e6df"))
+	brand_text.add_child(badge)
+	var name_label=title("Nieks TopoRotor",38)
+	name_label.add_theme_color_override("font_shadow_color",Color(0,0,0,.45))
+	name_label.add_theme_constant_override("shadow_offset_y",3)
+	brand_text.add_child(name_label)
+	var intro=label("Vlieg je topografie-huiswerk tegemoet.",15,Color("cfe0d9"))
 	intro.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-	col.add_child(intro)
-	var bar=ColorRect.new()
-	bar.color=GOLD
-	bar.custom_minimum_size=Vector2(64,4)
-	bar.size_flags_horizontal=Control.SIZE_SHRINK_BEGIN
-	col.add_child(bar)
-	col.add_child(spacer(4))
+	brand_text.add_child(intro)
+	var rule=ColorRect.new()
+	rule.color=Color(1,.76,.36,.35)
+	rule.custom_minimum_size=Vector2(0,1)
+	col.add_child(rule)
 	col.add_child(kicker("VLUCHTGEBIED"))
 	region_select=OptionButton.new()
 	region_select.add_item("Nederland · steden en wateren")
@@ -523,9 +562,19 @@ func build_menu() -> void:
 	mode_select.add_item("Oefenen · hulp als je dichtbij bent")
 	mode_select.add_item("Records · zonder hints, op snelheid")
 	mode_select.item_selected.connect(func(_index): update_best_label())
-	mode_select.custom_minimum_size.y=50
+	# The dropdown stays the model for the chosen mode; three tiles drive it.
+	mode_select.visible=false
 	col.add_child(mode_select)
-	col.add_child(spacer(4))
+	var tiles=HBoxContainer.new()
+	tiles.add_theme_constant_override("separation",8)
+	col.add_child(tiles)
+	for entry in [["Leren","alle hints","Leren: namen, afstand en richting in beeld."],["Oefenen","hulp dichtbij","Oefenen: richting en hulp als je dichtbij bent."],["Records","op snelheid","Records: geen hints, op tijd en elke fout kost 10 seconden."]]:
+		var tile=MenuWidgets.ModeTile.new(mode_tiles.size(),entry[0],entry[1],entry[2])
+		tile.pressed.connect(choose_mode.bind(mode_tiles.size()))
+		tiles.add_child(tile)
+		mode_tiles.append(tile)
+	refresh_mode_tiles()
+	col.add_child(spacer(2))
 	var start=button("START VLIEGMISSIE  →",func(): start_mission(),true)
 	start.custom_minimum_size.y=64
 	start.add_theme_font_size_override("font_size",23)
@@ -563,14 +612,14 @@ func build_menu() -> void:
 	style_button(paint_button,false,12,12)
 	footer.add_child(paint_button)
 	mute_button=button("Geluid: uit" if saved.mute else "Geluid: aan",toggle_sound)
-	mute_button.custom_minimum_size=Vector2(140,40)
+	mute_button.custom_minimum_size=Vector2(0,40)
 	mute_button.add_theme_font_size_override("font_size",15)
 	style_button(mute_button,false,12,12)
 	footer.add_child(mute_button)
 	# Same setting as the button under the flight heights: compass and minimap
 	# stay north-up, or turn with the helicopter.
 	menu_turn_button=button("",toggle_compass_mode)
-	menu_turn_button.custom_minimum_size=Vector2(190,40)
+	menu_turn_button.custom_minimum_size=Vector2(0,40)
 	menu_turn_button.add_theme_font_size_override("font_size",15)
 	menu_turn_button.tooltip_text="Vast: noord blijft boven. Draait mee: je neus wijst altijd omhoog. Geldt voor kompasrand en minikaart; tijdens het vliegen ook met toets R."
 	style_button(menu_turn_button,false,12,12)
@@ -581,6 +630,15 @@ func build_menu() -> void:
 	credits.size_flags_horizontal=Control.SIZE_SHRINK_END
 	credits.pressed.connect(show_credits)
 	col.add_child(credits)
+
+func choose_mode(index: int) -> void:
+	mode_select.select(index)
+	update_best_label()
+	sfx.play("whoosh",1.3)
+
+func refresh_mode_tiles() -> void:
+	for tile in mode_tiles:
+		tile.selected=tile.mode_index==mode_select.selected
 
 func chip(color: Color) -> StyleBoxFlat:
 	var s=style(color,8)
@@ -718,10 +776,11 @@ func toggle_compass_mode() -> void:
 	minimap.toggle_rotation()
 
 func update_map_turn_button() -> void:
-	var text="Kompas: draait mee" if minimap.rotate_with_heading else "Kompas: vast"
-	for control in [map_turn_button,menu_turn_button]:
-		if is_instance_valid(control):
-			control.text=text
+	if is_instance_valid(map_turn_button):
+		map_turn_button.text="Kompas: draait mee" if minimap.rotate_with_heading else "Kompas: vast"
+	# Shorter in the hangar so the footer keeps the menu at its usual width.
+	if is_instance_valid(menu_turn_button):
+		menu_turn_button.text="Kompas: draait" if minimap.rotate_with_heading else "Kompas: vast"
 
 func minimap_rotation_changed(rotating: bool) -> void:
 	update_map_turn_button()
@@ -776,6 +835,7 @@ func selected_presets() -> Array:
 	return catalog.presets(region,maxi(picker.selected,0) if is_instance_valid(picker) else 0)
 
 func update_best_label() -> void:
+	refresh_mode_tiles()
 	var best=float(saved.get("records",{}).get(record_key(selected_presets()),0.0))
 	var practice=clampi(int(saved.best.get(region+"_oefenen",0)),0,3)
 	var records=clampi(int(saved.best.get(region+"_test",0)),0,3)
@@ -830,6 +890,7 @@ func start_mission(custom: Array = [],as_custom: bool = true) -> void:
 	hud.show()
 	velocity=Vector2.ZERO
 	joystick.reset()
+	helicopter.scale=Vector3.ONE*FLIGHT_HELI_SCALE
 	helicopter.position=world.project(SPAWN.x,SPAWN.y)+Vector3(0,flight_altitude(),0)
 	heading=0.0
 	helicopter.rotation.y=heading
@@ -866,6 +927,8 @@ func update_goal() -> void:
 func _process(delta: float) -> void:
 	if paint_open and is_instance_valid(preview_heli):
 		preview_heli.rotate_y(delta*.6)
+	if state=="menu":
+		fly_menu_helicopter(delta)
 	if state!="flight" or photo_open:
 		return
 	flight_time+=delta
@@ -1266,6 +1329,20 @@ func return_menu() -> void:
 	world.set_hints(false)
 	position_menu_camera()
 	update_best_label()
+
+# In the hangar a big helicopter circles over the map, banking into the turn.
+func fly_menu_helicopter(delta: float) -> void:
+	menu_flight_time+=delta
+	var nl=region=="nl"
+	var centre=world.bounds.get_center()+(Vector2(20,-10) if nl else Vector2(40,-30))
+	var radius=58.0 if nl else 130.0
+	var angle=menu_flight_time*.16
+	var at=centre+Vector2(cos(angle),sin(angle))*radius
+	var direction=Vector2(-sin(angle),cos(angle))
+	helicopter.scale=Vector3.ONE*MENU_HELI_SCALE*(1.0 if nl else 1.9)
+	helicopter.position=Vector3(at.x,(60.0 if nl else 110.0)+sin(menu_flight_time*.7)*3.0,at.y)
+	helicopter.rotation.y=atan2(-direction.x,-direction.y)
+	helicopter.lean(Vector2(.55,1.0),delta)
 
 func position_menu_camera() -> void:
 	var center=world.bounds.get_center()
@@ -2050,7 +2127,7 @@ func smoke_test() -> void:
 	assert(is_equal_approx(minimap.map_layer.rotation,PI*.5),"Map layer turns as a node")
 	assert(minimap.screen_direction(CompassWords.map_direction(0)).distance_to(Vector2.RIGHT)<.01,"Flying west, north lies to the right on a heading-up map")
 	assert(minimap.screen_point(minimap.view_center).distance_to(minimap.circle_center())<1.0,"Turning country map turns around its centre")
-	assert(saved.minimap_rotate==true and map_turn_button.text.contains("draait mee") and menu_turn_button.text==map_turn_button.text,"Rotation choice is stored and shown in flight and in the hangar")
+	assert(saved.minimap_rotate==true and map_turn_button.text.contains("draait mee") and menu_turn_button.text=="Kompas: draait","Rotation choice is stored and shown in flight and in the hangar")
 	_unhandled_key_input(key_event(KEY_R))
 	minimap.refresh_navigation()
 	assert(not minimap.rotate_with_heading and is_zero_approx(minimap.map_layer.rotation) and saved.minimap_rotate==false,"R returns to a still north-up map")
@@ -2360,6 +2437,13 @@ func smoke_test() -> void:
 	var screen=get_viewport().get_visible_rect()
 	assert(screen.encloses(menu.get_global_rect()),"Hangar menu fits on screen without scrolling")
 	assert(menu.get_global_rect().size.y<=screen.size.y-32,"Hangar menu keeps a margin")
+	print("Hangar menu height: %d px" % menu.get_global_rect().size.y)
+	assert(mode_tiles.size()==3 and mode_tiles[mode_select.selected].selected,"Mode tiles mirror the chosen mode")
+	choose_mode(GameMode.PRACTICE)
+	assert(mode_select.selected==GameMode.PRACTICE and mode_tiles[1].selected and not mode_tiles[0].selected,"Tapping a tile picks the mode")
+	choose_mode(GameMode.LEARN)
+	fly_menu_helicopter(1.0)
+	assert(helicopter.scale.x>FLIGHT_HELI_SCALE*2,"The hangar shows a big circling helicopter")
 	print("SMOKE TEST PASSED: parsing, coordinates, land boundaries, flight scoring, custom missions")
 	await get_tree().process_frame
 	get_tree().quit()
