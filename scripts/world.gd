@@ -16,6 +16,11 @@ var water_material: ShaderMaterial
 var target: Node3D
 var helipads: Dictionary = {}
 var country_polys: Dictionary = {}
+# Full outlines of the neighbouring countries for the 2D maps (minimap and
+# locator card). The Dutch map file clips them to its own extent, which reads
+# as grey slabs once a map shows more than that rectangle.
+var neighbour_polys: Dictionary = {}
+const NEIGHBOURS = ["BEL","DEU","FRA","LUX","GBR"]
 var lake_polys: Array = []
 var boundary_data: Dictionary = {}
 var boundary_paths: Dictionary = {}
@@ -104,6 +109,9 @@ func build(new_region: String, catalog: TopoCatalog) -> void:
 		index += 1
 	if region == "eu":
 		reassign_crimea()
+	neighbour_polys = {}
+	if region == "nl":
+		load_neighbours()
 	if region == "nl":
 		dutch_scenery=DutchScenery.new(self)
 		dutch_scenery.landscape()
@@ -259,6 +267,33 @@ func reassign_crimea() -> void:
 			country_polys["UKR"].append(rus[i])
 			rus.remove_at(i)
 
+# Neighbour outlines from the Europe map, in this map's projection. 2D only:
+# the 3D landscape keeps the detailed, clipped Dutch map.
+func load_neighbours() -> void:
+	var europe = JSON.parse_string(FileAccess.get_file_as_string("res://data/map_eu.json"))
+	if not europe is Dictionary or not europe.get("countries") is Array:
+		return
+	for country in europe.countries:
+		if not country.get("code","") in NEIGHBOURS:
+			continue
+		var rings: Array = []
+		for polygon in country.polygons:
+			var ring = PackedVector2Array()
+			for p in polygon:
+				var v = project(p[0],p[1])
+				ring.append(Vector2(v.x,v.z))
+			if ring.size()>3 and ring[0].is_equal_approx(ring[-1]):
+				ring.remove_at(ring.size()-1)
+			if ring.size()>2:
+				rings.append(ring)
+		neighbour_polys[country.code] = rings
+
+func country_at(position3: Vector3) -> String:
+	for code in country_polys:
+		if country_contains(code,position3):
+			return code
+	return ""
+
 func has_country(code: String) -> bool:
 	return not country_polys.get(code,[]).is_empty()
 
@@ -356,14 +391,16 @@ func refresh_labels(focus: Vector3, overview: bool, view_size: float=46.0) -> vo
 		for marker in labels:
 			var distance=Vector2(marker.position.x-focus.x,marker.position.z-focus.z).length()
 			marker.pixel_size=.045*clampf(view_size/95.0,.6,2.0)
-			marker.visible=hints_enabled and (distance<60.0 or overview and marker.get_meta("kind","")=="land")
+			marker.visible=hints_enabled and (distance<60.0*maxf(1.0,view_size/95.0) or overview and marker.get_meta("kind","")=="land")
 		return
-	# Limit visible names spatially, without sorting every frame.
+	# Limit visible names spatially, without sorting every frame. Higher
+	# flight sees further, so names reach further too.
+	var reach=maxf(1.0,view_size/46.0)
 	for marker in labels:
 		marker.pixel_size=.035*clampf(view_size/46.0,.4,2.0)
 		var distance = Vector2(marker.position.x-focus.x,marker.position.z-focus.z).length()
 		var is_city = marker.get_meta("kind","") in ["stad","eigen punt"]
-		marker.visible = hints_enabled and (distance < (32.0 if is_city else 18.0))
+		marker.visible = hints_enabled and (distance < (32.0 if is_city else 18.0)*reach)
 		if overview:
 			marker.visible = hints_enabled and is_city and marker.text in ["Amsterdam","Rotterdam","Den Haag","Utrecht","Arnhem","Groningen","Maastricht","Leeuwarden","Zwolle"]
 
@@ -439,7 +476,8 @@ func boundary_mesh(paths: Array,width: float,height: float,dash: float,gap: floa
 
 func set_boundary_detail(view_size: float) -> void:
 	if is_instance_valid(municipal_boundary):
-		municipal_boundary.visible=view_size<=40.0
+		# Laag and Midden (zoom 38 and 64) show municipalities, Hoog stays calm.
+		municipal_boundary.visible=view_size<=70.0
 
 func province_at(position3: Vector3) -> String:
 	var point=Vector2(position3.x,position3.z)
