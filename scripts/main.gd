@@ -127,7 +127,27 @@ var board_mode: int = GameMode.RECORDS
 var board_title: Label
 var board_rows: VBoxContainer
 var board_tabs: Array = []
-var pilot_edit: LineEdit
+var board_pilot: Label
+var board_switch: Button
+# Pilot screen: profiles on this device and the look of the active pilot.
+var pilots_panel: PanelContainer
+var pilots_backdrop: ColorRect
+var pilots_open: bool = false
+var pilot_list: VBoxContainer
+var pilot_new: LineEdit
+var pilot_status: Label
+var pilot_delete: Button
+var pilot_delete_armed: bool = false
+var pilot_values: Dictionary = {}
+var pilot_preview: PilotFigure
+var hangar_pilot: PilotFigure
+var pilot_button: Button
+# Theme screen: provinces, rivers, areas, islands and the European themes.
+var themes_panel: PanelContainer
+var themes_backdrop: ColorRect
+var themes_open: bool = false
+var themes_grid: GridContainer
+var themes_mode: Label
 var board_button: Button
 var last_board_key: String = ""
 var last_board_place: int = 0
@@ -581,6 +601,8 @@ func build_ui() -> void:
 	build_photo_dialog()
 	build_paint_shop()
 	build_leaderboard()
+	build_themes()
+	build_pilots()
 
 # Big game titles: Lilita One with a thick outline and an extruded, warm
 # shadow that reads like a sticker on any map colour.
@@ -764,13 +786,18 @@ func build_menu() -> void:
 	var extras=HBoxContainer.new()
 	extras.add_theme_constant_override("separation",10)
 	col.add_child(extras)
-	for entry in [["Online missies",open_online_content],["Foto / eigen lijst",open_photo_dialog]]:
+	# Thema's: provinces, rivers, areas and islands as their own practice.
+	for entry in [["Thema's",open_themes,"Themes"],["Online missies",open_online_content,"Online"],["Foto / eigen lijst",open_photo_dialog,"Photo"]]:
 		var b=button(entry[0],entry[1])
+		b.name=entry[2]
 		b.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 		b.size_flags_stretch_ratio=1.0
 		b.custom_minimum_size=Vector2(0,46)
 		b.add_theme_font_size_override("font_size",16)
 		b.clip_text=true
+		if entry[2]=="Themes":
+			b.tooltip_text="Oefen alleen provincies, rivieren en water, gebieden of eilanden."
+			tone_button(b,"teal",14,16)
 		extras.add_child(b)
 	var stats=PanelContainer.new()
 	var stats_style=style(Color(0,0,0,.28),14,Color(GOLD,.35),2)
@@ -794,6 +821,16 @@ func build_menu() -> void:
 	best_label.name="Best"
 	best_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	stats_col.add_child(best_label)
+	# The active pilot: opens profiles and the character editor.
+	pilot_button=button("",open_pilots)
+	pilot_button.name="Pilots"
+	pilot_button.custom_minimum_size=Vector2(120,40)
+	pilot_button.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+	pilot_button.add_theme_font_size_override("font_size",15)
+	pilot_button.clip_text=true
+	pilot_button.tooltip_text="Kies je piloot, maak een nieuwe aan of verander hoe je piloot eruitziet."
+	tone_button(pilot_button,"ghost",12,10)
+	stats_row.add_child(pilot_button)
 	board_button=button("Ranglijst",open_leaderboard)
 	board_button.custom_minimum_size=Vector2(0,40)
 	board_button.size_flags_vertical=Control.SIZE_SHRINK_CENTER
@@ -1065,6 +1102,8 @@ func update_best_label() -> void:
 	stars_label.text="OEFENEN %s     RECORDS %s" % ["★".repeat(practice)+"☆".repeat(3-practice),"★".repeat(records)+"☆".repeat(3-records)]
 	best_label.text="Beste tijd op deze route: %.1f sec" % best if best>0 else "Zet je eerste recordtijd neer!"
 	rank_label.text="%s · %d PUNTEN" % [HangarCatalog.rank(points()).to_upper(),points()]
+	if is_instance_valid(pilot_button):
+		pilot_button.text="Piloot: "+pilot_name()
 	sync_menu_controls()
 
 func record_key(places: Array) -> String:
@@ -1144,12 +1183,13 @@ func update_goal() -> void:
 	minimap.goal=world.target.position
 	# The ring is the real answer range. Countries are checked against their
 	# outline instead, so they get the beacon without a circle.
-	minimap.goal_radius=zone_radius_units(p) if p.kind!="land" else 0.0
-	fx.set_zone(zone_radius_units(p),p.kind!="land",cos(deg_to_rad(world.origin.y))/maxf(cos(deg_to_rad(p.lat)),.1))
+	var area=area_goal(p)
+	minimap.goal_radius=zone_radius_units(p) if not area else 0.0
+	fx.set_zone(zone_radius_units(p),not area,cos(deg_to_rad(world.origin.y))/maxf(cos(deg_to_rad(p.lat)),.1))
 	in_zone=false
 	refresh_mode_hints()
 	progress_label.text="%s  ·  MISSIE %02d / %02d" % [MODE_NAMES[game_mode],mission_index+1,mission.size()]
-	title_label.text=("Vlieg boven " if p.kind=="land" else "Vlieg naar ")+p.name
+	title_label.text="Vlieg boven de provincie "+LocatorCard.display_name(p) if p.kind=="provincie" else ("Vlieg boven " if area else "Vlieg naar ")+p.name
 	status_label.text="Zoek %s. Druk op ‘Hier is het!’ als je er bent." % p.name
 	if mission_index==0:
 		status_label.text+=" Omhoog vliegt vooruit, links/rechts draait de heli."
@@ -1159,6 +1199,9 @@ func update_goal() -> void:
 func _process(delta: float) -> void:
 	if paint_open and is_instance_valid(preview_heli):
 		preview_heli.rotate_y(delta*.6)
+	# The pilot turns slowly to and fro so the back and the face are both seen.
+	if pilots_open and is_instance_valid(pilot_preview):
+		pilot_preview.rotation.y=PI+sin(Time.get_ticks_msec()*.0008)*.9
 	if state=="menu":
 		fly_menu_helicopter(delta)
 	if state!="flight" or photo_open:
@@ -1202,7 +1245,7 @@ func flight_speed() -> float:
 func build_radar_places() -> Array:
 	var kinds: Array=[]
 	for p in mission:
-		if p.kind!="land" and not p.kind in kinds:
+		if not area_goal(p) and not p.kind in kinds:
 			kinds.append(p.kind)
 	var places: Array=[]
 	var names: Dictionary={}
@@ -1236,7 +1279,7 @@ func update_radar() -> void:
 		status_label.text="Buiten de radarcirkel. Zoek verder."
 	radar_active=now_active
 
-const RADAR_WORDS = {"stad":"een stad","water":"een water","eiland":"een eiland","provincie":"een provincie","eigen punt":"een eigen punt"}
+const RADAR_WORDS = {"stad":"een stad","water":"een water","eiland":"een eiland","gebied":"een gebied","plek":"een plek","provincie":"een provincie","eigen punt":"een eigen punt"}
 
 # Zone highlight, downwash, rotor pitch and the answer button pulse. The
 # "in de zone" state is only computed while the mode already shows the goal,
@@ -1333,6 +1376,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func go_back(allow_quit: bool) -> void:
 	if board_open:
 		close_leaderboard()
+	elif pilots_open:
+		close_pilots()
+	elif themes_open:
+		close_themes()
 	elif paint_open:
 		close_paint_shop()
 	elif photo_open:
@@ -1392,10 +1439,17 @@ func units_per_km() -> float:
 func zone_radius_units(place: Dictionary) -> float:
 	return hit_radius_km(place)*units_per_km()
 
+# Countries, and Dutch provinces on the Dutch map, count anywhere inside
+# their outline instead of within a circle around one point.
+func area_goal(p: Dictionary) -> bool:
+	return p.kind=="land" or (is_instance_valid(world) and world.has_province(p))
+
 # Countries without usable map geometry fall back to the catalog reference point.
 func at_goal(p: Dictionary) -> bool:
 	if p.kind=="land":
 		return world.country_contains(p.code,helicopter.position) if world.has_country(p.code) else distance_km(p)<(1.5 if p.code=="VAT" else 25)
+	if world.has_province(p):
+		return world.province_contains(p,helicopter.position)
 	return distance_km(p)<hit_radius_km(p)
 
 func answer() -> void:
@@ -1409,7 +1463,7 @@ func answer() -> void:
 		if not saved.mute:
 			feedback_audio.play()
 		sfx.play("chime")
-		fx.celebrate(world.target.position if p.kind!="land" else ground)
+		fx.celebrate(world.target.position if not area_goal(p) else ground)
 		var first_try=goal_mistakes==0
 		streak=streak+1 if first_try else 0
 		mission_index+=1
@@ -1453,6 +1507,8 @@ func refresh_mode_hints() -> void:
 	var nearby=distance_km(place)<maxf(18.0 if region=="nl" else 75.0,hit_radius_km(place))
 	if place.kind=="land":
 		nearby=world.country_contains(place.code,helicopter.position) if world.has_country(place.code) else distance_km(place)<5.0
+	elif world.has_province(place):
+		nearby=world.province_contains(place,helicopter.position)
 	show_hints=game_mode==GameMode.LEARN or (game_mode==GameMode.PRACTICE and nearby)
 	# Only learning reveals map names. Practice reveals just the nearby goal.
 	world.set_hints(game_mode==GameMode.LEARN)
@@ -1764,6 +1820,7 @@ func save_data() -> void:
 	if is_capture_mode or progress_readonly:
 		return
 	saved.version=ProgressStore.VERSION
+	sync_profile()
 	var f=FileAccess.open(save_path+".tmp",FileAccess.WRITE)
 	if f==null:
 		push_warning("Kon de voortgang niet opslaan.")
@@ -1851,6 +1908,13 @@ func build_paint_shop() -> void:
 	viewport.add_child(preview_heli)
 	preview_heli.rotation.y=-.7
 	preview_heli.position.y=2.4
+	# The active pilot waits on the pad, in front of the helicopter.
+	hangar_pilot=PilotFigure.new()
+	hangar_pilot.name="HangarPilot"
+	viewport.add_child(hangar_pilot)
+	hangar_pilot.position=Vector3(2.5,.05,2.1)
+	hangar_pilot.rotation.y=PI-.45
+	hangar_pilot.configure(pilot_look())
 	hangar_rank=label("",19,GOLD)
 	left.add_child(hangar_rank)
 	hangar_progress=ProgressBar.new()
@@ -2030,6 +2094,16 @@ func pilot_name() -> String:
 	var name=Leaderboard.clean_pilot(saved.get("pilot",""))
 	return name if not name.is_empty() else ProgressStore.DEFAULT_PILOT
 
+# The active pilot's progress is kept in its profile as well, so switching
+# and saving never lose a flight.
+func sync_profile() -> void:
+	if not saved.has("profiles"):
+		saved.profiles={}
+	saved.profiles[pilot_name()]=ProgressStore.snapshot(saved)
+
+func pilot_look() -> Dictionary:
+	return PilotFigure.clean(saved.get("look",{}))
+
 func is_unlocked(item: Dictionary) -> bool:
 	return HangarCatalog.unlocked(item,points(),medals())
 
@@ -2138,11 +2212,12 @@ func set_paint(paint: Dictionary,sync_pickers: bool=true) -> void:
 			paint_pickers[part].color=Color(saved.paint[part])
 
 func open_paint_shop() -> void:
-	if state!="menu":
+	if state!="menu" or pilots_open or themes_open or board_open:
 		return
 	paint_open=true
 	apply_garage()
 	set_paint(current_paint())
+	hangar_pilot.configure(pilot_look())
 	paint_backdrop.show()
 	paint_panel.show()
 
@@ -2205,15 +2280,22 @@ func build_leaderboard() -> void:
 	var pilot_row=HBoxContainer.new()
 	pilot_row.add_theme_constant_override("separation",10)
 	col.add_child(pilot_row)
-	pilot_row.add_child(label("Naam piloot",16,MUTED))
-	pilot_edit=LineEdit.new()
-	pilot_edit.max_length=Leaderboard.MAX_PILOT
-	pilot_edit.custom_minimum_size=Vector2(0,44)
-	pilot_edit.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-	pilot_edit.placeholder_text=ProgressStore.DEFAULT_PILOT
-	pilot_edit.tooltip_text="Nieuwe vluchten komen onder deze naam op de lijst."
-	pilot_edit.text_changed.connect(func(text: String): saved.pilot=Leaderboard.clean_pilot(text))
-	pilot_row.add_child(pilot_edit)
+	# All pilots on this device share the lists; new flights go under the
+	# active pilot. Switching opens the pilot screen.
+	board_pilot=label("",16,MUTED)
+	board_pilot.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	board_pilot.clip_text=true
+	pilot_row.add_child(board_pilot)
+	var switch_button=button("Andere piloot",func():
+		close_leaderboard()
+		open_pilots())
+	switch_button.name="BoardPilots"
+	switch_button.custom_minimum_size=Vector2(170,44)
+	switch_button.add_theme_font_size_override("font_size",15)
+	tone_button(switch_button,"teal",12,10)
+	switch_button.visible=false
+	board_switch=switch_button
+	pilot_row.add_child(switch_button)
 	col.add_child(button("Sluiten",close_leaderboard,true))
 
 func board_route() -> Array:
@@ -2226,10 +2308,12 @@ func board_route_title() -> String:
 	return picker.get_item_text(maxi(picker.selected,0))
 
 func open_leaderboard() -> void:
-	if state not in ["menu","summary"] or paint_open:
+	if state not in ["menu","summary"] or paint_open or pilots_open or themes_open:
 		return
 	board_open=true
-	pilot_edit.text=pilot_name()
+	board_pilot.text="Je vliegt als %s. Alle piloten op dit apparaat staan op dezelfde lijst." % pilot_name()
+	# Switching pilots is a hangar action, not something for mid-summary.
+	board_switch.visible=state=="menu"
 	board_backdrop.move_to_front()
 	board_panel.move_to_front()
 	board_backdrop.show()
@@ -2240,10 +2324,8 @@ func close_leaderboard() -> void:
 	if not board_open:
 		return
 	board_open=false
-	pilot_edit.release_focus()
 	board_panel.hide()
 	board_backdrop.hide()
-	saved.pilot=pilot_name()
 	save_data()
 
 func show_board(mode: int) -> void:
@@ -2284,6 +2366,359 @@ func show_board(mode: int) -> void:
 		detail.custom_minimum_size.x=150
 		detail.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
 		line.add_child(detail)
+
+func overlay_panel(width: float) -> Array:
+	var backdrop=ColorRect.new()
+	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	backdrop.color=Color(.015,.055,.07,.78)
+	ui.add_child(backdrop)
+	backdrop.hide()
+	var panel=PanelContainer.new()
+	var panel_style=card(PANEL_SOLID,26)
+	for side in [SIDE_LEFT,SIDE_RIGHT]:
+		panel_style.set_content_margin(side,26)
+	for side in [SIDE_TOP,SIDE_BOTTOM]:
+		panel_style.set_content_margin(side,18)
+	panel.add_theme_stylebox_override("panel",panel_style)
+	ui.add_child(panel)
+	center_panel(panel,Vector2(width,0))
+	panel.hide()
+	var col=VBoxContainer.new()
+	col.add_theme_constant_override("separation",10)
+	panel.add_child(col)
+	return [backdrop,panel,col]
+
+# Thema's: one kind of topography per mission, such as only the provinces.
+# A theme is a route in the picker, so best times and the leaderboard work
+# the same as for the worksheet routes.
+const THEME_ABOUT = {
+	"Provincies":"Vlieg boven de provincie: overal binnen de provinciegrens telt.",
+	"Rivieren en water":"Rivieren, zeearmen, meren en kanalen.",
+	"Gebieden":"Landstreken zoals de Veluwe, de Achterhoek en de Betuwe.",
+	"Eilanden":"De Waddeneilanden en de Zeeuwse en Zuid-Hollandse eilanden.",
+}
+
+func build_themes() -> void:
+	var parts=overlay_panel(640)
+	themes_backdrop=parts[0]
+	themes_panel=parts[1]
+	var col: VBoxContainer=parts[2]
+	col.add_child(kicker("THEMA'S · OEFEN ÉÉN SOORT TOPOGRAFIE"))
+	col.add_child(title("Wat wil je oefenen?",30))
+	themes_mode=label("",15,MUTED)
+	themes_mode.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(themes_mode)
+	themes_grid=hangar_grid(2)
+	col.add_child(themes_grid)
+	col.add_child(button("Sluiten",close_themes))
+
+func open_themes() -> void:
+	if state!="menu" or paint_open or board_open or pilots_open:
+		return
+	themes_open=true
+	for child in themes_grid.get_children():
+		themes_grid.remove_child(child)
+		child.queue_free()
+	for theme in catalog.themes(region):
+		var about: String=THEME_ABOUT.get(theme.theme,"")
+		var b=hangar_button("%s · %d\n%s" % [theme.theme,theme.count,about if not about.is_empty() else theme.title],start_theme.bind(theme.index),72,15)
+		b.name="Theme_"+String(theme.theme).replace(" ","_")
+		themes_grid.add_child(b)
+	themes_mode.text="Je vliegt in de modus %s. Een andere modus kies je met de tegels in het menu." % ["Leren","Oefenen","Records"][mode_select.selected]
+	themes_backdrop.move_to_front()
+	themes_panel.move_to_front()
+	themes_backdrop.show()
+	themes_panel.show()
+	reveal(themes_panel)
+
+func close_themes() -> void:
+	if not themes_open:
+		return
+	themes_open=false
+	themes_panel.hide()
+	themes_backdrop.hide()
+
+func start_theme(index: int) -> void:
+	var picker: OptionButton=europe_route_select if region=="eu" else nl_route_select
+	picker.select(index)
+	update_best_label()
+	close_themes()
+	sfx.play("whoosh",1.2)
+	start_mission()
+
+# Pilots: every player on this device gets a profile with its own points,
+# hangar and look. The leaderboard is shared, so they compete on one list.
+const LOOK_COLOURS = ["huid","haarkleur","kleur"]
+
+func build_pilots() -> void:
+	var parts=overlay_panel(1010)
+	pilots_backdrop=parts[0]
+	pilots_panel=parts[1]
+	var col: VBoxContainer=parts[2]
+	col.add_child(kicker("PILOTEN · IEDER EEN EIGEN PROFIEL, SAMEN OP DE RANGLIJST"))
+	col.add_child(title("Jouw piloot",32))
+	var row=HBoxContainer.new()
+	row.add_theme_constant_override("separation",22)
+	col.add_child(row)
+	var left=VBoxContainer.new()
+	left.add_theme_constant_override("separation",8)
+	left.custom_minimum_size.x=340
+	row.add_child(left)
+	var stage=PanelContainer.new()
+	var stage_style=style(Color("0b2228"),18,EDGE)
+	for side in [SIDE_LEFT,SIDE_RIGHT,SIDE_TOP,SIDE_BOTTOM]:
+		stage_style.set_content_margin(side,0)
+	stage.add_theme_stylebox_override("panel",stage_style)
+	left.add_child(stage)
+	var view_box=SubViewportContainer.new()
+	view_box.stretch=true
+	view_box.custom_minimum_size=Vector2(340,190)
+	view_box.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	stage.add_child(view_box)
+	var viewport=SubViewport.new()
+	viewport.own_world_3d=true
+	viewport.transparent_bg=true
+	viewport.msaa_3d=Viewport.MSAA_4X
+	view_box.add_child(viewport)
+	var preview_camera=Camera3D.new()
+	preview_camera.fov=30
+	preview_camera.position=Vector3(0,1.7,5.2)
+	var look=Environment.new()
+	look.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR
+	look.ambient_light_color=Color("d6e8df")
+	look.ambient_light_energy=.75
+	look.background_mode=Environment.BG_CLEAR_COLOR
+	preview_camera.environment=look
+	viewport.add_child(preview_camera)
+	preview_camera.look_at(Vector3(0,1.2,0),Vector3.UP)
+	var sun=DirectionalLight3D.new()
+	sun.rotation_degrees=Vector3(-40,-25,0)
+	sun.light_energy=1.1
+	viewport.add_child(sun)
+	var pad=MeshInstance3D.new()
+	var pad_mesh=CylinderMesh.new()
+	pad_mesh.top_radius=1.1
+	pad_mesh.bottom_radius=1.1
+	pad_mesh.height=.08
+	pad.mesh=pad_mesh
+	var pad_mat=StandardMaterial3D.new()
+	pad_mat.albedo_color=Color("2c4a50")
+	pad.material_override=pad_mat
+	pad.position.y=-.04
+	viewport.add_child(pad)
+	pilot_preview=PilotFigure.new()
+	pilot_preview.name="PilotPreview"
+	viewport.add_child(pilot_preview)
+	pilot_preview.rotation.y=PI
+	left.add_child(kicker("WIE VLIEGT ER?"))
+	var scroll=ScrollContainer.new()
+	scroll.custom_minimum_size.y=132
+	scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	left.add_child(scroll)
+	pilot_list=VBoxContainer.new()
+	pilot_list.add_theme_constant_override("separation",6)
+	pilot_list.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	scroll.add_child(pilot_list)
+	var add_row=HBoxContainer.new()
+	add_row.add_theme_constant_override("separation",8)
+	left.add_child(add_row)
+	pilot_new=LineEdit.new()
+	pilot_new.name="NewPilot"
+	pilot_new.max_length=Leaderboard.MAX_PILOT
+	pilot_new.custom_minimum_size=Vector2(0,44)
+	pilot_new.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	pilot_new.placeholder_text="Naam nieuwe piloot"
+	pilot_new.text_submitted.connect(func(_text): add_pilot())
+	add_row.add_child(pilot_new)
+	var add=button("Nieuw",add_pilot)
+	add.name="AddPilot"
+	add.custom_minimum_size=Vector2(78,44)
+	add.add_theme_font_size_override("font_size",15)
+	tone_button(add,"teal",12,10)
+	add_row.add_child(add)
+	pilot_delete=button("Verwijder",delete_pilot)
+	pilot_delete.name="DeletePilot"
+	pilot_delete.custom_minimum_size=Vector2(96,44)
+	pilot_delete.add_theme_font_size_override("font_size",14)
+	pilot_delete.clip_text=true
+	tone_button(pilot_delete,"ghost",12,10)
+	add_row.add_child(pilot_delete)
+	pilot_status=label("",14,MUTED)
+	pilot_status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	pilot_status.custom_minimum_size.x=340
+	left.add_child(pilot_status)
+	var right=VBoxContainer.new()
+	right.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	right.add_theme_constant_override("separation",6)
+	row.add_child(right)
+	right.add_child(kicker("ZO ZIET JE PILOOT ERUIT"))
+	for entry in PilotFigure.ATTRIBUTES:
+		var attribute: String=entry[0]
+		var line=HBoxContainer.new()
+		line.add_theme_constant_override("separation",8)
+		right.add_child(line)
+		var caption=label(entry[1],16,MUTED)
+		caption.custom_minimum_size.x=130
+		line.add_child(caption)
+		var back=button("◀",step_look.bind(attribute,-1))
+		back.name="Prev_"+attribute
+		back.custom_minimum_size=Vector2(48,38)
+		tone_button(back,"ghost",10,6)
+		line.add_child(back)
+		var swatch: ColorRect=null
+		if attribute in LOOK_COLOURS:
+			swatch=ColorRect.new()
+			swatch.custom_minimum_size=Vector2(26,26)
+			swatch.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+			line.add_child(swatch)
+		var value=label("",17,CREAM)
+		value.name="Value_"+attribute
+		value.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		value.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+		line.add_child(value)
+		var next=button("▶",step_look.bind(attribute,1))
+		next.name="Next_"+attribute
+		next.custom_minimum_size=Vector2(48,38)
+		tone_button(next,"ghost",10,6)
+		line.add_child(next)
+		pilot_values[attribute]={"label":value,"swatch":swatch}
+	var surprise=button("Verras me",random_look)
+	surprise.name="RandomLook"
+	surprise.custom_minimum_size.y=42
+	right.add_child(surprise)
+	var done=button("Klaar · naar de hangar  →",close_pilots,true)
+	done.custom_minimum_size.y=50
+	col.add_child(done)
+
+func open_pilots() -> void:
+	if state!="menu" or paint_open or themes_open or board_open:
+		return
+	pilots_open=true
+	pilot_delete_armed=false
+	pilot_status.text="Elke piloot heeft eigen punten, hangar en sterren. De ranglijst is van iedereen samen."
+	refresh_pilots()
+	pilots_backdrop.move_to_front()
+	pilots_panel.move_to_front()
+	pilots_backdrop.show()
+	pilots_panel.show()
+	reveal(pilots_panel)
+
+func close_pilots() -> void:
+	if not pilots_open:
+		return
+	pilots_open=false
+	pilot_new.release_focus()
+	pilots_panel.hide()
+	pilots_backdrop.hide()
+	save_data()
+	update_best_label()
+
+func refresh_pilots() -> void:
+	if not is_instance_valid(pilot_list):
+		return
+	for child in pilot_list.get_children():
+		pilot_list.remove_child(child)
+		child.queue_free()
+	var active=pilot_name()
+	for name in ProgressStore.profile_names(saved):
+		var profile: Dictionary=saved.profiles[name]
+		var pts=int(profile.get("points",0)) if name!=active else points()
+		var b=hangar_button("%s%s · %s · %d punten" % [name,"  ✓" if name==active else "",HangarCatalog.rank(pts),pts],choose_pilot.bind(name),40,15)
+		b.name="Pilot_"+name
+		b.autowrap_mode=TextServer.AUTOWRAP_OFF
+		b.clip_text=true
+		style_button(b,name==active,12,10)
+		pilot_list.add_child(b)
+	pilot_delete.disabled=saved.profiles.size()<=1
+	pilot_delete.text="Zeker?" if pilot_delete_armed else "Verwijder"
+	pilot_delete.tooltip_text="Verwijdert %s en de eigen punten en hangar. Vluchten op de ranglijst blijven staan." % active
+	var look=pilot_look()
+	for attribute in pilot_values:
+		var cell: Dictionary=pilot_values[attribute]
+		cell.label.text=PilotFigure.option_name(attribute,look[attribute])
+		if cell.swatch!=null:
+			cell.swatch.color=Color(look[attribute])
+	pilot_preview.configure(look)
+	if is_instance_valid(hangar_pilot):
+		hangar_pilot.configure(look)
+
+# Puts the active profile on the helicopter, hangar and menu.
+func apply_profile() -> void:
+	helicopter.apply_paint(saved.get("paint",RotorHelicopter.DEFAULT_PAINT))
+	if is_instance_valid(preview_heli) and not preview_heli.paint_materials.is_empty():
+		preview_heli.apply_paint(saved.get("paint",RotorHelicopter.DEFAULT_PAINT))
+	apply_garage()
+	update_best_label()
+
+func choose_pilot(name: String) -> void:
+	pilot_delete_armed=false
+	if name==pilot_name():
+		refresh_pilots()
+		return
+	sync_profile()
+	if ProgressStore.switch_profile(saved,name):
+		apply_profile()
+		save_data()
+		sfx.play("whoosh",1.25)
+		pilot_status.text="Je vliegt nu als %s." % pilot_name()
+	refresh_pilots()
+
+func add_pilot() -> void:
+	pilot_delete_armed=false
+	var name=Leaderboard.clean_pilot(pilot_new.text)
+	if name.is_empty():
+		pilot_status.text="Typ eerst een naam voor de nieuwe piloot."
+	elif not ProgressStore.find_profile(saved,name).is_empty():
+		pilot_status.text="%s bestaat al. Tik op de naam om te wisselen." % ProgressStore.find_profile(saved,name)
+	elif saved.profiles.size()>=ProgressStore.MAX_PROFILES:
+		pilot_status.text="Er passen %d piloten op dit apparaat. Verwijder er eerst een." % ProgressStore.MAX_PROFILES
+	else:
+		sync_profile()
+		ProgressStore.add_profile(saved,name)
+		apply_profile()
+		save_data()
+		pilot_new.text=""
+		sfx.play("star",1.1)
+		pilot_status.text="Welkom, %s! Kies rechts hoe je piloot eruitziet." % pilot_name()
+	refresh_pilots()
+
+# Two taps: the first asks, the second removes the active pilot.
+func delete_pilot() -> void:
+	if saved.profiles.size()<=1:
+		return
+	if not pilot_delete_armed:
+		pilot_delete_armed=true
+		pilot_status.text="Weet je het zeker? Tik nog eens op ‘Zeker?’ om %s te verwijderen." % pilot_name()
+		refresh_pilots()
+		return
+	pilot_delete_armed=false
+	var removed=pilot_name()
+	if ProgressStore.remove_profile(saved,removed):
+		apply_profile()
+		save_data()
+		pilot_status.text="%s is verwijderd. Je vliegt nu als %s; de vluchten op de ranglijst blijven staan." % [removed,pilot_name()]
+	refresh_pilots()
+
+func step_look(attribute: String,direction: int) -> void:
+	var look=PilotFigure.step(pilot_look(),attribute,direction)
+	# A new figure starts with a matching haircut; every part stays changeable.
+	if attribute=="figuur":
+		if look.figuur=="vrouw" and look.haar=="kort":
+			look.haar="staart"
+		elif look.figuur=="man" and look.haar=="staart":
+			look.haar="kort"
+	saved.look=look
+	sfx.play("star",1.15)
+	refresh_pilots()
+
+func random_look() -> void:
+	var look: Dictionary={}
+	for entry in PilotFigure.ATTRIBUTES:
+		var ids=PilotFigure.option_ids(entry[0])
+		look[entry[0]]=ids[randi()%ids.size()]
+	saved.look=PilotFigure.clean(look)
+	sfx.play("whoosh",1.3)
+	refresh_pilots()
 
 static func format_date(iso: String) -> String:
 	var parts=iso.split("-")
@@ -2746,7 +3181,7 @@ func smoke_test() -> void:
 			layouts[stats.layout]=true
 	assert(dutch_cities==65 and layouts.size()==dutch_cities,"Dutch cities do not repeat the same layout")
 	# Worksheet routes: overview map, learning map and maps A-D of the textbook.
-	assert(catalog.nl_routes.size()==7,"All Dutch worksheet routes are bundled")
+	assert(catalog.nl_routes.size()==11,"All Dutch worksheet routes and the four themes are bundled")
 	assert(catalog.presets("nl",0)==[catalog.lookup.utrecht,catalog.lookup.amsterdam,catalog.lookup["den haag"],catalog.lookup.rotterdam,catalog.lookup.middelburg,catalog.lookup["den bosch"],catalog.lookup.maastricht,catalog.lookup.arnhem,catalog.lookup.zwolle,catalog.lookup.assen,catalog.lookup.groningen,catalog.lookup.leeuwarden],"Short Dutch route is unchanged, so its best time stays")
 	assert(catalog.presets("nl",1).size()==34,"Overview map lists all 34 numbered places")
 	for route in catalog.nl_routes:
@@ -2756,6 +3191,28 @@ func smoke_test() -> void:
 		assert(catalog.lookup.has(catalog.normalize(name)),"Worksheet name is known: "+name)
 	assert(catalog.lookup[catalog.normalize("Groningen (provincie)")].kind=="provincie" and catalog.lookup[catalog.normalize("Groningen (stad)")].kind=="stad","Province and city with the same name stay apart")
 	assert(hit_radius_km(catalog.lookup.biesbos)==7.0 and hit_radius_km(catalog.lookup.randstad)==30.0,"Areas use their own answer range")
+	# Thema's: provinces, rivers and water, areas and islands as their own practice.
+	var nl_themes: Dictionary={}
+	for theme in catalog.themes("nl"):
+		nl_themes[theme.theme]=catalog.routes("nl")[theme.index].places
+	assert(nl_themes.keys()==["Provincies","Rivieren en water","Gebieden","Eilanden"] and catalog.themes("eu").size()==6,"Theme routes on both maps")
+	assert(nl_themes.Provincies.size()==12 and nl_themes.Eilanden.size()>=15 and nl_themes.Gebieden.size()>=20 and nl_themes["Rivieren en water"].size()>=25,"Every province, island, area and water of the lesson is in a theme")
+	for theme_name in nl_themes:
+		for place in nl_themes[theme_name]:
+			assert(float(place.get("radius_km",hit_radius_km(place)))>0 and TopoWorld.in_bounds(TopoWorld.map_bounds("nl"),place.lat,place.lon),"Theme place lies on the Dutch map: "+place.name)
+	for name in ["Walcheren","Goeree-Overflakkee","Schouwen-Duiveland","Achterhoek","Betuwe","Peel","Heuvelland","Hollands Diep","Haringvliet","Lauwersmeer","Merwede"]:
+		assert(catalog.lookup.has(catalog.normalize(name)),"Lesson name is known: "+name)
+	# Provinces count anywhere inside their outline, not in a circle.
+	var gelderland: Dictionary=catalog.lookup.gelderland
+	assert(area_goal(gelderland) and world.has_province(catalog.lookup.friesland) and not area_goal(catalog.lookup.veluwe),"Dutch provinces are area goals, Friesland included")
+	var province_probe=helicopter.position
+	helicopter.position=world.project(6.6,52.1)
+	assert(distance_km(gelderland)>25.0 and at_goal(gelderland),"Anywhere in Gelderland counts, also far from its reference point")
+	helicopter.position=world.project(5.12,52.09)
+	assert(not at_goal(gelderland) and at_goal(catalog.lookup["utrecht provincie"]),"The neighbouring province does not count")
+	helicopter.position=world.project(5.8,53.1)
+	assert(at_goal(catalog.lookup.friesland),"Friesland matches the official name Fryslân")
+	helicopter.position=province_probe
 	var builtin_cities=["Amsterdam","Rotterdam","Utrecht","Den Haag","Groningen","Arnhem","Nijmegen","Maastricht","Almere","Lelystad","Leeuwarden","Zwolle","Breda","Delft","Middelburg","Sneek","Eindhoven"]
 	var real_landmarks=0
 	for place in catalog.places:
@@ -3327,7 +3784,75 @@ func smoke_test() -> void:
 	await get_tree().process_frame
 	print("Leaderboard panel: %s" % board_panel.get_global_rect().size)
 	assert(screen.encloses(board_panel.get_global_rect()),"Leaderboard fits on screen")
+	assert(board_switch.visible and board_pilot.text.contains(pilot_name()),"The leaderboard names the active pilot and offers to switch")
 	close_leaderboard()
+	# Pilot profiles: own progress and look per pilot, one shared leaderboard.
+	var profile_data=ProgressStore.defaults()
+	profile_data.points=300
+	assert(ProgressStore.add_profile(profile_data,"Sara")=="Sara" and profile_data.pilot=="Sara" and profile_data.points==0,"A new pilot starts at zero")
+	assert(ProgressStore.add_profile(profile_data,"sara").is_empty() and ProgressStore.add_profile(profile_data,"  ").is_empty(),"Pilot names are unique and not empty")
+	profile_data.points=40
+	profile_data.look=PilotFigure.step(profile_data.look,"bril",1)
+	assert(ProgressStore.switch_profile(profile_data,"niek") and profile_data.pilot=="Niek" and profile_data.points==300 and profile_data.look.bril=="geen","Switching restores the other pilot")
+	assert(ProgressStore.switch_profile(profile_data,"Sara") and profile_data.points==40 and profile_data.look.bril=="rond","Each pilot keeps its own points and look")
+	var reloaded=ProgressStore.clean(JSON.parse_string(JSON.stringify(profile_data)))
+	assert(reloaded.pilot=="Sara" and reloaded.profiles.size()==2 and reloaded.profiles.Niek.points==300 and reloaded.points==40 and reloaded.look.bril=="rond","Profiles survive saving and loading")
+	var legacy_profile=ProgressStore.clean({"pilot":"Bram","points":120,"garage":{"model":"libel"}})
+	assert(legacy_profile.profiles.keys()==["Bram"] and legacy_profile.profiles.Bram.points==120,"A save from before profiles becomes its pilot's profile")
+	assert(ProgressStore.remove_profile(reloaded,"Sara") and reloaded.pilot=="Niek" and reloaded.points==300 and not ProgressStore.remove_profile(reloaded,"Niek"),"Removing a pilot switches to another; the last one stays")
+	for i in 20:
+		ProgressStore.add_profile(reloaded,"Piloot %d" % i)
+	assert(reloaded.profiles.size()==ProgressStore.MAX_PROFILES,"At most eight pilots per device")
+	var odd_look=PilotFigure.clean({"haar":"paars","bril":"zonnebril","extra":1})
+	assert(odd_look.haar==PilotFigure.DEFAULT_LOOK.haar and odd_look.bril=="zonnebril" and not odd_look.has("extra"),"Pilot looks are validated")
+	assert(PilotFigure.step(PilotFigure.DEFAULT_LOOK,"bril",-1).bril=="vliegbril","Look choices wrap round")
+	for entry in PilotFigure.ATTRIBUTES:
+		for option in entry[2]:
+			var figure_look=PilotFigure.DEFAULT_LOOK.duplicate()
+			figure_look[entry[0]]=option[0]
+			var figure=PilotFigure.new()
+			add_child(figure)
+			figure.configure(figure_look)
+			assert(figure.root.get_child_count()>20,"Pilot figure builds with %s %s" % [entry[0],option[0]])
+			figure.queue_free()
+	var pilots_before: Dictionary=saved.duplicate(true)
+	open_pilots()
+	assert(pilots_open and pilots_panel.visible and pilot_list.get_child_count()==saved.profiles.size(),"The pilot screen lists every pilot")
+	pilot_new.text="Sara"
+	add_pilot()
+	assert(pilot_name()=="Sara" and points()==0 and saved.profiles.size()==pilots_before.profiles.size()+1 and pilot_button.text=="Piloot: Sara","A new pilot becomes the active one")
+	step_look("hoofd",1)
+	assert(saved.look.hoofd!=PilotFigure.DEFAULT_LOOK.hoofd and pilot_preview.look.hoofd==saved.look.hoofd and hangar_pilot.look.hoofd==saved.look.hoofd,"A new look reaches the preview and the hangar pilot")
+	choose_pilot(pilots_before.pilot)
+	assert(pilot_name()==pilots_before.pilot and points()==int(pilots_before.points) and saved.look.hoofd==PilotFigure.DEFAULT_LOOK.hoofd,"Switching back restores points and look")
+	delete_pilot()
+	assert(saved.profiles.size()==pilots_before.profiles.size()+1 and pilot_delete_armed,"Removing a pilot asks first")
+	choose_pilot("Sara")
+	delete_pilot()
+	delete_pilot()
+	assert(saved.profiles.size()==pilots_before.profiles.size() and pilot_name()==pilots_before.pilot,"The second tap removes the pilot")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	print("Pilot panel: %s" % pilots_panel.get_global_rect().size)
+	assert(screen.encloses(pilots_panel.get_global_rect()),"Pilot screen fits on screen")
+	go_back(false)
+	assert(not pilots_open and state=="menu","Back closes the pilot screen")
+	saved=pilots_before
+	apply_profile()
+	# The theme screen starts a theme route in the chosen mode.
+	open_themes()
+	assert(themes_open and themes_grid.get_child_count()==catalog.themes(region).size(),"The theme screen lists this map's themes")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	print("Theme panel: %s" % themes_panel.get_global_rect().size)
+	assert(screen.encloses(themes_panel.get_global_rect()),"Theme screen fits on screen")
+	var picked_route=europe_route_select.selected
+	var first_theme: Dictionary=catalog.themes(region)[0]
+	start_theme(first_theme.index)
+	assert(not themes_open and state=="flight" and mission.size()==first_theme.count,"A theme starts its own mission")
+	return_menu()
+	europe_route_select.select(picked_route)
+	update_best_label()
 	assert(mode_tiles.size()==3 and mode_tiles[mode_select.selected].selected,"Mode tiles mirror the chosen mode")
 	choose_mode(GameMode.PRACTICE)
 	assert(mode_select.selected==GameMode.PRACTICE and mode_tiles[1].selected and not mode_tiles[0].selected,"Tapping a tile picks the mode")

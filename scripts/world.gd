@@ -599,6 +599,33 @@ func set_boundary_detail(view_size: float) -> void:
 		# Laag and Midden (zoom 38 and 64) show municipalities, Hoog stays calm.
 		municipal_boundary.visible=view_size<=70.0
 
+# Catalog names that differ from the official province name in boundaries_nl.json.
+const PROVINCE_NAMES = {"Friesland":"Fryslân"}
+
+# The boundary name for a catalog province ("Utrecht provincie" -> "Utrecht").
+static func province_name_for(place: Dictionary) -> String:
+	var name=String(place.get("name","")).trim_suffix(" provincie")
+	return PROVINCE_NAMES.get(name,name)
+
+func has_province(place: Dictionary) -> bool:
+	if place.get("kind","")!="provincie":
+		return false
+	var name=province_name_for(place)
+	for province in province_regions:
+		if province.name==name:
+			return true
+	return false
+
+func province_contains(place: Dictionary,position3: Vector3) -> bool:
+	var name=province_name_for(place)
+	var point=Vector2(position3.x,position3.z)
+	for province in province_regions:
+		if province.name==name:
+			for polygon in province.polygons:
+				if Geometry2D.is_point_in_polygon(point,polygon):
+					return true
+	return false
+
 func province_at(position3: Vector3) -> String:
 	var point=Vector2(position3.x,position3.z)
 	for province in province_regions:

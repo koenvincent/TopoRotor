@@ -29,8 +29,18 @@ func load_routes(region: String) -> Array:
 		var resolved: Array = []
 		for name in route.places:
 			resolved.append(resolve(name,region))
-		result.append({"title":route.title,"places":resolved})
+		result.append({"title":route.title,"theme":String(route.get("theme","")),"places":resolved})
 	return result
+
+# Theme routes (provinces, rivers, areas, islands, ...) with their index in
+# the region's route list, so the menu can select them in the route picker.
+func themes(region: String) -> Array:
+	var list: Array=[]
+	var all := routes(region)
+	for i in all.size():
+		if not String(all[i].theme).is_empty():
+			list.append({"index":i,"theme":all[i].theme,"title":all[i].title,"count":all[i].places.size()})
+	return list
 
 # Region first, then the shared lookup (Amsterdam is the Dutch capital in Europe).
 func resolve(name: String, region: String) -> Dictionary:

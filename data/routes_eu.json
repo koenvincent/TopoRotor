@@ -18,6 +18,7 @@
     },
     {
       "title": "Europa · hoofdsteden",
+      "theme": "Hoofdsteden",
       "places": [
         "Amsterdam",
         "Londen",
@@ -66,6 +67,7 @@
     },
     {
       "title": "Europa · landen",
+      "theme": "Landen",
       "places": [
         "Nederland",
         "België",
@@ -121,6 +123,7 @@
     },
     {
       "title": "Europa · zeeën en oceaan",
+      "theme": "Zeeën en oceaan",
       "places": [
         "Noordzee",
         "Oostzee",
@@ -139,6 +142,7 @@
     },
     {
       "title": "Europa · rivieren en meren",
+      "theme": "Rivieren en meren",
       "places": [
         "Rijn",
         "Donau",
@@ -164,6 +168,7 @@
     },
     {
       "title": "Europa · gebergten en eilanden",
+      "theme": "Gebergten en eilanden",
       "places": [
         "Alpen",
         "Pyreneeën",
@@ -190,6 +195,7 @@
     },
     {
       "title": "Europa · grote steden",
+      "theme": "Grote steden",
       "places": [
         "Barcelona",
         "Milaan",
