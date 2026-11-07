@@ -43,7 +43,7 @@ var ocr_input_snapshot: String = ""
 var ocr_retry_after_msec: int = 0
 # Test/capture harness is only reachable from debug (editor/CI) builds, never from release exports.
 var is_test_mode: bool = OS.is_debug_build() and OS.get_cmdline_user_args().has("--smoke-test")
-var is_capture_mode: bool = OS.is_debug_build() and OS.get_cmdline_user_args().has("--capture")
+var is_capture_mode: bool = OS.is_debug_build() and (OS.get_cmdline_user_args().has("--capture") or OS.get_cmdline_user_args().has("--capture-fx"))
 # Smoke tests exercise the real save path against a separate file, never the player's profile.
 var save_path: String = "user://smoke-progress.json" if is_test_mode else "user://progress.json"
 var http: HTTPRequest
@@ -84,9 +84,16 @@ const REVERSE_FACTOR = .45
 const CAMERA_FOLLOW = 7.0
 const CAMERA_TURN = 4.5
 const LOOK_AHEAD = .16
+const AIM_HEIGHT = .3
 var heading: float = 0.0
 var camera_yaw: float = 0.0
 var compass: FlightCompass
+var fx: FlightFx
+var hud_fx: HudFx
+var sfx: SfxBank
+var found_button: Button
+var shake: float = 0.0
+var in_zone: bool = false
 var best_label: Label
 var custom_mission: bool = false
 var progress_readonly: bool = false
@@ -115,7 +122,7 @@ func _ready() -> void:
 	if is_test_mode:
 		call_deferred("smoke_test")
 	if is_capture_mode:
-		call_deferred("capture_preview")
+		call_deferred("capture_effects_only" if OS.get_cmdline_user_args().has("--capture-fx") else "capture_preview")
 
 func build_environment() -> void:
 	var env = WorldEnvironment.new()
@@ -126,6 +133,18 @@ func build_environment() -> void:
 	e.ambient_light_color=Color("d6e8df")
 	e.ambient_light_energy=.65
 	e.tonemap_mode=Environment.TONE_MAPPER_LINEAR
+	# Soft bloom makes beacons, fireworks and lights glow; a touch more
+	# saturation and contrast gives the miniature world more punch.
+	e.glow_enabled=true
+	e.glow_intensity=.7
+	e.glow_strength=1.05
+	e.glow_bloom=.04
+	e.glow_hdr_threshold=.92
+	e.glow_blend_mode=Environment.GLOW_BLEND_MODE_SCREEN
+	e.adjustment_enabled=true
+	e.adjustment_saturation=1.07
+	e.adjustment_contrast=1.06
+	e.adjustment_brightness=1.02
 	env.environment=e
 	add_child(env)
 	var sun=DirectionalLight3D.new()
@@ -155,6 +174,11 @@ func build_environment() -> void:
 	feedback_audio.stream=load("res://assets/success.wav")
 	feedback_audio.volume_db=-12
 	add_child(feedback_audio)
+	sfx=SfxBank.new()
+	add_child(sfx)
+	fx=FlightFx.new()
+	fx.sfx=sfx
+	add_child(fx)
 
 func style(color: Color,radius: int=18,border: Color=Color.TRANSPARENT,border_width: int=1) -> StyleBoxFlat:
 	var s=StyleBoxFlat.new()
@@ -372,8 +396,11 @@ func build_ui() -> void:
 	ui.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	canvas.add_child(ui)
 	ui.theme=build_theme()
+	hud_fx=HudFx.new()
+	ui.add_child(hud_fx.vignette) # Below every panel.
 	build_menu()
 	build_hud()
+	ui.add_child(hud_fx) # Above the HUD, below pause and dialogs.
 	pause_backdrop=ColorRect.new()
 	pause_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	pause_backdrop.color=Color(.015,.055,.07,.7)
@@ -601,10 +628,10 @@ func build_hud() -> void:
 	actions.alignment=BoxContainer.ALIGNMENT_END
 	hud.add_child(actions)
 	pin(actions,bottom_right,-284,-236,-24,-24)
-	var found=button("Hier is het!  ✓",answer,true)
-	found.custom_minimum_size.y=60
-	found.add_theme_font_size_override("font_size",22)
-	actions.add_child(found)
+	found_button=button("Hier is het!  ✓",answer,true)
+	found_button.custom_minimum_size.y=60
+	found_button.add_theme_font_size_override("font_size",22)
+	actions.add_child(found_button)
 	hint_button=button("Hint / kaartnamen",toggle_hint)
 	actions.add_child(hint_button)
 	actions.add_child(button("Overzichtskaart",toggle_overview))
@@ -649,11 +676,13 @@ func load_world(new_region: String) -> void:
 	if is_instance_valid(europe_route_select):
 		europe_route_select.visible=region=="eu"
 	if is_instance_valid(world):
+		fx.detach_zone()
 		remove_child(world)
 		world.queue_free()
 	world=TopoWorld.new()
 	add_child(world)
 	world.build(region,catalog)
+	fx.attach_target(world.target)
 	minimap.world=world
 	helicopter.position=world.project(SPAWN.x,SPAWN.y)+Vector3(0,flight_altitude(),0)
 	position_menu_camera()
@@ -684,6 +713,11 @@ func start_mission(custom: Array = [],as_custom: bool = true) -> void:
 	custom_mission=as_custom and not custom.is_empty()
 	mission=custom.duplicate() if not custom.is_empty() else selected_presets()
 	game_mode=mode_select.selected
+	sfx.muted=saved.mute
+	fx.clear_effects()
+	hud_fx.clear()
+	shake=0.0
+	in_zone=false
 	if game_mode==GameMode.RECORDS:
 		# Same start and route order make repeat record attempts comparable.
 		mission.sort_custom(func(a,b): return a.name<b.name)
@@ -727,6 +761,11 @@ func update_goal() -> void:
 	var p: Dictionary=mission[mission_index]
 	world.target.position=world.project(p.lon,p.lat)
 	minimap.goal=world.target.position
+	# The ring is the real answer range. Countries are checked against their
+	# outline instead, so they get the beacon without a circle.
+	minimap.goal_radius=zone_radius_units(p) if p.kind!="land" else 0.0
+	fx.set_zone(zone_radius_units(p),p.kind!="land",cos(deg_to_rad(world.origin.y))/maxf(cos(deg_to_rad(p.lat)),.1))
+	in_zone=false
 	refresh_mode_hints()
 	progress_label.text="%s  ·  MISSIE %02d / %02d" % [MODE_NAMES[game_mode],mission_index+1,mission.size()]
 	title_label.text=("Vlieg boven " if p.kind=="land" else "Vlieg naar ")+p.name
@@ -751,11 +790,38 @@ func _process(delta: float) -> void:
 	minimap.refresh_navigation()
 	world.refresh_labels(helicopter.position,show_overview,camera.size)
 	world.set_boundary_detail(camera.size)
+	update_effects(delta)
 	if mission_index<mission.size():
 		var p: Dictionary=mission[mission_index]
 		var km=distance_km(p)
 		var nav="Afstand: %d km" % km if game_mode==GameMode.LEARN else "Je bent dichtbij!" if show_hints else "Zoek zelf de juiste plek."
 		detail_label.text="%s  ·  %s %.1f sec  ·  %d gevonden" % [nav,"Recordtijd" if exam else "Vliegtijd",flight_time+mistakes*10.0 if exam else flight_time,completed.size()]
+
+func flight_speed() -> float:
+	return 10.0 if region=="nl" else 42.0
+
+# Zone highlight, downwash, rotor pitch and the answer button pulse. The
+# "in de zone" state is only computed while the mode already shows the goal,
+# so it can never give away a hidden target.
+func update_effects(delta: float) -> void:
+	fx.view_scale=camera.size/FLIGHT_ZOOMS[0] if not show_overview else 1.0
+	var speed_fraction=clampf(velocity.length()/flight_speed(),0.0,1.0)
+	fx.update_downwash(helicopter.position,camera_level,speed_fraction,not show_overview)
+	rotor_audio.pitch_scale=.94+speed_fraction*.22
+	shake=move_toward(shake,0.0,delta*2.6)
+	var now_inside=false
+	if mission_index<mission.size() and world.target.visible:
+		now_inside=at_goal(mission[mission_index])
+	if now_inside and not in_zone:
+		status_label.text="In de zone! Druk nu op ‘Hier is het!’"
+		sfx.play("star",.75)
+	in_zone=now_inside
+	fx.set_inside(in_zone)
+	fx.update_sight(helicopter.position,not show_overview)
+	var pulse=.5+.5*sin(flight_time*9.0) if in_zone else 0.0
+	found_button.modulate=Color(1,1,1).lerp(Color(1.35,1.3,1.0),pulse)
+	found_button.scale=Vector2.ONE*(1.0+pulse*.04)
+	found_button.pivot_offset=found_button.size*.5
 
 # Pilot-relative controls: x turns the helicopter, -y flies along the nose.
 # Reversing is slower so the chase camera never has to swing round.
@@ -765,7 +831,7 @@ func steer(direction: Vector2,delta: float) -> void:
 	heading=wrapf(heading-turn*TURN_RATE*delta,-PI,PI)
 	helicopter.rotation.y=heading
 	var thrust=throttle if throttle>0 else throttle*REVERSE_FACTOR
-	var speed=10.0 if region=="nl" else 42.0
+	var speed=flight_speed()
 	# Exponential smoothing keeps steering consistent across frame rates.
 	var response=9.0 if is_zero_approx(throttle) else 6.0
 	velocity=velocity.lerp(nose_direction(heading)*thrust*speed,1.0-exp(-response*delta))
@@ -783,6 +849,8 @@ static func nose_direction(yaw: float) -> Vector2:
 func update_flight_camera(delta: float,snap: bool=false) -> void:
 	var blend=1.0 if snap else 1.0-exp(-CAMERA_FOLLOW*delta)
 	if show_overview:
+		camera.h_offset=0.0
+		camera.v_offset=0.0
 		var center=world.bounds.get_center()
 		camera.position=camera.position.lerp(Vector3(center.x,600,center.y+400),1.0 if snap else min(delta*3,1.0))
 		camera.look_at(Vector3(center.x,0,center.y),Vector3.UP)
@@ -796,7 +864,15 @@ func update_flight_camera(delta: float,snap: bool=false) -> void:
 	camera.position=camera.position.lerp(helicopter.position+Vector3(0,height,0)-ahead*back,blend)
 	camera.size=lerp(camera.size,flight_zoom(),1.0 if snap else min(delta*3,1.0))
 	# Aim slightly ahead so more of the route is visible than what lies behind.
-	camera.look_at(helicopter.position+ahead*camera.size*LOOK_AHEAD,Vector3.UP)
+	# The aim point sits below the helicopter, between it and the ground, so the
+	# ground sight (the point the answer check uses) stays well inside the view.
+	var aim=Vector3(helicopter.position.x,helicopter.position.y*AIM_HEIGHT,helicopter.position.z)
+	camera.look_at(aim+ahead*camera.size*LOOK_AHEAD,Vector3.UP)
+	# Screen shake after a wrong answer uses the lens offset, so the camera's
+	# position (and the chase geometry) stays exact.
+	var jolt=shake*shake*camera.size*.03
+	camera.h_offset=sin(flight_time*71.0)*jolt
+	camera.v_offset=cos(flight_time*53.0)*jolt
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -847,27 +923,65 @@ func hit_radius_km(place: Dictionary) -> float:
 			return 25.0 if nl else 40.0
 		"eiland":
 			return 10.0 if nl else 25.0
+		"stad":
+			return city_radius_km(place) if nl else EU_CITY_KM
 	return 6.0 if nl else 25.0
+
+const NL_CITY_KM = 6.0
+const EU_CITY_KM = 45.0
+const CITY_MARGIN_KM = .8
+
+# A Dutch city counts as found anywhere over its visible neighbourhoods: its
+# plan radius (plus a small margin) when that is larger than the 6 km floor.
+# European cities get 45 km, which covers the house grid of their model town
+# and still keeps the closest capitals (Wenen, Bratislava: 55 km) apart.
+func city_radius_km(place: Dictionary) -> float:
+	if not is_instance_valid(world) or world.region!="nl" or world.dutch_scenery==null:
+		return NL_CITY_KM
+	var plan: Dictionary=world.dutch_scenery.city_plans.get(place.get("name",""),{})
+	var plan_radius=float(plan.get("radius",0.0))
+	return maxf(NL_CITY_KM,plan_radius/units_per_km()+CITY_MARGIN_KM) if plan_radius>0 else NL_CITY_KM
+
+func units_per_km() -> float:
+	return world.geo_scale/111.195
+
+func zone_radius_units(place: Dictionary) -> float:
+	return hit_radius_km(place)*units_per_km()
+
+# Countries without usable map geometry fall back to the catalog reference point.
+func at_goal(p: Dictionary) -> bool:
+	if p.kind=="land":
+		return world.country_contains(p.code,helicopter.position) if world.has_country(p.code) else distance_km(p)<(1.5 if p.code=="VAT" else 25)
+	return distance_km(p)<hit_radius_km(p)
 
 func answer() -> void:
 	if state!="flight" or answer_cooldown>0 or photo_open:
 		return
 	var p: Dictionary=mission[mission_index]
-	# Countries without usable map geometry fall back to the catalog reference point.
-	var hit=(world.country_contains(p.code,helicopter.position) if world.has_country(p.code) else distance_km(p)<(1.5 if p.code=="VAT" else 25)) if p.kind=="land" else distance_km(p)<hit_radius_km(p)
-	if hit:
+	sfx.muted=saved.mute
+	var ground=Vector3(helicopter.position.x,0,helicopter.position.z)
+	if at_goal(p):
 		completed.append({"name":p.name,"hints":show_hints,"mistakes":goal_mistakes})
 		if not saved.mute:
 			feedback_audio.play()
+		sfx.play("chime")
+		fx.celebrate(world.target.position if p.kind!="land" else ground)
+		var first_try=goal_mistakes==0
 		mission_index+=1
 		update_goal()
+		# The last goal opens the summary, which has its own celebration.
 		if state=="flight":
+			hud_fx.show_hit("GOED ZO!" if first_try else "GEVONDEN!",p.name)
 			status_label.text="Goed gevonden! Op naar %s." % mission[mission_index].name
 		answer_cooldown=.6
 	else:
 		mistakes+=1
 		goal_mistakes+=1
 		status_label.text="Nog niet op de juiste plek. Kijk nog eens naar de kaart."
+		sfx.play("buzzer")
+		fx.miss_mark(ground)
+		hud_fx.show_miss("MIS!" if goal_mistakes<3 else "NOG NIET!")
+		shake=1.0
 		answer_cooldown=1.0
 
 func refresh_mode_hints() -> void:
@@ -904,9 +1018,12 @@ func update_height_controls() -> void:
 func change_height(direction: int) -> void:
 	if state!="flight" or photo_open:
 		return
+	var previous=camera_level
 	camera_level=clampi(camera_level+direction,0,FLIGHT_ZOOMS.size()-1)
 	show_overview=false
 	update_height_controls()
+	if camera_level!=previous:
+		sfx.play("whoosh",1.15 if direction<0 else .85)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if state=="flight" and not photo_open and event is InputEventMouseButton and event.pressed:
@@ -918,6 +1035,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func toggle_overview() -> void:
 	show_overview=not show_overview
 	joystick.reset()
+	sfx.play("whoosh",.7 if show_overview else 1.0)
 
 func mission_stars(first_try: int) -> int:
 	if mistakes==0 and exam and not hints_used:
@@ -929,6 +1047,8 @@ func finish_mission() -> void:
 	hud.hide()
 	world.target.hide()
 	rotor_audio.stop()
+	fx.idle()
+	sfx.play("fanfare")
 	var first_try=0
 	var missed=PackedStringArray()
 	for c in completed:
@@ -967,7 +1087,7 @@ func finish_mission() -> void:
 	summary.add_child(col)
 	col.add_child(kicker("MISSIE VOLTOOID"))
 	col.add_child(title("Goed gevlogen, piloot!",34))
-	col.add_child(title("★".repeat(stars)+"☆".repeat(3-stars),52))
+	col.add_child(star_row(stars))
 	col.add_child(label("%d locaties gevonden · %d pogingen mis\nVliegtijd %02d:%02d" % [completed.size(),mistakes,int(flight_time)/60,int(flight_time)%60],21))
 	if not missed.is_empty():
 		var shown=PackedStringArray()
@@ -983,6 +1103,26 @@ func finish_mission() -> void:
 	col.add_child(tip)
 	col.add_child(button("Dezelfde locaties opnieuw",func(): start_mission(mission,custom_mission),true))
 	col.add_child(button("Terug naar de hangar",return_menu))
+	hud_fx.celebrate()
+	# A last volley over the helicopter while the summary pops up.
+	fx.celebrate(Vector3(helicopter.position.x,0,helicopter.position.z))
+
+# Stars pop in one by one with a ping per earned star.
+func star_row(stars: int) -> HBoxContainer:
+	var row=HBoxContainer.new()
+	row.alignment=BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation",10)
+	for i in 3:
+		var star=title("★" if i<stars else "☆",58)
+		star.resized.connect(func(): star.pivot_offset=star.size*.5)
+		star.scale=Vector2.ZERO
+		row.add_child(star)
+		var tween=star.create_tween()
+		tween.tween_interval(.35+i*.28)
+		if i<stars:
+			tween.tween_callback(func(): sfx.play("star",1.0+i*.12))
+		tween.tween_property(star,"scale",Vector2.ONE,.45).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	return row
 
 func pause_flight() -> void:
 	if state!="flight":
@@ -992,6 +1132,7 @@ func pause_flight() -> void:
 	velocity=Vector2.ZERO
 	joystick.reset()
 	rotor_audio.stop()
+	fx.idle()
 	pause_backdrop.show()
 	pause_panel.show()
 
@@ -1011,6 +1152,9 @@ func return_menu() -> void:
 	pause_panel.hide()
 	state="menu"
 	rotor_audio.stop()
+	fx.idle()
+	fx.clear_effects()
+	hud_fx.clear()
 	hud.hide()
 	menu.show()
 	joystick.reset()
@@ -1026,12 +1170,17 @@ func position_menu_camera() -> void:
 	var shift=95.0 if region=="nl" else 190.0
 	var view_target=Vector3(center.x-shift,0,center.y)
 	camera.size=330 if region=="nl" else 650
+	camera.h_offset=0.0
+	camera.v_offset=0.0
 	camera.position=view_target+Vector3(0,600,450)
 	camera.look_at(view_target,Vector3.UP)
 	world.set_boundary_detail(camera.size)
 
 func toggle_sound() -> void:
 	saved.mute=not saved.mute
+	sfx.muted=saved.mute
+	if saved.mute:
+		sfx.stop_all()
 	mute_button.text="Geluid: uit" if saved.mute else "Geluid: aan"
 	save_data()
 
@@ -1588,7 +1737,24 @@ func smoke_test() -> void:
 	assert(flight_zoom()==close_zoom,"Pilot can return to low search flight")
 	helicopter.position=world.project(5.8987,51.9851)+Vector3(0,9.0 if region=="nl" else 3.3,0)
 	assert(distance_km(mission[0])<.01,"Distance at target")
-	assert(hit_radius_km(catalog.lookup.arnhem)==6.0,"Dutch cities keep their tolerance in mixed missions")
+	# Answer range covers the visible city: every Dutch city plan fits inside it.
+	for place in catalog.places:
+		if place.kind=="stad" and place.region=="nl":
+			var plan_units=float(world.dutch_scenery.city_plans.get(place.name,{}).get("radius",0.0))
+			assert(hit_radius_km(place)>=NL_CITY_KM and zone_radius_units(place)>=plan_units,"Visible city lies inside its answer range: "+place.name)
+	var arnhem_plan=float(world.dutch_scenery.city_plans.Arnhem.radius)
+	assert(is_equal_approx(hit_radius_km(catalog.lookup.arnhem),arnhem_plan/units_per_km()+CITY_MARGIN_KM),"Arnhem range follows its city plan")
+	var arnhem_center=world.project(catalog.lookup.arnhem.lon,catalog.lookup.arnhem.lat)
+	helicopter.position=arnhem_center+Vector3(arnhem_plan*.95,9.0,0)
+	assert(at_goal(catalog.lookup.arnhem),"Outer neighbourhood of the city counts as found")
+	helicopter.position=arnhem_center+Vector3(zone_radius_units(catalog.lookup.arnhem)*1.15,9.0,0)
+	assert(not at_goal(catalog.lookup.arnhem),"Just outside the drawn ring is not found")
+	helicopter.position=world.project(5.8987,51.9851)+Vector3(0,9.0 if region=="nl" else 3.3,0)
+	assert(fx.zone.get_parent()==world.target and fx.zone_disc.visible,"Goal shows its answer range as a circle")
+	assert(is_equal_approx(fx.zone_radius,zone_radius_units(mission[0])),"Drawn circle equals the answer range")
+	assert(is_equal_approx(minimap.goal_radius,fx.zone_radius),"Minimap ring uses the same range")
+	_process(1.0/60.0)
+	assert(in_zone and fx.inside,"Being inside the visible range lights up the zone")
 	assert(hit_radius_km({"kind":"provincie","region":"nl"})==25.0,"Province tolerance")
 	assert(hit_radius_km({"kind":"eiland","region":"nl"})==10.0,"Island tolerance")
 	assert(hit_radius_km({"radius_km":INF,"region":"nl","kind":"stad"})==6.0,"Nonfinite radius ignored")
@@ -1605,13 +1771,22 @@ func smoke_test() -> void:
 	var stars_before=JSON.stringify(saved.best)
 	start_mission([catalog.lookup.amsterdam,catalog.lookup.arnhem])
 	helicopter.position=world.project(-20,35)
+	var crosses_before=hud_fx.crosses_shown
 	answer()
 	assert(goal_mistakes==1,"Wrong answer belongs to current goal")
+	assert(hud_fx.crosses_shown==crosses_before+1 and hud_fx.cross.visible and fx.misses_shown>0 and shake>0,"Wrong answer shows a big red cross and shakes the view")
+	_process(1.0/60.0)
+	assert(not in_zone and not fx.inside,"Distant practice goal never reports the zone")
+	var bursts_before=fx.bursts_started
+	var banners_before=hud_fx.banners_shown
 	for index in 2:
 		var target_place: Dictionary=mission[mission_index]
 		helicopter.position=world.project(target_place.lon,target_place.lat)
 		answer_cooldown=0
 		answer()
+		assert(fx.bursts_started>bursts_before,"Correct answer launches fireworks")
+		bursts_before=fx.bursts_started
+	assert(hud_fx.banners_shown==banners_before+1,"Hit banner for the first goal; the last goal opens the summary instead")
 	assert(completed[0].mistakes==1 and completed[1].mistakes==0,"Mistakes reset between goals")
 	assert(mission_stars(1)==1,"Half correct on first try earns one star")
 	assert(JSON.stringify(saved.best)==stars_before,"Custom missions preserve preset stars")
@@ -1647,7 +1822,12 @@ func smoke_test() -> void:
 	assert(not world.helipads.has("Arnhem"),"Europe base map omits Arnhem scenery")
 	world.ensure_mission_markers([catalog.lookup.arnhem])
 	assert(world.label_names.has("Arnhem") and not world.helipads.has("Arnhem"),"Mission-only markers do not reveal targets with new scenery")
-	assert(hit_radius_km(catalog.lookup.arnhem)==6.0,"Dutch city keeps its radius on Europe map")
+	assert(hit_radius_km(catalog.lookup.arnhem)==NL_CITY_KM,"Dutch city keeps its 6 km floor on Europe map")
+	assert(hit_radius_km(catalog.lookup.parijs)==EU_CITY_KM and hit_radius_km({"kind":"eigen punt","region":"eu"})==25.0,"European city range covers its model town")
+	assert(fx.zone.get_parent()==world.target,"Range circle survives a region reload")
+	assert(sfx.players.size()==8,"All synthesised effect sounds are built")
+	for sound in sfx.players.values():
+		assert(sound.stream.data.size()>1000,"Effect sound has audio data")
 	assert(WorksheetImage.allowed_size(Vector2i(6000,4000)),"24 MP photos accepted")
 	var img=Image.create(12,8,false,Image.FORMAT_RGB8)
 	var png=img.save_png_to_buffer()
@@ -1720,6 +1900,8 @@ func smoke_test() -> void:
 	refresh_mode_hints()
 	toggle_hint()
 	assert(not minimap.show_goal and not world.target.visible,"Records never reveals target, even nearby or via H")
+	update_effects(1.0/60.0)
+	assert(not in_zone and not fx.inside and found_button.modulate==Color.WHITE,"Records never hints the zone, even at the goal")
 	for marker in world.labels:
 		assert(not marker.visible,"Records hides all map names")
 	flight_time=12.5
@@ -1854,6 +2036,7 @@ func capture_preview() -> void:
 		minimap.refresh_navigation()
 		await get_tree().create_timer(.4).timeout
 		get_viewport().get_texture().get_image().save_png("res://build/preview-"+city.replace(" ","-")+".png")
+	await capture_effects()
 	# Shared camera/UI/helicopter changes also get a visual check in Europe.
 	load_world("eu")
 	start_mission([catalog.lookup.parijs])
@@ -1876,6 +2059,47 @@ func capture_preview() -> void:
 	await get_tree().create_timer(.2).timeout
 	get_viewport().get_texture().get_image().save_png("res://build/preview-europe-hangar.png")
 	print("VISUAL CHECK PASSED")
+	get_tree().quit()
+
+# Effects: answer range, in-zone highlight, fireworks, red cross, summary.
+func capture_effects() -> void:
+	mode_select.select(GameMode.LEARN)
+	start_mission([catalog.lookup.amsterdam,catalog.lookup.utrecht])
+	var goal_place: Dictionary=mission[0]
+	var goal_center=world.project(goal_place.lon,goal_place.lat)
+	var reach=zone_radius_units(goal_place)
+	helicopter.position=goal_center+Vector3(reach*1.15,flight_altitude(),reach*1.1)
+	update_flight_camera(0.0,true)
+	await get_tree().create_timer(1.2).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-fx-zone.png")
+	helicopter.position=goal_center+Vector3(reach*.35,flight_altitude(),reach*.3)
+	await get_tree().create_timer(1.0).timeout
+	assert(in_zone,"Capture shows the in-zone highlight")
+	get_viewport().get_texture().get_image().save_png("res://build/preview-fx-inzone.png")
+	answer()
+	await get_tree().create_timer(1.0).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-fx-fireworks.png")
+	await get_tree().create_timer(1.6).timeout
+	helicopter.position=world.project(4.75,52.75)+Vector3(0,flight_altitude(),0)
+	answer_cooldown=0
+	answer()
+	await get_tree().create_timer(.42).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-fx-miss.png")
+	await get_tree().create_timer(1.6).timeout
+	var last_place: Dictionary=mission[mission_index]
+	helicopter.position=world.project(last_place.lon,last_place.lat)+Vector3(0,flight_altitude(),0)
+	answer_cooldown=0
+	answer()
+	await get_tree().create_timer(1.4).timeout
+	assert(state=="summary","Capture reaches the mission summary")
+	get_viewport().get_texture().get_image().save_png("res://build/preview-fx-summary.png")
+	return_menu()
+
+func capture_effects_only() -> void:
+	saved.mute=true
+	DirAccess.make_dir_recursive_absolute("res://build")
+	await capture_effects()
+	print("FX CAPTURE PASSED")
 	get_tree().quit()
 
 # Lesson packs contain catalog names, never executable resources.

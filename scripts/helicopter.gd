@@ -7,6 +7,15 @@ var body: Node3D
 var ground_shadow: MeshInstance3D
 var running: bool = true
 var time: float = 0.0
+var rotor_disc: MeshInstance3D
+var beacon_light: MeshInstance3D
+var strobes: Array[MeshInstance3D] = []
+
+func glow_material(color: Color) -> StandardMaterial3D:
+	var m = StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = color
+	return m
 
 func material(color: Color, metal: float = 0.0) -> StandardMaterial3D:
 	var m = StandardMaterial3D.new()
@@ -81,6 +90,21 @@ func _ready() -> void:
 	part(BoxMesh.new(),Vector3(0,-.58,-1.02),Vector3(.5,.28,.35),dark,body)
 	part(CylinderMesh.new(),Vector3(0,1.06,1.4),Vector3(.055,.8,.055),dark,body)
 	part(BoxMesh.new(),Vector3(0,.25,3.6),Vector3(1.8,.08,.35),cream,body)
+	# Motion-blur disc makes the rotor read as fast-spinning from the chase cam.
+	var disc_mesh = PlaneMesh.new()
+	disc_mesh.size = Vector2(8.2,8.2)
+	var disc_mat = ShaderMaterial.new()
+	disc_mat.shader = load("res://assets/shaders/rotor_disc.gdshader")
+	rotor_disc = part(disc_mesh,Vector3(0,1.4,.12),Vector3.ONE,disc_mat,body)
+	rotor_disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Anti-collision beacon on top, white strobes on the tail and stabiliser.
+	beacon_light = part(sphere,Vector3(0,1.02,1.15),Vector3(.22,.16,.22),glow_material(Color("ff3b30")),body)
+	for at in [Vector3(0,1.32,4.1),Vector3(-.92,.3,3.6),Vector3(.92,.3,3.6)]:
+		strobes.append(part(sphere,at,Vector3(.14,.14,.14),glow_material(Color("ffffff")),body))
+	# Glowing navigation lights (port red, starboard green) and a landing light.
+	for side in [-1,1]:
+		part(sphere,Vector3(side*1.43,-.05,.7),Vector3(.12,.12,.12),glow_material(Color("ff4d3d") if side<0 else Color("4dff88")),body)
+	part(sphere,Vector3(0,-.62,-1.18),Vector3(.2,.12,.12),glow_material(Color("fff4c8")),body)
 	# Alpha falloff avoids a hard disc and needs no screen-space effects.
 	var shadow_mat = ShaderMaterial.new()
 	shadow_mat.shader = load("res://assets/shaders/aircraft_shadow.gdshader")
@@ -95,6 +119,11 @@ func _process(delta: float) -> void:
 	rotor.rotation.y += delta * (32.0 if running else 3.0)
 	tail_rotor.rotation.x += delta * 44.0
 	body.position.y = sin(time * 3.0) * .1
+	# Beacon pulses once a second; strobes give a quick double flash.
+	beacon_light.visible = fmod(time, 1.0) < .45
+	var strobe_phase = fmod(time + .5, 1.3)
+	for strobe in strobes:
+		strobe.visible = strobe_phase < .06 or (strobe_phase > .14 and strobe_phase < .2)
 
 func lean(direction: Vector2, delta: float) -> void:
 	body.rotation.z = lerp(body.rotation.z,-direction.x*.14,1.0-exp(-7.0*delta))

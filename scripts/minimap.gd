@@ -20,6 +20,7 @@ var world: TopoWorld:
 var aircraft: Vector3 = Vector3.ZERO
 var heading: float = 0.0
 var goal: Vector3 = Vector3.ZERO
+var goal_radius: float = 0.0
 var show_goal: bool = false
 var overlay: NavigationOverlay
 var background_draws: int = 0
@@ -147,7 +148,12 @@ func draw_navigation(canvas: Control) -> void:
 	if show_goal:
 		var goal_point=map_point(Vector2(goal.x,goal.z))
 		if inset.has_point(goal_point):
-			canvas.draw_circle(goal_point,5,Color("ffc35c"))
+			# The answer range as a ring, never smaller than a readable dot.
+			var ring=maxf((map_point(Vector2(goal.x,goal.z)+Vector2(0,goal_radius))-goal_point).length(),7.0) if goal_radius>0 else 0.0
+			if ring>0:
+				canvas.draw_circle(goal_point,ring,Color(1,.76,.36,.18))
+				canvas.draw_arc(goal_point,ring,0,TAU,32,Color("ffc35c"),1.5,true)
+			canvas.draw_circle(goal_point,4,Color("ffc35c"))
 	var pos=map_point(Vector2(aircraft.x,aircraft.z))
 	if inset.has_point(pos):
 		# The flight camera turns with the helicopter; the map stays north-up and
