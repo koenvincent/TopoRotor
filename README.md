@@ -19,7 +19,7 @@ Installeer **Godot 4.5.1 Standard** (geen .NET nodig), importeer `project.godot`
 - Kies Nederland of Europa, Leren, Oefenen of Records en start een vliegmissie.
 - Sturen: joystick, WASD of pijltjes. Links/rechts draait de helikopter; omhoog/W vliegt vooruit en omlaag/S achteruit. De camera draait soepel mee, de overzichtskaart blijft noordgericht. Antwoorden: ‘Hier is het!’ of spatie. M: overzicht.
 - Je begint **laag en dichtbij**. Gebruik **Lager / Hoger**, het muiswiel of **Q / E** om tussen drie vlieghoogtes te wisselen. Lager toont meer detail; hoger geeft meer zicht op de omgeving. De overzichtskaart (M) blijft apart beschikbaar. Het spel controleert je positie; er is geen landingssimulatie.
-- ‘Hangar’ beëindigt een vlucht. Naar de achtergrond schakelen pauzeert de vlucht; bij terugkeer gaat hij verder. De Android-terugknop sluit eerst de foto of vlucht.
+- ‘Pauze’, Escape of de Android-terugknop pauzeert de vlucht. Kies verder vliegen of stoppen naar de hangar. Naar de achtergrond schakelen pauzeert ook; hervatten doe je zelf. De terugknop sluit eerst een geopende foto.
 
 ## Nederlandse miniatuurwereld
 
@@ -48,7 +48,7 @@ De decoratieve akkers kunnen worden herbouwd met `uv run --with shapely python t
 
 ## Schoolwerk
 
-Open **Foto / eigen topo-opdrachten**. Kies een JPG of PNG van maximaal 25 MB en 12 megapixel. Een foto blijft lokaal als referentie; voer de gewenste namen in of gebruik de optionele OCR-service. Voor een eigen locatie:
+Open **Foto / eigen topo-opdrachten**. Kies een JPG of PNG van maximaal 25 MB en 24 megapixel. Een foto blijft lokaal als referentie; voer de gewenste namen in of gebruik de optionele OCR-service. Voor een eigen locatie:
 
 ```
 Arnhem
@@ -56,7 +56,7 @@ IJsselmeer
 Mijn dorp | 52.123 | 5.456
 ```
 
-Namen mogen ook met komma's worden gescheiden. De app meldt onbekende namen en dubbelzinnige dubbele namen. Europese en Nederlandse plaatsen mogen worden gemengd. Gebruik `Utrecht provincie` / `Groningen provincie` voor provincies, en `Luxemburg land` voor het land.
+Een eigen punt is `naam | breedtegraad | lengtegraad` in WGS84-graden, eerst de breedtegraad (noord), dan de lengtegraad (oost; west is negatief). Een decimale punt of komma mag (`52.123` of `52,123`). Punten buiten de Europakaart (34°–72°N, 25°W–45°O) worden geweigerd. Op regels zonder `|` mogen namen ook met komma's worden gescheiden. De app meldt onbekende namen en dubbelzinnige dubbele namen. Europese en Nederlandse plaatsen mogen worden gemengd. Gebruik `Utrecht provincie` / `Groningen provincie` voor provincies, en `Luxemburg land` voor het land.
 
 ![Opdrachten en foto](docs/screenshots/preview-photo.png)
 
@@ -67,10 +67,10 @@ De ouder controleert altijd de herkende locaties. Een kopje zoals ‘Nederland�
 ## Geografie en leren
 
 - Landvragen controleren het landpolygoon op de kaart. Volgens de Nederlandse schooltopografie telt de Krim als Oekraïne, Noord-Cyprus als Cyprus en Åland als Finland.
-- Andere vragen controleren een referentiepunt met 6 km tolerantie in Nederland en 25 km in Europa. Provincies, rivieren, eilanden en meren hebben **geen volledige gebieds-/rivierdetectie**. De getekende provinciegrens verandert deze antwoordcontrole niet.
+- Andere vragen controleren een referentiepunt met tolerantie per locatie: Nederlandse steden 6 km (ook in Europa-missies), Europese steden 25 km, Nederlandse eilanden 10 km, Europese eilanden 25 km, provincies 25 km, Nederlandse wateren 25 km en Europese wateren 40 km. Een positief, eindig `radius_km` kan dit overschrijven. Provincies, rivieren, eilanden en meren hebben **geen volledige gebieds-/rivierdetectie**. De getekende provinciegrens verandert deze antwoordcontrole niet.
 - Natural Earth-contouren zijn grof, vooral rond delta's en kleine eilanden. Europa loopt circa 25°W–45°O en 34°–72°N.
 - Velden, bomen, gebouwen en bergen zijn gestileerde decoratie; geen echte hoogte- of landgebruiksdatabase.
-- Drie sterren: een foutloze Records-vlucht; twee bij maximaal twee fouten; anders één. Records bewaart daarnaast de beste tijd per route. Er is nog geen adaptief herhalen of langdurige voortgang per locatie.
+- Drie sterren: een foutloze Records-vlucht; twee als minstens 80% van de locaties in één keer goed is; anders één. De samenvatting toont welke locaties nog oefening vragen. Eigen missies overschrijven de presetsterren niet. Records bewaart daarnaast de beste tijd per route. Er is nog geen adaptief herhalen of langdurige voortgang per locatie.
 - Nederland heeft een kleurrijke miniatuurwereld met grachtenpanden in Amsterdam, de Domtoren, een Rotterdamse haven met vereenvoudigde Erasmusbrug, duinen en gemengd bos. Steden staan op hun cataloguscoördinaten; gebouwen en landschapselementen zijn uitvergroot en symbolisch. Dit is geen nauwkeurige stratenkaart. Europa heeft nu eigen stadswijken, regionale bouwstijlen, herkenningspunten, bossen en berggordels; zie [Europa](docs/EUROPA.md).
 - Het IJsselmeer/Markermeer is opnieuw uitgesneden met gedetailleerdere meergeometrie; Flevoland, Almere en Lelystad blijven op land.
 - Vliegen in Nederland is rustiger gemaakt zodat je tijd hebt om te zoeken. Kindertests en prestaties op echte Android-toestellen blijven nodig.
@@ -89,7 +89,18 @@ GODOT_BIN=/pad/naar/godot python3 tools/check_godot.py
 .venv/bin/pip-audit -r ocr-service/requirements.lock.txt
 ```
 
-Met Tesseract (`nld` en `eng`) geïnstalleerd draait ook de echte OCR-test:
+Installeer Tesseract met Nederlandse en Engelse taaldata voor lokale OCR-tests:
+
+```sh
+# macOS (Homebrew)
+brew install tesseract tesseract-lang
+# Ubuntu / Debian
+sudo apt-get install tesseract-ocr tesseract-ocr-nld tesseract-ocr-eng
+# Controleer dat nld en eng beschikbaar zijn
+tesseract --list-langs
+```
+
+De Docker-image en GitHub Actions installeren deze taaldata al. Met Tesseract (`nld` en `eng`) geïnstalleerd draait ook de echte OCR-test:
 
 ```
 TOPOROTOR_TEST_REAL_OCR=1 .venv/bin/python -m unittest discover -s tests -v

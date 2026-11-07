@@ -13,7 +13,17 @@ func _init() -> void:
 
 func normalize(value: String) -> String:
 	var s = value.strip_edges().to_lower()
-	for pair in [["ë","e"],["é","e"],["ï","i"],["ö","o"],["á","a"],["ü","u"],["-"," "],["'",""]]:
+	# Mirrors the OCR service (NFKD + strip combining marks) for the Latin letters we expect.
+	var folds := {
+		"a": "àáâãäåăąā", "c": "çćčĉċ", "d": "ď", "e": "èéêëęěēė",
+		"g": "ğ", "i": "ìíîïīį", "l": "ĺľ", "n": "ñńňņ", "o": "òóôõöőō",
+		"r": "ŕř", "s": "śšşșŝ", "t": "ťţț", "u": "ùúûüůűūų",
+		"y": "ýÿ", "z": "źżž",
+	}
+	for base in folds:
+		for ch in folds[base]:
+			s = s.replace(ch, base)
+	for pair in [["-"," "],["'",""],["’",""],["‘",""],["`",""]]:
 		s = s.replace(pair[0],pair[1])
 	return " ".join(s.split(" ",false))
 

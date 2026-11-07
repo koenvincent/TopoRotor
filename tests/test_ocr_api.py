@@ -80,6 +80,13 @@ class OCRAPITests(unittest.TestCase):
             self.assertEqual(self.client.post("/extract", headers=HEADERS, content=png()).status_code, 413)
             decode.assert_not_called()
 
+    def test_engine_failure_does_not_log_worksheet_content(self):
+        failure = subprocess.CalledProcessError(1, "tesseract", stderr=b"private worksheet text")
+        with patch.object(api.subprocess, "run", side_effect=failure), self.assertLogs(api.log, level="WARNING") as logs:
+            response = self.client.post("/extract", headers=HEADERS, content=png())
+        self.assertEqual(response.status_code, 502)
+        self.assertNotIn("private worksheet text", "\n".join(logs.output))
+
     def test_corrupt_image(self):
         self.assertEqual(self.client.post("/extract", headers=HEADERS, content=b"invalid image").status_code, 400)
 
