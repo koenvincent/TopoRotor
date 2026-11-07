@@ -268,7 +268,35 @@ func skids(x: float, y: float, z: float, length: float, leg_z: Array, leg_top: f
 			taper(knee, Vector3(side * x, y, lz), .05, .055, "gear")
 			ball(knee, Vector3(.1,.1,.1), "gear")
 
+# Airframes modelled in Blender (tools/blender/models.py) replace the
+# procedural body where they exist. Their faces carry paint-slot names as
+# material names, so the hangar's colours land on the right parts; rotors
+# stay procedural, because the rotor upgrade adds blades.
+const MODEL_DIR = "res://assets/models/"
+
+func airframe(id: String) -> bool:
+	var path = MODEL_DIR + id + ".glb"
+	if not ResourceLoader.exists(path):
+		return false
+	var frame: Node3D = (load(path) as PackedScene).instantiate()
+	frame.name = "Airframe"
+	body.add_child(frame)
+	for mesh_node in frame.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance = mesh_node as MeshInstance3D
+		for surface in mesh_instance.mesh.get_surface_count():
+			var source = mesh_instance.mesh.surface_get_material(surface)
+			var slot = source.resource_name if source != null else "body"
+			mesh_instance.set_surface_override_material(surface, paint_materials.get(slot, paint_materials.body))
+	return true
+
 func build_redder() -> Dictionary:
+	if airframe("redder"):
+		add_rotor(Vector3(0,1.42,.12),8.0,4)
+		add_tail_rotor(Vector3(.2,.95,3.95),1.5,4)
+		return {"nose":Vector3(0,-.55,-1.3),"side":Vector3(.95,.45,-.2),"belly":Vector3(0,-.75,.2),"top":Vector3(0,1.0,.5),"tail":Vector3(0,1.6,4.05),
+			"skid":[1.1,-.9,0.0,3.3],"wing":[1.0,-.1,.6],"exhaust":[Vector3(-.32,.9,1.66),Vector3(.32,.9,1.66)],
+			"beacon":Vector3(0,1.0,1.15),"strobes":[Vector3(0,1.62,4.0),Vector3(-.9,.64,3.2),Vector3(.9,.64,3.2)],"nav":[Vector3(-.94,-.15,.3),Vector3(.94,-.15,.3)],"landing":Vector3(0,-.6,-1.25),
+			"eyes":Vector3(0,.32,-1.42)}
 	ball(Vector3(0,0,0),Vector3(1.9,1.45,2.5),"body")
 	ball(Vector3(0,.22,-.65),Vector3(1.78,1.15,1.65),"glass")
 	box(Vector3(0,.16,-.9),Vector3(.07,1.35,1.25),"rotor")
