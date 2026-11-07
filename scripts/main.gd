@@ -201,6 +201,7 @@ var streak: int = 0
 const PHOTO_SIZE = Vector2(1140,640)
 
 func _ready() -> void:
+	get_tree().node_added.connect(touch_friendly)
 	if not is_test_mode and not is_capture_mode:
 		load_save()
 	build_environment()
@@ -224,6 +225,10 @@ func build_environment() -> void:
 	e.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color=Color("d6e8df")
 	e.ambient_light_energy=.65
+	# The aircraft's lacquer and glass mirror a soft sky; the map itself is
+	# matte, so this only adds shine to the models.
+	e.sky=ToyLook.studio_sky()
+	e.reflected_light_source=Environment.REFLECTION_SOURCE_SKY
 	e.tonemap_mode=Environment.TONE_MAPPER_LINEAR
 	# Soft bloom makes beacons, fireworks and lights glow; a touch more
 	# saturation and contrast gives the miniature world more punch.
@@ -365,6 +370,27 @@ func button(text: String,action: Callable,gold: bool=false) -> Button:
 	return b
 
 # A quick squash on press and a springy release: buttons feel physical.
+# Swiping through a list of buttons on a tablet: a finger that lands on a
+# button must still scroll the list. A button normally stops the touch, so
+# its ScrollContainer never sees the drag; inside a list it passes the touch
+# on instead, and the list cancels the tap once the finger really moves.
+# The dead zone keeps a slightly wobbly tap a tap.
+const SCROLL_DEADZONE = 14
+
+func touch_friendly(node: Node) -> void:
+	if node is ScrollContainer:
+		(node as ScrollContainer).scroll_deadzone=SCROLL_DEADZONE
+	elif node is BaseButton and in_scroll_list(node):
+		(node as BaseButton).mouse_filter=Control.MOUSE_FILTER_PASS
+
+static func in_scroll_list(node: Node) -> bool:
+	var up=node.get_parent()
+	while up!=null:
+		if up is ScrollContainer:
+			return true
+		up=up.get_parent()
+	return false
+
 func add_press_juice(b: BaseButton) -> void:
 	b.resized.connect(func(): b.pivot_offset=b.size*.5)
 	b.button_down.connect(func():
@@ -1893,42 +1919,7 @@ func build_paint_shop() -> void:
 		stage_style.set_content_margin(side,0)
 	stage.add_theme_stylebox_override("panel",stage_style)
 	left.add_child(stage)
-	var view_box=SubViewportContainer.new()
-	view_box.stretch=true
-	view_box.custom_minimum_size=Vector2(330,280)
-	view_box.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	stage.add_child(view_box)
-	var viewport=SubViewport.new()
-	viewport.own_world_3d=true
-	viewport.transparent_bg=true
-	viewport.msaa_3d=Viewport.MSAA_4X
-	view_box.add_child(viewport)
-	var preview_camera=Camera3D.new()
-	preview_camera.fov=38
-	preview_camera.position=Vector3(0,7.4,13.5)
-	var look=Environment.new()
-	look.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR
-	look.ambient_light_color=Color("d6e8df")
-	look.ambient_light_energy=.7
-	look.background_mode=Environment.BG_CLEAR_COLOR
-	preview_camera.environment=look
-	viewport.add_child(preview_camera)
-	preview_camera.look_at(Vector3(0,1.8,0),Vector3.UP)
-	var sun=DirectionalLight3D.new()
-	sun.rotation_degrees=Vector3(-48,-30,0)
-	sun.light_energy=1.1
-	viewport.add_child(sun)
-	var pad=MeshInstance3D.new()
-	var pad_mesh=CylinderMesh.new()
-	pad_mesh.top_radius=3.6
-	pad_mesh.bottom_radius=3.6
-	pad_mesh.height=.12
-	pad.mesh=pad_mesh
-	var pad_mat=StandardMaterial3D.new()
-	pad_mat.albedo_color=Color("2c4a50")
-	pad.material_override=pad_mat
-	pad.position.y=-.02
-	viewport.add_child(pad)
+	var viewport=preview_stage(stage,Vector2(330,280),38,Vector3(0,6.0,11.0),Vector3(0,1.7,0),3.6,true)
 	preview_heli=RotorHelicopter.new()
 	viewport.add_child(preview_heli)
 	preview_heli.rotation.y=-.7
@@ -1986,6 +1977,112 @@ func build_paint_shop() -> void:
 	done.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	footer.add_child(done)
 	show_hangar_page("type")
+
+# A lit 3D stage for the hangar and pilot previews: a soft glow behind the
+# model, a warm key light with shadows, a cool back light that draws bright
+# edges, and a pad with a glowing ring (with a helipad H for the aircraft).
+func preview_stage(stage: PanelContainer,min_size: Vector2,fov: float,eye: Vector3,target: Vector3,radius: float,helipad: bool) -> SubViewport:
+	var glow=TextureRect.new()
+	glow.name="StageGlow"
+	var shine=GradientTexture2D.new()
+	shine.fill=GradientTexture2D.FILL_RADIAL
+	shine.fill_from=Vector2(.5,.42)
+	shine.fill_to=Vector2(1.0,.42)
+	var fade=Gradient.new()
+	fade.set_color(0,Color(SKY.r,SKY.g,SKY.b,.3))
+	fade.set_color(1,Color(SKY.r,SKY.g,SKY.b,0))
+	shine.gradient=fade
+	glow.texture=shine
+	glow.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+	glow.stretch_mode=TextureRect.STRETCH_SCALE
+	glow.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	stage.add_child(glow)
+	var view_box=SubViewportContainer.new()
+	view_box.stretch=true
+	view_box.custom_minimum_size=min_size
+	view_box.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	stage.add_child(view_box)
+	var viewport=SubViewport.new()
+	viewport.own_world_3d=true
+	viewport.transparent_bg=true
+	viewport.msaa_3d=Viewport.MSAA_4X
+	view_box.add_child(viewport)
+	var preview_camera=Camera3D.new()
+	preview_camera.fov=fov
+	preview_camera.position=eye
+	# A studio sky lights the model from all sides and shows in the lacquer;
+	# the background stays clear so the panel's glow shows through.
+	var look=Environment.new()
+	look.background_mode=Environment.BG_CLEAR_COLOR
+	look.sky=ToyLook.studio_sky()
+	look.ambient_light_source=Environment.AMBIENT_SOURCE_SKY
+	look.ambient_light_energy=.5
+	look.reflected_light_source=Environment.REFLECTION_SOURCE_SKY
+	look.adjustment_enabled=true
+	look.adjustment_saturation=1.15
+	look.adjustment_contrast=1.05
+	preview_camera.environment=look
+	viewport.add_child(preview_camera)
+	preview_camera.look_at(target,Vector3.UP)
+	var sun=DirectionalLight3D.new()
+	sun.rotation_degrees=Vector3(-50,-35,0)
+	sun.light_color=Color("fff1d8")
+	sun.light_energy=1.0
+	sun.shadow_enabled=true
+	sun.shadow_bias=.04
+	sun.shadow_blur=2.5
+	sun.directional_shadow_max_distance=40.0
+	viewport.add_child(sun)
+	# A soft fill from the other side and a cool back light along the edges.
+	var fill=DirectionalLight3D.new()
+	fill.rotation_degrees=Vector3(-25,60,0)
+	fill.light_color=Color("cfe2ff")
+	fill.light_energy=.25
+	fill.light_specular=.2
+	viewport.add_child(fill)
+	var back=DirectionalLight3D.new()
+	back.rotation_degrees=Vector3(-20,165,0)
+	back.light_color=Color("9fe3ff")
+	back.light_energy=.45
+	viewport.add_child(back)
+	var pad=MeshInstance3D.new()
+	var pad_mesh=CylinderMesh.new()
+	pad_mesh.top_radius=radius
+	pad_mesh.bottom_radius=radius*1.04
+	pad_mesh.height=radius*.035
+	pad_mesh.radial_segments=64
+	pad.mesh=pad_mesh
+	pad.material_override=ToyLook.material(Color("1d343a"),.55)
+	pad.position.y=-pad_mesh.height*.5
+	viewport.add_child(pad)
+	var lamp=StandardMaterial3D.new()
+	lamp.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+	lamp.albedo_color=SKY
+	var ring=MeshInstance3D.new()
+	var ring_mesh=TorusMesh.new()
+	ring_mesh.inner_radius=radius*.93
+	ring_mesh.outer_radius=radius*.97
+	ring_mesh.rings=64
+	ring.mesh=ring_mesh
+	ring.material_override=lamp
+	ring.scale.y=.25
+	ring.position.y=.005
+	ring.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	viewport.add_child(ring)
+	if helipad:
+		var paint=StandardMaterial3D.new()
+		paint.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+		paint.albedo_color=Color(GOLD,.85)
+		paint.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+		for bar in [[Vector3(-.7,0,0),Vector3(.32,.01,2.2)],[Vector3(.7,0,0),Vector3(.32,.01,2.2)],[Vector3.ZERO,Vector3(1.1,.01,.3)]]:
+			var stroke=MeshInstance3D.new()
+			stroke.mesh=BoxMesh.new()
+			stroke.scale=bar[1]
+			stroke.position=bar[0]+Vector3(0,.01,0)
+			stroke.material_override=paint
+			stroke.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			viewport.add_child(stroke)
+	return viewport
 
 func hangar_button(text: String,action: Callable,height: float,font_px: int) -> Button:
 	var b=button(text,action)
@@ -2667,42 +2764,7 @@ func build_pilots() -> void:
 		stage_style.set_content_margin(side,0)
 	stage.add_theme_stylebox_override("panel",stage_style)
 	left.add_child(stage)
-	var view_box=SubViewportContainer.new()
-	view_box.stretch=true
-	view_box.custom_minimum_size=Vector2(340,190)
-	view_box.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	stage.add_child(view_box)
-	var viewport=SubViewport.new()
-	viewport.own_world_3d=true
-	viewport.transparent_bg=true
-	viewport.msaa_3d=Viewport.MSAA_4X
-	view_box.add_child(viewport)
-	var preview_camera=Camera3D.new()
-	preview_camera.fov=30
-	preview_camera.position=Vector3(0,1.7,5.2)
-	var look=Environment.new()
-	look.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR
-	look.ambient_light_color=Color("d6e8df")
-	look.ambient_light_energy=.75
-	look.background_mode=Environment.BG_CLEAR_COLOR
-	preview_camera.environment=look
-	viewport.add_child(preview_camera)
-	preview_camera.look_at(Vector3(0,1.2,0),Vector3.UP)
-	var sun=DirectionalLight3D.new()
-	sun.rotation_degrees=Vector3(-40,-25,0)
-	sun.light_energy=1.1
-	viewport.add_child(sun)
-	var pad=MeshInstance3D.new()
-	var pad_mesh=CylinderMesh.new()
-	pad_mesh.top_radius=1.1
-	pad_mesh.bottom_radius=1.1
-	pad_mesh.height=.08
-	pad.mesh=pad_mesh
-	var pad_mat=StandardMaterial3D.new()
-	pad_mat.albedo_color=Color("2c4a50")
-	pad.material_override=pad_mat
-	pad.position.y=-.04
-	viewport.add_child(pad)
+	var viewport=preview_stage(stage,Vector2(340,190),30,Vector3(0,1.7,5.2),Vector3(0,1.25,0),1.1,false)
 	pilot_preview=PilotFigure.new()
 	pilot_preview.name="PilotPreview"
 	viewport.add_child(pilot_preview)
@@ -4090,11 +4152,22 @@ func smoke_test() -> void:
 			var figure=PilotFigure.new()
 			add_child(figure)
 			figure.configure(figure_look)
-			assert(figure.root.get_child_count()>20,"Pilot figure builds with %s %s" % [entry[0],option[0]])
+			var head: Node3D=figure.root.get_node_or_null("Head")
+			assert(head!=null and head.scale.x>1.0 and figure.root.find_children("*","MeshInstance3D",true,false).size()>20,"Pilot figure builds with %s %s" % [entry[0],option[0]])
 			figure.queue_free()
 	var pilots_before: Dictionary=saved.duplicate(true)
 	open_pilots()
 	assert(pilots_open and pilots_panel.visible and pilot_list.get_child_count()==saved.profiles.size(),"The pilot screen lists every pilot")
+	# Tablet swipes: every button in a scrolling list lets the drag through,
+	# and every list has a dead zone so a tap stays a tap.
+	var list_buttons=0
+	for panel in [paint_panel,pilots_panel]:
+		for scroll in panel.find_children("*","ScrollContainer",true,false):
+			assert((scroll as ScrollContainer).scroll_deadzone==SCROLL_DEADZONE,"Scroll list %s has a touch dead zone" % scroll.name)
+			for b in scroll.find_children("*","BaseButton",true,false):
+				assert((b as Control).mouse_filter==Control.MOUSE_FILTER_PASS,"Button %s passes swipes to its list" % b.name)
+				list_buttons+=1
+	assert(list_buttons>=HangarCatalog.MODELS.size()+HangarCatalog.ACCESSORIES.size()+saved.profiles.size(),"The swipe check saw the type, accessory and pilot lists")
 	pilot_new.text="Sara"
 	add_pilot()
 	assert(pilot_name()=="Sara" and points()==0 and saved.profiles.size()==pilots_before.profiles.size()+1 and pilot_button.text=="Piloot: Sara","A new pilot becomes the active one")

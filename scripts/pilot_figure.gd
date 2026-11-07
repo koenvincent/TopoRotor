@@ -38,6 +38,15 @@ const EXTRAS = [["geen","Geen"],["sjaal","Sjaal",{"points":100}],["rugzak","Rugz
 const ATTRIBUTES = [["figuur","Figuur",BODIES],["huid","Huidskleur",SKINS],["haar","Kapsel",HAIR],["haarkleur","Haarkleur",HAIR_COLOURS],["hoofd","Op je hoofd",HEADWEAR],["bril","Bril",GLASSES],["gezicht","Gezicht",FACE],["outfit","Outfit",OUTFITS],["kleur","Outfitkleur",OUTFIT_COLOURS],["extra","Extra",EXTRAS]]
 const DEFAULT_LOOK = {"figuur":"man","huid":"f6d7c3","haar":"kort","haarkleur":"8b5a2b","hoofd":"koptelefoon","bril":"geen","gezicht":"geen","outfit":"vliegpak","kleur":"e67b34","extra":"geen"}
 
+# The body shrinks round the feet; the head is drawn round HEAD_PIVOT,
+# enlarged and set on the shortened neck at HEAD_AT (see rebuild).
+const BODY_SCALE = .9
+const HEAD_PIVOT = Vector3(0,1.92,0)
+const HEAD_SCALE = 1.32
+const HEAD_AT = Vector3(0,1.9,0)
+const SATIN = .4
+const GLOSSY = .95
+
 # Headwear that hides the top of the hair.
 const COVERING = ["pet","helm","muts","hoed","baret","propellerpet","brandweer","piraat"]
 
@@ -122,9 +131,7 @@ static func locked_count(points: int,medals: Array) -> int:
 	return count
 
 func _init() -> void:
-	sphere=SphereMesh.new()
-	sphere.radial_segments=14
-	sphere.rings=7
+	sphere=ToyLook.sphere()
 
 func _ready() -> void:
 	if not is_instance_valid(root):
@@ -134,33 +141,37 @@ func configure(new_look: Dictionary) -> void:
 	look=clean(new_look)
 	rebuild()
 
-func mat(hex: String) -> StandardMaterial3D:
-	if not materials.has(hex):
-		var m=StandardMaterial3D.new()
-		m.albedo_color=Color(hex)
-		m.roughness=.75
-		materials[hex]=m
-	return materials[hex]
+# Vinyl toy paint: satin by default, glossy for the eyes and shiny gear.
+func mat(hex: String,gloss: float=SATIN) -> StandardMaterial3D:
+	var key="%s@%.2f" % [hex,gloss]
+	if not materials.has(key):
+		materials[key]=ToyLook.material(Color(hex),gloss)
+	return materials[key]
 
-func piece(mesh: Mesh,at: Vector3,size: Vector3,hex: String,rotation_deg: Vector3=Vector3.ZERO) -> MeshInstance3D:
+# A plain box becomes a rounded block at its real size; other meshes scale.
+func piece(mesh: Mesh,at: Vector3,size: Vector3,hex: String,rotation_deg: Vector3=Vector3.ZERO,gloss: float=SATIN) -> MeshInstance3D:
 	var p=MeshInstance3D.new()
-	p.mesh=mesh
-	p.material_override=mat(hex)
+	if mesh is BoxMesh and (mesh as BoxMesh).size==Vector3.ONE:
+		p.mesh=ToyLook.rounded_box(size,.45)
+	else:
+		p.mesh=mesh
+		p.scale=size
+	p.material_override=mat(hex,gloss)
 	p.position=at
-	p.scale=size
 	p.rotation_degrees=rotation_deg
 	root.add_child(p)
 	return p
 
-func box(at: Vector3,size: Vector3,hex: String,rotation_deg: Vector3=Vector3.ZERO) -> MeshInstance3D:
-	return piece(BoxMesh.new(),at,size,hex,rotation_deg)
+func box(at: Vector3,size: Vector3,hex: String,rotation_deg: Vector3=Vector3.ZERO,gloss: float=SATIN) -> MeshInstance3D:
+	return piece(BoxMesh.new(),at,size,hex,rotation_deg,gloss)
 
-func ball(at: Vector3,size: Vector3,hex: String) -> MeshInstance3D:
-	return piece(sphere,at,size,hex)
+func ball(at: Vector3,size: Vector3,hex: String,gloss: float=SATIN) -> MeshInstance3D:
+	return piece(sphere,at,size,hex,Vector3.ZERO,gloss)
 
 func cylinder(at: Vector3,radius: float,height: float,hex: String,rotation_deg: Vector3=Vector3.ZERO,top: float=-1.0) -> MeshInstance3D:
 	var mesh=CylinderMesh.new()
-	mesh.radial_segments=14
+	mesh.radial_segments=24
+	mesh.rings=1
 	mesh.top_radius=radius if top<0 else top
 	mesh.bottom_radius=radius
 	mesh.height=height
@@ -191,35 +202,62 @@ func rebuild() -> void:
 	elif look.outfit=="smoking":
 		cloth="17191c"
 	var shoulder: float=.29 if woman else .34
-	# Legs and shoes.
+	# Toy proportions: the body is drawn at its usual size and then shrunk
+	# round the feet, the head is drawn at its usual place and enlarged
+	# round its middle. Outfits, hair, hats and glasses keep fitting, and
+	# the pilot gets the big friendly head of a modern toy figure.
+	var figure_root=root
+	var body=Node3D.new()
+	body.name="Body"
+	body.scale=Vector3.ONE*BODY_SCALE
+	root.add_child(body)
+	root=body
+	# Legs and chunky sneakers with a pale sole.
 	for side in [-1,1]:
-		box(Vector3(side*.12,.47,0),Vector3(.19,.86,.22),pants)
-		box(Vector3(side*.12,.06,-.04),Vector3(.21,.12,.32),"2a2522")
+		box(Vector3(side*.12,.5,0),Vector3(.2,.82,.23),pants)
+		box(Vector3(side*.125,.085,-.05),Vector3(.25,.15,.38),"2a2522")
+		box(Vector3(side*.125,.025,-.05),Vector3(.26,.05,.39),"f2f0ea")
 	# Torso: a woman's figure is narrower at the shoulders with a wider hip.
-	box(Vector3(0,1.25,0),Vector3(shoulder*2,.74,.32),cloth)
+	box(Vector3(0,1.25,0),Vector3(shoulder*2,.74,.34),cloth)
 	if woman:
-		box(Vector3(0,.95,0),Vector3(.56,.18,.31),cloth)
-	# Arms with hands.
+		box(Vector3(0,.95,0),Vector3(.56,.18,.33),cloth)
+	# Arms a little away from the body, with round mitten hands.
 	for side in [-1,1]:
-		box(Vector3(side*(shoulder+.08),1.24,0),Vector3(.15,.66,.17),cloth,Vector3(0,0,side*6))
-		ball(Vector3(side*(shoulder+.11),.86,0),Vector3(.15,.15,.15),skin)
+		box(Vector3(side*(shoulder+.09),1.24,0),Vector3(.16,.66,.18),cloth,Vector3(0,0,side*9))
+		ball(Vector3(side*(shoulder+.15),.87,0),Vector3(.19,.19,.19),skin)
 	build_outfit(shoulder,cloth)
-	# Neck and head.
-	cylinder(Vector3(0,1.67,0),.08,.14,skin)
+	cylinder(Vector3(0,1.67,0),.09,.14,skin)
+	build_extra(shoulder)
+	root=figure_root
+	var head=Node3D.new()
+	head.name="Head"
+	head.position=HEAD_AT
+	head.scale=Vector3.ONE*HEAD_SCALE
+	root.add_child(head)
+	var offset=Node3D.new()
+	offset.position=-HEAD_PIVOT
+	head.add_child(offset)
+	root=offset
 	ball(Vector3(0,1.92,0),Vector3(.44,.5,.44),skin)
 	for side in [-1,1]:
 		ball(Vector3(side*.22,1.9,0),Vector3(.08,.12,.08),skin)
-		ball(Vector3(side*.09,1.95,-.2),Vector3(.065,.07,.04),"1b1b1b")
-	ball(Vector3(0,1.88,-.225),Vector3(.07,.08,.06),shade(skin,.1))
-	box(Vector3(0,1.8,-.205),Vector3(.12,.025,.02),"9c4a4a")
-	if woman:
-		for side in [-1,1]:
-			box(Vector3(side*.09,1.995,-.205),Vector3(.08,.012,.01),"1b1b1b")
+		# Glossy button eyes with a glint, like a vinyl toy figure.
+		ball(Vector3(side*.085,1.94,-.2),Vector3(.058,.078,.03),"1d1714",GLOSSY)
+		ball(Vector3(side*.085+.012,1.957,-.214),Vector3(.018,.018,.008),"ffffff",GLOSSY)
+		# Eyebrows in the hair colour, a soft blush on the cheeks.
+		box(Vector3(side*.088,2.012,-.207),Vector3(.07,.018,.016),hair if look.haar!="kaal" else shade(skin,.45),Vector3(0,0,-side*7))
+		ball(Vector3(side*.13,1.872,-.172),Vector3(.07,.04,.014),"f5a3a8")
+		if woman:
+			box(Vector3(side*.125,1.975,-.19),Vector3(.04,.014,.012),"1b1b1b",Vector3(0,side*-30,side*30))
+	ball(Vector3(0,1.885,-.222),Vector3(.05,.048,.04),shade(skin,.06))
+	# A small closed smile: a dark curve whose top is hidden by the upper lip.
+	ball(Vector3(0,1.818,-.197),Vector3(.085,.04,.024),"6e2a2a")
+	ball(Vector3(0,1.83,-.203),Vector3(.095,.032,.024),skin)
 	build_face(skin,hair)
 	build_hair(hair,look.hoofd in COVERING)
 	build_headwear(look.kleur)
 	build_glasses()
-	build_extra(shoulder)
+	root=figure_root
 
 func build_outfit(shoulder: float,cloth: String) -> void:
 	match look.outfit:
@@ -573,7 +611,7 @@ func build_extra(shoulder: float) -> void:
 				ball(at+Vector3(side*.05,.22,0),Vector3(.05,.05,.03),"9a6a3c")
 			ball(at+Vector3(0,.14,-.055),Vector3(.04,.03,.02),"2a2522")
 		"papegaai":
-			var at=Vector3(-shoulder+.04,1.7,.02)
+			var at=Vector3(-shoulder-.04,1.68,.04)
 			ball(at,Vector3(.13,.2,.13),"3fbf6a")
 			ball(at+Vector3(0,.14,-.02),Vector3(.1,.1,.1),"e8453a")
 			ball(at+Vector3(0,.14,-.07),Vector3(.04,.04,.05),"f4c51c")
