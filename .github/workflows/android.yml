@@ -86,7 +86,11 @@ jobs:
         if: always()
         run: rm -f "$GODOT_ANDROID_KEYSTORE_RELEASE_PATH"
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Every successful main build becomes a downloadable GitHub Release
+    # (v0.4.<run>, same as the APK's version name); a pushed v* tag publishes
+    # under its own name. Tags created here use GITHUB_TOKEN and therefore do
+    # not trigger this workflow again.
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     needs: apk
     runs-on: ubuntu-24.04
     permissions:
@@ -100,7 +104,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          RUN_NUMBER: ${{ github.run_number }}
+          TARGET_SHA: ${{ github.sha }}
         run: |
-          gh release view "$RELEASE_TAG" >/dev/null 2>&1 || gh release create "$RELEASE_TAG" --title "TopoRotor $RELEASE_TAG" --generate-notes
-          gh release upload "$RELEASE_TAG" apk/TopoRotor.apk apk/TopoRotor.apk.sha256 --clobber
+          if [ "$REF_TYPE" = tag ]; then
+            tag="$REF_NAME"
+          else
+            tag="v0.4.$RUN_NUMBER"
+          fi
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --target "$TARGET_SHA" --title "TopoRotor $tag" --generate-notes --latest
+          gh release upload "$tag" apk/TopoRotor.apk apk/TopoRotor.apk.sha256 --clobber
