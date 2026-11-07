@@ -3602,7 +3602,7 @@ func parse_custom() -> Dictionary:
 			manual.append({"name":parts[0].strip_edges(),"lat":lat,"lon":lon,"region":"nl" if TopoWorld.in_bounds(nl_bounds,lat,lon) else "eu","kind":"eigen punt","code":""})
 		else:
 			ordinary.append(raw)
-	var result=catalog.parse_list("\n".join(ordinary))
+	var result=catalog.parse_list("\n".join(ordinary),region)
 	var names: Dictionary={}
 	for place in result.found:
 		names[catalog.normalize(place.name)]=true
@@ -4035,7 +4035,7 @@ func smoke_test() -> void:
 	assert(not world.country_contains("FRA",world.project(13.405,52.52)),"Berlin not France")
 	assert(world.country_contains("UKR",world.project(34.1,44.95)) and not world.country_contains("RUS",world.project(34.1,44.95)),"Crimea counts as Ukraine")
 	assert(world.country_contains("CYP",world.project(33.9,35.3)),"Northern Cyprus counts as Cyprus")
-	assert(world.country_contains("FIN",world.project(19.95,60.2)),"Aland counts as Finland")
+	assert(world.country_contains("FIN",world.project(19.95,60.1)),"Aland counts as Finland")
 	for pair in [["rome","Rome ligt in Italië, ten zuidoosten van Nederland."],["londen","Londen ligt in het Verenigd Koninkrijk, ten westen van Nederland."],["duitsland","Duitsland ligt ten oosten van Nederland."]]:
 		if catalog.lookup.has(pair[0]):
 			var sentence=locator.describe(catalog.lookup[pair[0]])
@@ -4626,6 +4626,8 @@ func smoke_test() -> void:
 	assert(helicopter.scale.x>FLIGHT_HELI_SCALE*2,"The hangar shows a big circling helicopter")
 	preload("res://scripts/smoke/ws1.gd").run(self)
 	preload("res://scripts/smoke/ws5b.gd").run(self)
+	preload("res://scripts/smoke/ws4.gd").run(self)
+	preload("res://scripts/smoke/ws5a.gd").run(self)
 	print("SMOKE TEST PASSED: parsing, coordinates, land boundaries, flight scoring, custom missions")
 	await get_tree().process_frame
 	get_tree().quit()
@@ -5095,7 +5097,7 @@ func apply_online_content(text: String,from_cache: bool=false) -> bool:
 		content_status.text+=" %d overgeslagen: niet meer geldig." % skipped
 	return true
 
-# One mission of a lesson pack: {"pack": {title, places}} or {"error": Dutch reason}.
+# One mission of a lesson pack: {"pack": {title, places, region}} or {"error": Dutch reason}.
 func parse_online_pack(pack: Variant) -> Dictionary:
 	if not pack is Dictionary or not pack.get("title") is String or pack.title.strip_edges().is_empty() or pack.title.length()>100 or not pack.get("places") is Array or pack.places.is_empty() or pack.places.size()>100:
 		return {"error":"Een missie heeft een ongeldige titel of locatielijst."}
@@ -5104,17 +5106,21 @@ func parse_online_pack(pack: Variant) -> Dictionary:
 		if not place is String or place.length()>120:
 			return {"error":"Een locatie is ongeldig."}
 		names.append(place)
-	var parsed=catalog.parse_list("\n".join(names))
+	# Optional "region": "nl" or "eu" picks the map for names both maps have (Noordzee, Rijn).
+	var pack_region: String=String(pack.get("region","")) if pack.get("region","") is String else "?"
+	if pack_region not in ["","nl","eu"]:
+		return {"error":"Missie %s: region moet \"nl\" of \"eu\" zijn." % pack.title}
+	var parsed=catalog.parse_list("\n".join(names),pack_region)
 	if not parsed.unknown.is_empty() or parsed.found.is_empty():
 		return {"error":"Onbekende locaties in %s: %s" % [pack.title,", ".join(parsed.unknown)]}
-	return {"error":"","pack":{"title":pack.title,"places":parsed.found}}
+	return {"error":"","pack":{"title":pack.title,"places":parsed.found,"region":pack_region}}
 
 func start_online_mission() -> void:
 	var selected=content_list.get_selected_items()
 	if selected.is_empty():
 		return
 	var places: Array=online_packs[selected[0]].places
-	var target_region="nl"
+	var target_region="eu" if online_packs[selected[0]].region=="eu" else "nl"
 	for place in places:
 		if place.region!="nl":
 			target_region="eu"

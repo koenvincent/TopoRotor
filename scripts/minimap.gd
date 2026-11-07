@@ -50,6 +50,7 @@ var world: TopoWorld:
 		area_sample=Vector2(INF,INF)
 		view_radius=0.0
 		country_radius=0.0
+		update_tooltip()
 		redraw_map()
 var aircraft: Vector3 = Vector3.ZERO
 var heading: float = 0.0
@@ -89,7 +90,7 @@ var direction_index: int = -1
 
 func _ready() -> void:
 	mouse_filter=Control.MOUSE_FILTER_STOP
-	tooltip_text="Tik om te wisselen tussen Nederland en de omgeving. Kleuren gelden alleen voor de minikaart. Grenzen: Kadaster NL, CC BY 4.0."
+	update_tooltip()
 	clipper=Control.new()
 	clipper.clip_contents=true
 	clipper.mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -107,6 +108,13 @@ func _ready() -> void:
 		layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	resized.connect(layout_layers)
 	layout_layers()
+
+# Only the Dutch map has a tap toggle and Kadaster borders; Europe shows no promise it cannot keep.
+func update_tooltip() -> void:
+	if is_instance_valid(world) and world.region!="nl":
+		tooltip_text="Kleuren gelden alleen voor de minikaart."
+	else:
+		tooltip_text="Tik om te wisselen tussen Nederland en de omgeving. Kleuren gelden alleen voor de minikaart. Grenzen: Kadaster NL, CC BY 4.0."
 
 func _gui_input(event: InputEvent) -> void:
 	# Touch is emitted as a mouse click by the project input settings.

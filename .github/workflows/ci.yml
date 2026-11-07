@@ -38,6 +38,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Validate map, boundary and place data
+        run: python3 tools/check_data.py
       - name: Load pinned Godot version and checksums
         run: |
           if grep -vE '^(#.*|GODOT_[A-Z0-9_]+=[A-Za-z0-9._-]+)?$' tools/godot-version.env; then
