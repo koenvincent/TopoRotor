@@ -18,6 +18,10 @@ class CandidateTests(unittest.TestCase):
         self.assertNotIn("Rome", module.candidates("romero"))
         self.assertEqual(module.candidates("Onbekenddorp"), [])
 
+    def test_typographic_apostrophes(self):
+        for apostrophe in ["'", "’", "‘", "`"]:
+            self.assertIn("Den Bosch", module.candidates(apostrophe + "s-Hertogenbosch"))
+
     def test_aliases(self):
         self.assertIn("Den Bosch", module.candidates("'s-Hertogenbosch"))
 

@@ -3,6 +3,7 @@ extends RefCounted
 
 # Schema version of progress.json. Files without a version field are treated as version 1.
 const VERSION := 1
+const KNOWN_KEYS = ["version","best","records","custom","endpoint","mute"]
 
 # True when the file was written by a newer app with a schema this build does not understand.
 static func is_newer(raw: Variant) -> bool:
@@ -15,6 +16,9 @@ static func clean(raw: Variant) -> Dictionary:
 	var data: Dictionary = {"version":VERSION,"best":{},"records":{},"custom":[],"endpoint":"","mute":false}
 	if not raw is Dictionary:
 		return data
+	for key in raw:
+		if not key in KNOWN_KEYS:
+			data[key]=raw[key]
 	if raw.get("mute") is bool:
 		data.mute=raw.mute
 	if raw.get("endpoint") is String and raw.endpoint.length()<=2048:

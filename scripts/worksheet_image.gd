@@ -2,7 +2,7 @@ class_name WorksheetImage
 extends RefCounted
 
 const MAX_BYTES: int = 25 * 1024 * 1024
-const MAX_PIXELS: int = 12_000_000
+const MAX_PIXELS: int = 24_000_000
 
 static func be16(bytes: PackedByteArray, index: int) -> int:
 	return (int(bytes[index]) << 8) | int(bytes[index+1])

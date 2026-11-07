@@ -22,6 +22,8 @@ var boundary_paths: Dictionary = {}
 var province_regions: Array = []
 var municipal_boundary: MeshInstance3D
 var rng = RandomNumberGenerator.new()
+var material_cache: Dictionary = {}
+var label_font: Font
 
 # Natural Earth's default admin_0 layer follows de-facto control. Dutch school
 # topography (and the Dutch government position) counts these areas as part of
@@ -42,12 +44,18 @@ func project(lon: float, lat: float) -> Vector3:
 func unproject(p: Vector3) -> Vector2:
 	return Vector2(p.x/(cos(deg_to_rad(origin.y))*geo_scale)+origin.x,origin.y-p.z/geo_scale)
 
-func mat(color: Color, unshaded: bool = false) -> StandardMaterial3D:
+func mat(color: Color, unshaded: bool = false, cull_disabled: bool = false) -> StandardMaterial3D:
+	var key = "%s|%s|%s" % [color.to_html(), unshaded, cull_disabled]
+	if material_cache.has(key):
+		return material_cache[key]
 	var m = StandardMaterial3D.new()
 	m.albedo_color = color
 	m.roughness = 1.0
 	if unshaded:
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	if cull_disabled:
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material_cache[key] = m
 	return m
 
 func build(new_region: String, catalog: TopoCatalog) -> void:
@@ -163,8 +171,7 @@ func land_polygon(points: PackedVector2Array, color: Color, y: float) -> void:
 			st.add_vertex(Vector3(p.x,y,p.y))
 	var mesh = MeshInstance3D.new()
 	mesh.mesh = st.commit()
-	var land_mat = mat(color,false)
-	land_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var land_mat = mat(color,false,true)
 	mesh.material_override = water_material if color == Color("377f94") else land_mat
 	add_child(mesh)
 
@@ -183,8 +190,7 @@ func line(points: PackedVector2Array,color: Color,y: float,width: float,closed: 
 			st.add_vertex(Vector3(p.x,y,p.y))
 	var mesh = MeshInstance3D.new()
 	mesh.mesh = st.commit()
-	var m = mat(color)
-	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var m = mat(color,false,true)
 	mesh.material_override = m
 	add_child(mesh)
 
@@ -200,9 +206,7 @@ func coast_wall(points: PackedVector2Array) -> void:
 	st.generate_normals()
 	var mesh = MeshInstance3D.new()
 	mesh.mesh = st.commit()
-	var edge = mat(Color("b3b28a"))
-	edge.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mesh.material_override = edge
+	mesh.material_override = mat(Color("b3b28a"),false,true)
 	add_child(mesh)
 
 func make_city(pos: Vector3,place_name: String="") -> void:
@@ -291,7 +295,11 @@ func build_landscape_detail() -> void:
 				st.add_vertex(Vector3(points[index].x,.025,points[index].y))
 		var mesh=MeshInstance3D.new()
 		mesh.mesh=st.commit()
-		var m=mat(Color.WHITE,region != "nl")
+		var m=StandardMaterial3D.new()
+		m.albedo_color=Color.WHITE
+		m.roughness=1.0
+		if region != "nl":
+			m.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
 		m.vertex_color_is_srgb=false
 		m.vertex_color_use_as_albedo=true
 		m.cull_mode=BaseMaterial3D.CULL_DISABLED
@@ -321,22 +329,24 @@ func build_landscape_detail() -> void:
 
 func ensure_mission_markers(places: Array) -> void:
 	for place in places:
-		add_place_marker(place)
+		add_place_marker(place,false)
 
-func add_place_marker(p: Dictionary) -> void:
+func add_place_marker(p: Dictionary,with_scenery: bool = true) -> void:
 	if label_names.has(p.name):
 		if p.kind == "eigen punt" and marker_labels.has(p.name):
 			marker_labels[p.name].position = project(p.lon,p.lat)+Vector3(0,3.8,0)
 		return
 	label_names[p.name]=true
 	var pos = project(p.lon,p.lat)
-	if p.kind == "stad":
+	if with_scenery and p.kind == "stad":
 		make_city(pos,p.name)
 		make_pad(pos,p.name)
 	var label = Label3D.new()
 	label.text = p.name
 	label.position = pos+Vector3(0,3.8 if region=="nl" else 2.1,0)
-	label.font = load("res://assets/interface.ttf")
+	if label_font == null:
+		label_font = load("res://assets/interface.ttf")
+	label.font = label_font
 	label.font_size = 36 if p.kind == "stad" else 30
 	label.pixel_size = .035 if region=="nl" else .06
 	label.modulate = Color("153c48") if p.kind == "stad" else Color("2b5b63")
@@ -430,9 +440,7 @@ func boundary_mesh(paths: Array,width: float,height: float,dash: float,gap: floa
 			walked+=length
 	var node=MeshInstance3D.new()
 	node.mesh=surface.commit()
-	var neutral=mat(Color("566056"),true)
-	neutral.cull_mode=BaseMaterial3D.CULL_DISABLED
-	node.material_override=neutral
+	node.material_override=mat(Color("566056"),true,true)
 	node.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(node)
 	return node

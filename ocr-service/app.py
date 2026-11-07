@@ -53,7 +53,7 @@ _EXTRACT_ERRORS = {code: {"model": ErrorBody} for code in (400, 401, 408, 413, 4
 def normalized(text: str) -> str:
     text = unicodedata.normalize("NFKD", text.casefold())
     text = "".join(c for c in text if not unicodedata.combining(c))
-    return re.sub(r"\s+", " ", text.replace("-", " ").replace("'", "")).strip()
+    return re.sub(r"\s+", " ", re.sub(r"['\u2018\u2019`]", "", text.replace("-", " "))).strip()
 
 
 def candidates(text: str) -> list[str]:
@@ -135,6 +135,7 @@ def recognize(content: bytes) -> dict:
             warnings.simplefilter("error", Image.DecompressionBombWarning)
             # Restrict plugins at open time so only PNG/JPEG header parsers see untrusted bytes.
             with Image.open(io.BytesIO(content), formats=["PNG", "JPEG"]) as source:
+                log.info("ocr_image pixels=%d", source.width * source.height)
                 # Validate dimensions before exif_transpose/load decode image pixels.
                 if source.width * source.height > MAX_PIXELS:
                     log.warning("ocr_rejected status=413 width=%d height=%d", source.width, source.height)
@@ -147,11 +148,13 @@ def recognize(content: bytes) -> dict:
                 encoded = io.BytesIO()
                 image.save(encoded, format="PNG")
                 # Piping pixels avoids pytesseract's temporary worksheet file on disk.
+                ocr_started = time.monotonic()
                 result = subprocess.run(
                     ["tesseract", "stdin", "stdout", "-l", "nld+eng", "--psm", "11"],
                     input=encoded.getvalue(), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                     timeout=30, check=True,
                 )
+                log.info("ocr_engine duration_ms=%d", (time.monotonic() - ocr_started) * 1000)
                 text = result.stdout.decode("utf-8", errors="replace")
     except (Image.DecompressionBombError, Image.DecompressionBombWarning):
         raise HTTPException(413, "Image dimensions too large")
@@ -159,8 +162,7 @@ def recognize(content: bytes) -> dict:
         log.error("ocr_failed status=503 reason=tesseract_not_found")
         raise HTTPException(503, "OCR engine is not installed")
     except subprocess.CalledProcessError as e:
-        log.warning("ocr_failed status=502 rc=%s stderr=%s", e.returncode,
-                    (e.stderr or b"")[:500].decode("utf-8", errors="replace"))
+        log.warning("ocr_failed status=502 rc=%s", e.returncode)
         raise HTTPException(502, "OCR engine failed")
     except (UnidentifiedImageError, OSError, ValueError) as e:
         log.warning("ocr_failed status=400 error=%s", type(e).__name__)
@@ -223,6 +225,7 @@ async def _extract(request: Request):
                     content.extend(chunk)
         except TimeoutError:
             raise HTTPException(408, "Upload timed out")
+        log.info("ocr_upload bytes=%d", len(content))
         # Time budget: upload 20 s + decode + Tesseract 30 s; the app's HTTPRequest timeout (60 s) must stay above it.
         if await request.is_disconnected():
             raise HTTPException(408, "Client disconnected")
