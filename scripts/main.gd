@@ -25,6 +25,7 @@ var content_url: LineEdit
 var content_list: ItemList
 var content_dialog: AcceptDialog
 var online_packs: Array = []
+var europe_route_select: OptionButton
 var mode_select: OptionButton
 var mute_button: Button
 var hint_button: Button
@@ -109,14 +110,14 @@ func build_environment() -> void:
 	e.background_color=Color("286375")
 	e.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color=Color("d6e8df")
-	e.ambient_light_energy=.55
+	e.ambient_light_energy=.65
 	e.tonemap_mode=Environment.TONE_MAPPER_LINEAR
 	env.environment=e
 	add_child(env)
 	var sun=DirectionalLight3D.new()
-	sun.rotation_degrees=Vector3(-48,-28,0)
+	sun.rotation_degrees=Vector3(-52,-32,0)
 	sun.light_color=Color("fff2d2")
-	sun.light_energy=.9
+	sun.light_energy=1.05
 	sun.shadow_enabled=true
 	sun.directional_shadow_max_distance=450
 	sun.shadow_bias=.03
@@ -216,6 +217,14 @@ func build_ui() -> void:
 	region_select.custom_minimum_size.y=48
 	region_select.item_selected.connect(func(index): load_world("nl" if index==0 else "eu"))
 	col.add_child(region_select)
+	europe_route_select=OptionButton.new()
+	europe_route_select.add_item("Europa · kort rondje")
+	europe_route_select.add_item("Europa · hoofdsteden (43)")
+	europe_route_select.add_item("Europa · landen (50)")
+	europe_route_select.custom_minimum_size.y=44
+	europe_route_select.visible=false
+	europe_route_select.item_selected.connect(func(_index): update_best_label())
+	col.add_child(europe_route_select)
 	mode_select=OptionButton.new()
 	mode_select.add_item("Leren · alle aanwijzingen")
 	mode_select.add_item("Oefenen · hulp als je dichtbij bent")
@@ -233,6 +242,11 @@ func build_ui() -> void:
 	best_label=label("Klaar voor vertrek, piloot?",15,Color("b1c9c1"))
 	best_label.name="Best"
 	col.add_child(best_label)
+	var credits=LinkButton.new()
+	credits.text="Bronnen en licenties"
+	credits.add_theme_font_size_override("font_size",13)
+	credits.pressed.connect(show_credits)
+	col.add_child(credits)
 	hud=Control.new()
 	hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hud.mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -257,13 +271,13 @@ func build_ui() -> void:
 	hud.add_child(pause)
 	minimap=FlightMinimap.new()
 	minimap.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	minimap.position=Vector2(-234,88)
-	minimap.size=Vector2(210,180)
-	minimap.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	minimap.position=Vector2(-284,88)
+	minimap.size=Vector2(260,230)
+	minimap.mouse_filter=Control.MOUSE_FILTER_STOP
 	hud.add_child(minimap)
 	var height_panel=PanelContainer.new()
 	height_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	height_panel.position=Vector2(-234,280)
+	height_panel.position=Vector2(-234,330)
 	height_panel.size=Vector2(210,108)
 	height_panel.add_theme_stylebox_override("panel",style(Color(.035,.12,.16,.94),14))
 	hud.add_child(height_panel)
@@ -338,8 +352,22 @@ func build_ui() -> void:
 	pause_panel.hide()
 	build_photo_dialog()
 
+func show_credits() -> AcceptDialog:
+	var dialog=AcceptDialog.new()
+	dialog.title="TopoRotor · bronnen en licenties"
+	dialog.dialog_text="Grensgegevens: Kadaster NL / PDOK, Bestuurlijke Gebieden 2026.\nCC BY 4.0: https://creativecommons.org/licenses/by/4.0/\nBron: https://api.pdok.nl/kadaster/brk-bestuurlijke-gebieden/ogc/v1\nGebundeld op 7 november 2026; uitgesneden en vereenvoudigd.\n\nLand-, water- en stadscontouren: Natural Earth, public domain.\nDe buurten en gebouwen zijn gestileerde modellen, geen echte stratenkaart.\nEigen code en modellen: MIT. Godot: MIT. DejaVu: fontlicentie.\nZie THIRD-PARTY.md voor bronverwijzingen en overige licenties."
+	ui.add_child(dialog)
+	dialog.get_label().autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	dialog.get_label().custom_minimum_size.x=600
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.popup_centered(Vector2i(660,360))
+	return dialog
+
 func load_world(new_region: String) -> void:
 	region=new_region
+	if is_instance_valid(europe_route_select):
+		europe_route_select.visible=region=="eu"
 	if is_instance_valid(world):
 		remove_child(world)
 		world.queue_free()
@@ -352,12 +380,15 @@ func load_world(new_region: String) -> void:
 	world.set_hints(false)
 	update_best_label()
 
+func selected_presets() -> Array:
+	return catalog.presets(region,europe_route_select.selected if region=="eu" and is_instance_valid(europe_route_select) else 0)
+
 func update_best_label() -> void:
-	var best=float(saved.get("records",{}).get(record_key(catalog.presets(region)),0.0))
+	var best=float(saved.get("records",{}).get(record_key(selected_presets()),0.0))
 	var practice=clampi(int(saved.best.get(region+"_oefenen",0)),0,3)
 	var records=clampi(int(saved.best.get(region+"_test",0)),0,3)
 	best_label.text="Oefenen: %s · Records: %s\n" % ["★".repeat(practice)+"☆".repeat(3-practice),"★".repeat(records)+"☆".repeat(3-records)]
-	best_label.text+="Beste standaardroute: %.1f sec" % best if best>0 else "Zet je eerste recordtijd neer!"
+	best_label.text+="Beste gekozen route: %.1f sec" % best if best>0 else "Zet je eerste recordtijd neer!"
 
 func record_key(places: Array) -> String:
 	var route: Array=[]
@@ -371,7 +402,7 @@ func start_mission(custom: Array = [],as_custom: bool = true) -> void:
 	if is_instance_valid(summary):
 		summary.queue_free()
 	custom_mission=as_custom and not custom.is_empty()
-	mission=custom.duplicate() if not custom.is_empty() else catalog.presets(region)
+	mission=custom.duplicate() if not custom.is_empty() else selected_presets()
 	game_mode=mode_select.selected
 	if game_mode==GameMode.RECORDS:
 		# Same start and route order make repeat record attempts comparable.
@@ -445,6 +476,7 @@ func _process(delta: float) -> void:
 	minimap.aircraft=helicopter.position
 	minimap.refresh_navigation()
 	world.refresh_labels(helicopter.position,show_overview,camera.size)
+	world.set_boundary_detail(camera.size)
 	if mission_index<mission.size():
 		var p: Dictionary=mission[mission_index]
 		var km=distance_km(p)
@@ -507,7 +539,7 @@ func answer() -> void:
 		return
 	var p: Dictionary=mission[mission_index]
 	# Countries without usable map geometry fall back to the catalog reference point.
-	var hit=(world.country_contains(p.code,helicopter.position) if world.has_country(p.code) else distance_km(p)<25) if p.kind=="land" else distance_km(p)<hit_radius_km(p)
+	var hit=(world.country_contains(p.code,helicopter.position) if world.has_country(p.code) else distance_km(p)<(1.5 if p.code=="VAT" else 25)) if p.kind=="land" else distance_km(p)<hit_radius_km(p)
 	if hit:
 		completed.append({"name":p.name,"hints":show_hints,"mistakes":goal_mistakes})
 		if not saved.mute:
@@ -528,8 +560,8 @@ func refresh_mode_hints() -> void:
 		return
 	var place: Dictionary=mission[mission_index]
 	var nearby=distance_km(place)<(18.0 if region=="nl" else 75.0)
-	if place.kind=="land" and world.has_country(place.code):
-		nearby=world.country_contains(place.code,helicopter.position)
+	if place.kind=="land":
+		nearby=world.country_contains(place.code,helicopter.position) if world.has_country(place.code) else distance_km(place)<5.0
 	show_hints=game_mode==GameMode.LEARN or (game_mode==GameMode.PRACTICE and nearby)
 	# Only learning reveals map names. Practice reveals just the nearby goal.
 	world.set_hints(game_mode==GameMode.LEARN)
@@ -542,7 +574,7 @@ func toggle_hint() -> void:
 		refresh_mode_hints()
 
 func flight_altitude() -> float:
-	return FLIGHT_ALTITUDES[camera_level] if region=="nl" else FLIGHT_ALTITUDES[camera_level]*.6
+	return FLIGHT_ALTITUDES[camera_level] if region=="nl" else FLIGHT_ALTITUDES[camera_level]*1.35
 
 func flight_zoom() -> float:
 	return FLIGHT_ZOOMS[camera_level] if region=="nl" else FLIGHT_ZOOMS[camera_level]*2.5
@@ -677,6 +709,7 @@ func position_menu_camera() -> void:
 	camera.size=330 if region=="nl" else 650
 	camera.position=view_target+Vector3(0,600,450)
 	camera.look_at(view_target,Vector3.UP)
+	world.set_boundary_detail(camera.size)
 
 func toggle_sound() -> void:
 	saved.mute=not saved.mute
@@ -1150,6 +1183,22 @@ func _notification(what: int) -> void:
 			pause_flight()
 
 func smoke_test() -> void:
+	assert(world.province_regions.size()==12,"All Dutch provinces are bundled")
+	assert(world.boundary_data.municipality_count==342,"Official municipality layer is complete")
+	for level in ["national","provincial","municipal"]:
+		assert(not world.boundary_paths[level].is_empty(),"Boundary level has usable geometry: "+level)
+	var layouts: Dictionary={}
+	for place in catalog.places:
+		if place.kind=="stad" and place.region=="nl":
+			assert(world.dutch_scenery.city_stats.has(place.name),"Every Dutch city receives a city plan")
+			var stats: Dictionary=world.dutch_scenery.city_stats[place.name]
+			assert(stats.plots>0,"City plan is not empty: "+place.name)
+			layouts[stats.layout]=true
+	assert(layouts.size()==50,"Dutch cities do not repeat the same layout")
+	minimap.toggle_detail()
+	assert(minimap.local_view,"Minimap can show local municipality boundaries")
+	minimap.toggle_detail()
+	assert(not minimap.local_view,"Minimap can return to the country overview")
 	assert(world.dutch_scenery.landmarks.has("Amsterdam") and world.dutch_scenery.landmarks.has("Rotterdam") and world.dutch_scenery.landmarks.has("Utrecht"),"Dutch landmarks built at catalog anchors")
 	world.set_hints(true)
 	world.refresh_labels(helicopter.position,false)
@@ -1230,7 +1279,7 @@ func smoke_test() -> void:
 	load_world("eu")
 	for place in catalog.places:
 		if place.kind=="land":
-			assert(world.has_country(place.code),"Country %s has map polygons" % place.code)
+			assert(world.has_country(place.code) or place.code=="VAT","Country %s has map polygons or documented point fallback" % place.code)
 	assert(world.country_contains("FRA",world.project(2.3522,48.8566)),"Paris in France")
 	assert(not world.country_contains("FRA",world.project(13.405,52.52)),"Berlin not France")
 	assert(world.country_contains("UKR",world.project(34.1,44.95)) and not world.country_contains("RUS",world.project(34.1,44.95)),"Crimea counts as Ukraine")
@@ -1356,6 +1405,41 @@ func smoke_test() -> void:
 	content_dialog.hide()
 	return_menu()
 	feedback_audio.stop()
+	load_world("eu")
+	assert(world.europe_scenery.landmarks.size()>=40,"European capitals have detailed city scenery")
+	assert(world.europe_scenery.peak_count>20 and world.europe_scenery.terrain_patches>100,"Europe has terrain and mountain variety")
+	assert(catalog.presets("eu",1).size()>40 and catalog.presets("eu",2).size()>35,"Full-European capital and country routes exist")
+	mode_select.select(GameMode.PRACTICE)
+	start_mission([catalog.lookup.parijs])
+	assert(not minimap.show_goal,"European practice hides a distant city")
+	helicopter.position=world.project(catalog.lookup.parijs.lon,catalog.lookup.parijs.lat)
+	refresh_mode_hints()
+	assert(minimap.show_goal,"European practice reveals nearby city")
+	start_mission([catalog.lookup["frankrijk"]])
+	refresh_mode_hints()
+	assert(not minimap.show_goal,"Country goal stays hidden outside country")
+	helicopter.position=world.project(2.3,48.8)
+	refresh_mode_hints()
+	assert(minimap.show_goal,"European country practice reveals goal inside country")
+	mode_select.select(GameMode.RECORDS)
+	start_mission([catalog.lookup.parijs])
+	helicopter.position=world.project(catalog.lookup.parijs.lon,catalog.lookup.parijs.lat)
+	toggle_hint()
+	toggle_overview()
+	world.refresh_labels(helicopter.position,true)
+	assert(not minimap.show_goal and not world.target.visible,"European records hides markers even in overview")
+	for marker in world.labels:
+		assert(not marker.visible,"European records overview does not reveal labels")
+	var vatican: Dictionary=catalog.lookup.vaticaanstad
+	mode_select.select(GameMode.PRACTICE)
+	start_mission([vatican])
+	helicopter.position=world.project(vatican.lon,vatican.lat)
+	refresh_mode_hints()
+	assert(minimap.show_goal,"Vatican point fallback reveals nearby goal")
+	answer()
+	assert(state=="summary","Vatican fallback accepts its reference point")
+	mode_select.select(GameMode.LEARN)
+	return_menu()
 	print("SMOKE TEST PASSED: parsing, coordinates, land boundaries, flight scoring, custom missions")
 	await get_tree().process_frame
 	get_tree().quit()
@@ -1382,9 +1466,19 @@ func capture_preview() -> void:
 	change_height(1)
 	await get_tree().create_timer(1).timeout
 	get_viewport().get_texture().get_image().save_png("res://build/preview-flight-high.png")
+	minimap.toggle_detail()
+	await get_tree().create_timer(.3).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-boundaries-local.png")
+	minimap.toggle_detail()
 	return_menu()
 	await get_tree().create_timer(.5).timeout
 	get_viewport().get_texture().get_image().save_png("res://build/preview-hangar.png")
+	var credits=show_credits()
+	await get_tree().create_timer(.2).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-credits.png")
+	credits.hide()
+	credits.queue_free()
+	await get_tree().process_frame
 	open_photo_dialog()
 	import_photo("res://examples/demo-werkblad.png")
 	mission_text.text="Amsterdam\nRotterdam\nDen Haag\nUtrecht\nArnhem"
@@ -1396,7 +1490,7 @@ func capture_preview() -> void:
 	photo_open=false
 	photo_dialog.hide()
 	photo_backdrop.hide()
-	for city in ["amsterdam","utrecht","rotterdam"]:
+	for city in ["amsterdam","utrecht","rotterdam","den haag","groningen","arnhem","nijmegen","almere","maastricht","zwolle","sneek"]:
 		var place: Dictionary=catalog.lookup[city]
 		start_mission([place])
 		state="preview" # Freeze flight while photographing a detail view.
@@ -1407,10 +1501,11 @@ func capture_preview() -> void:
 		camera.look_at(center)
 		detail_label.text="Nederland · herkenningspunten van dichtbij"
 		world.refresh_labels(center,false,camera.size)
+		world.set_boundary_detail(camera.size)
 		minimap.aircraft=helicopter.position
 		minimap.refresh_navigation()
 		await get_tree().create_timer(.4).timeout
-		get_viewport().get_texture().get_image().save_png("res://build/preview-"+city+".png")
+		get_viewport().get_texture().get_image().save_png("res://build/preview-"+city.replace(" ","-")+".png")
 	# Shared camera/UI/helicopter changes also get a visual check in Europe.
 	load_world("eu")
 	start_mission([catalog.lookup.parijs])
@@ -1420,6 +1515,18 @@ func capture_preview() -> void:
 	rotor_audio.stop()
 	feedback_audio.stop()
 	await get_tree().process_frame
+	for city in ["parijs","londen","rome","stockholm","athene","bern","oslo"]:
+		var place: Dictionary=catalog.lookup[city]
+		mode_select.select(GameMode.LEARN)
+		start_mission([place])
+		helicopter.position=world.project(place.lon,place.lat)+Vector3(0,flight_altitude(),0)
+		camera_level=0
+		camera.size=flight_zoom()
+		await get_tree().create_timer(2).timeout
+		get_viewport().get_texture().get_image().save_png("res://build/preview-europe-"+city+".png")
+	return_menu()
+	await get_tree().create_timer(.2).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-europe-hangar.png")
 	print("VISUAL CHECK PASSED")
 	get_tree().quit()
 
