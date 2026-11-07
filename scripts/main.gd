@@ -26,6 +26,7 @@ var content_list: ItemList
 var content_dialog: AcceptDialog
 var online_packs: Array = []
 var europe_route_select: OptionButton
+var nl_route_select: OptionButton
 var mode_select: OptionButton
 var mute_button: Button
 var hint_button: Button
@@ -492,6 +493,14 @@ func build_menu() -> void:
 	region_select.custom_minimum_size.y=50
 	region_select.item_selected.connect(func(index): load_world("nl" if index==0 else "eu"))
 	col.add_child(region_select)
+	# Same slot and height as the Europe picker; only one of the two is visible.
+	nl_route_select=OptionButton.new()
+	for route in catalog.nl_routes:
+		nl_route_select.add_item("%s (%d)" % [route.title,route.places.size()])
+	nl_route_select.custom_minimum_size.y=46
+	nl_route_select.visible=region=="nl"
+	nl_route_select.item_selected.connect(func(_index): update_best_label())
+	col.add_child(nl_route_select)
 	europe_route_select=OptionButton.new()
 	europe_route_select.add_item("Europa · kort rondje")
 	europe_route_select.add_item("Europa · hoofdsteden (43)")
@@ -697,6 +706,8 @@ func load_world(new_region: String) -> void:
 	region=new_region
 	if is_instance_valid(europe_route_select):
 		europe_route_select.visible=region=="eu"
+	if is_instance_valid(nl_route_select):
+		nl_route_select.visible=region=="nl"
 	if is_instance_valid(world):
 		fx.detach_zone()
 		remove_child(world)
@@ -712,7 +723,8 @@ func load_world(new_region: String) -> void:
 	update_best_label()
 
 func selected_presets() -> Array:
-	return catalog.presets(region,europe_route_select.selected if region=="eu" and is_instance_valid(europe_route_select) else 0)
+	var picker: OptionButton=europe_route_select if region=="eu" else nl_route_select
+	return catalog.presets(region,maxi(picker.selected,0) if is_instance_valid(picker) else 0)
 
 func update_best_label() -> void:
 	var best=float(saved.get("records",{}).get(record_key(selected_presets()),0.0))
@@ -1845,13 +1857,26 @@ func smoke_test() -> void:
 	for level in ["national","provincial","municipal"]:
 		assert(not world.boundary_paths[level].is_empty(),"Boundary level has usable geometry: "+level)
 	var layouts: Dictionary={}
+	var dutch_cities=0
 	for place in catalog.places:
 		if place.kind=="stad" and place.region=="nl":
+			dutch_cities+=1
 			assert(world.dutch_scenery.city_stats.has(place.name),"Every Dutch city receives a city plan")
 			var stats: Dictionary=world.dutch_scenery.city_stats[place.name]
 			assert(stats.plots>0,"City plan is not empty: "+place.name)
 			layouts[stats.layout]=true
-	assert(layouts.size()==50,"Dutch cities do not repeat the same layout")
+	assert(dutch_cities==65 and layouts.size()==dutch_cities,"Dutch cities do not repeat the same layout")
+	# Worksheet routes: overview map, learning map and maps A-D of the textbook.
+	assert(catalog.nl_routes.size()==7,"All Dutch worksheet routes are bundled")
+	assert(catalog.presets("nl",0)==[catalog.lookup.utrecht,catalog.lookup.amsterdam,catalog.lookup["den haag"],catalog.lookup.rotterdam,catalog.lookup.middelburg,catalog.lookup["den bosch"],catalog.lookup.maastricht,catalog.lookup.arnhem,catalog.lookup.zwolle,catalog.lookup.assen,catalog.lookup.groningen,catalog.lookup.leeuwarden],"Short Dutch route is unchanged, so its best time stays")
+	assert(catalog.presets("nl",1).size()==34,"Overview map lists all 34 numbered places")
+	for route in catalog.nl_routes:
+		for place in route.places:
+			assert(place.region=="nl" and TopoWorld.in_bounds(TopoWorld.map_bounds("nl"),place.lat,place.lon),"Route place lies on the Dutch map: "+place.name)
+	for name in ["Biesbos","Randstad","Twente","Veluwe","Schiphol","Afsluitdijk","Vaalserberg","Lek","Neder-Rijn","Fryslân","Groningen (provincie)","Utrecht (stad)","Zaandam","Alphen aan den Rijn"]:
+		assert(catalog.lookup.has(catalog.normalize(name)),"Worksheet name is known: "+name)
+	assert(catalog.lookup[catalog.normalize("Groningen (provincie)")].kind=="provincie" and catalog.lookup[catalog.normalize("Groningen (stad)")].kind=="stad","Province and city with the same name stay apart")
+	assert(hit_radius_km(catalog.lookup.biesbos)==7.0 and hit_radius_km(catalog.lookup.randstad)==30.0,"Areas use their own answer range")
 	var builtin_cities=["Amsterdam","Rotterdam","Utrecht","Den Haag","Groningen","Arnhem","Nijmegen","Maastricht","Almere","Lelystad","Leeuwarden","Zwolle","Breda","Delft","Middelburg","Sneek","Eindhoven"]
 	var real_landmarks=0
 	for place in catalog.places:
@@ -2191,7 +2216,9 @@ func smoke_test() -> void:
 	# Layout must fit the base viewport without a scrollbar in the hangar menu.
 	await get_tree().process_frame
 	await get_tree().process_frame
-	assert(europe_route_select.visible,"Layout check covers the tallest menu variant")
+	assert(europe_route_select.visible and not nl_route_select.visible,"Layout check covers the tallest menu variant")
+	print("Hangar menu width: %d px" % menu.get_global_rect().size.x)
+	assert(menu.get_global_rect().size.x<=640,"Route pickers do not widen the hangar menu past half the screen")
 	var screen=get_viewport().get_visible_rect()
 	assert(screen.encloses(menu.get_global_rect()),"Hangar menu fits on screen without scrolling")
 	assert(menu.get_global_rect().size.y<=screen.size.y-32,"Hangar menu keeps a margin")

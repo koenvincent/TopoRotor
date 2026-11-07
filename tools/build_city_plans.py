@@ -1,7 +1,12 @@
 """Generate schematic neighbourhoods constrained by Natural Earth urban areas.
 
-uv run --with shapely python tools/build_city_plans.py /path/to/ne_10m_urban_areas.geojson
+uv run --with shapely python tools/build_city_plans.py /path/to/ne_10m_urban_areas.geojson [--keep-existing]
 These are miniature city layouts, not surveyed streets or individual buildings.
+--keep-existing leaves every plan already in data/city_plans_nl.json untouched and
+only generates plans for cities that are new in places.json, so adding a city never
+reshapes a city the player already knows. Use it whenever places.json gains cities:
+a full rebuild shrinks plans next to the new neighbours (Amsterdam next to Amstelveen
+no longer fits its landmark reserve and fails).
 """
 import json, math, random, sys, zlib
 from pathlib import Path
@@ -19,18 +24,21 @@ index=STRtree(urban)
 water=unary_union([Polygon(r) for r in json.loads((ROOT/'data/map_nl.json').read_text())['lakes']])
 types={}
 for kind,names in {
- 'canal':['Amsterdam','Utrecht','Delft','Leiden','Gouda','Alkmaar','Leeuwarden','Sneek','Hoorn','Middelburg'],
- 'river':['Arnhem','Nijmegen','Maastricht','Deventer','Zutphen','Venlo','Roermond','Dordrecht'],
- 'modern':['Almere','Lelystad'],
- 'port':['Rotterdam','Den Helder','Vlissingen','Terneuzen'],
- 'green':['Apeldoorn','Assen','Emmen','Wageningen','Harderwijk'],
- 'industrial':['Eindhoven','Tilburg','Enschede','Hengelo','Helmond','Oss'],
+ 'canal':['Amsterdam','Utrecht','Delft','Leiden','Gouda','Alkmaar','Leeuwarden','Sneek','Hoorn','Middelburg','Enkhuizen'],
+ 'river':['Arnhem','Nijmegen','Maastricht','Deventer','Zutphen','Venlo','Roermond','Dordrecht','Kampen','Alphen aan den Rijn'],
+ 'modern':['Almere','Lelystad','Zoetermeer','Emmeloord'],
+ 'port':['Rotterdam','Den Helder','Vlissingen','Terneuzen','Delfzijl'],
+ 'green':['Apeldoorn','Assen','Emmen','Wageningen','Harderwijk','Hilversum','Hoogeveen'],
+ 'industrial':['Eindhoven','Tilburg','Enschede','Hengelo','Helmond','Oss','Zaandam','Almelo','Veendam'],
 }.items():
  for name in names:types[name]=kind
+existing=json.loads((ROOT/'data/city_plans_nl.json').read_text())['cities'] if '--keep-existing' in sys.argv[2:] else {}
 plans={}
 sx=math.cos(math.radians(52.2))*85
 for place in places:
  name=place['name'];lon=place['lon'];lat=place['lat'];kind=types.get(name,'historic')
+ if name in existing:
+  plans[name]=existing[name];continue
  rng=random.Random(zlib.crc32(name.encode()))
  city=Point(lon,lat);poly=urban[index.nearest(city)]
  supported=poly.distance(city)<.015
@@ -45,8 +53,11 @@ for place in places:
  count=48 if name in ['Amsterdam','Rotterdam','Utrecht','Den Haag','Groningen'] else rng.randrange(22,38)
  plots=[];occupied=[]
  # A different street orientation/shape per city, with a shared deterministic seed.
- for attempt in range(3000):
-  if len(plots)>=count:break
+ # After 3000 tries without a single plot (a tiny urban polygon), fall back to a
+ # schematic layout. Cities that got plots stop at 3000 exactly as before.
+ for attempt in range(6000):
+  if len(plots)>=count or (attempt>=3000 and plots):break
+  if attempt==3000:supported=False
   x=rng.uniform(-radius,radius);z=rng.uniform(-radius*.8,radius*.8)
   if (x/radius)**2+(z/(radius*.8))**2>1:continue
   if kind=='river' and abs(z)<.8:continue
