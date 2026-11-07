@@ -15,10 +15,15 @@ var trunk = CylinderMesh.new()
 var landmarks: Dictionary = {}
 var city_plans: Dictionary = {}
 var city_stats: Dictionary = {}
+var landmark_data: Dictionary = {}
+var landmark_built: Dictionary = {}
+var kit: LandmarkKit
 
 func _init(parent: Node3D) -> void:
 	world=parent
 	city_plans=JSON.parse_string(FileAccess.get_file_as_string("res://data/city_plans_nl.json")).cities
+	landmark_data=JSON.parse_string(FileAccess.get_file_as_string("res://data/landmarks_nl.json")).cities
+	kit=LandmarkKit.new(self)
 	rng.seed=1206
 	leaf.radial_segments=5
 	leaf.rings=2
@@ -39,11 +44,15 @@ func material(hex: String) -> Material:
 		materials[hex]=m
 	return materials[hex]
 
-func piece(mesh: Mesh, pos: Vector3, dimensions: Vector3, color: String, angle: float=0) -> void:
+func surface(color: String) -> SurfaceTool:
 	if not surfaces.has(color):
-		var surface=SurfaceTool.new()
-		surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-		surfaces[color]=surface
+		var st=SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		surfaces[color]=st
+	return surfaces[color]
+
+func piece(mesh: Mesh, pos: Vector3, dimensions: Vector3, color: String, angle: float=0) -> void:
+	surface(color)
 	var basis=Basis(Vector3.UP,angle) * Basis.from_scale(dimensions)
 	surfaces[color].append_from(mesh,0,Transform3D(basis,pos))
 
@@ -114,7 +123,13 @@ func forest(points: Array) -> void:
 func town(pos: Vector3,name: String) -> void:
 	var plan: Dictionary=city_plans.get(name,{})
 	rng.seed=int(plan.get("seed",1206))
-	neighbourhood(pos,plan)
+	# Real landmarks claim their ground first; generated plots there are skipped.
+	var entries: Array=landmark_data.get(name,[])
+	var clear: Array=[]
+	for entry in entries:
+		if entry.get("type")!="builtin":
+			clear.append([Vector2(entry.at[0],entry.at[1]),LandmarkKit.footprint(entry)])
+	neighbourhood(pos,plan,clear)
 	match name:
 		"Amsterdam": amsterdam(pos)
 		"Rotterdam": rotterdam(pos)
@@ -128,24 +143,37 @@ func town(pos: Vector3,name: String) -> void:
 		"Lelystad": modern_centre(pos,true)
 		"Leeuwarden": leaning_tower(pos)
 		"Zwolle": star_centre(pos)
-		"Den Bosch": basilica(pos,"c0a77c",true)
 		"Breda": basilica(pos,"d6c8aa",false)
 		"Delft": tower(pos+Vector3(0,0,-.3),"c3aa86",5.5)
 		"Middelburg": town_hall(pos)
 		"Sneek": water_gate(pos)
 		"Eindhoven": factory(pos)
 		_:
-			if plan.get("kind")=="port":
+			if covers(clear,Vector2.ZERO,1.2):
+				pass # A landmark already stands on the square.
+			elif plan.get("kind")=="port":
 				small_harbour(pos)
 			elif plan.get("kind")=="green":
 				for i in 5:
 					tree(pos+Vector3(cos(i*1.25)*1.0,0,sin(i*1.25)*1.0),.65)
 			else:
 				town_square(pos,plan)
+	var built=0
+	for entry in entries:
+		if entry.get("type")!="builtin":
+			kit.build(pos+Vector3(entry.at[0],0,entry.at[1]),entry)
+			built+=1
+	landmark_built[name]=built
 	landmarks[name]=true
 	city_stats[name]={"plots":plan.get("plots",[]).size(),"layout":hash(JSON.stringify(plan.get("plots",[]))),"kind":plan.get("kind","")}
 
-func neighbourhood(pos: Vector3,plan: Dictionary) -> void:
+func covers(clear: Array,point: Vector2,margin: float) -> bool:
+	for zone in clear:
+		if point.distance_to(zone[0])<zone[1]+margin:
+			return true
+	return false
+
+func neighbourhood(pos: Vector3,plan: Dictionary,clear: Array=[]) -> void:
 	var ground_color="b8b6a0" if plan.get("kind") in ["modern","industrial","port"] else "c4b899"
 	if not surfaces.has(ground_color):
 		var ground=SurfaceTool.new()
@@ -174,6 +202,9 @@ func neighbourhood(pos: Vector3,plan: Dictionary) -> void:
 	var colors=modern if plan.get("kind") in ["modern","industrial","port"] else historic
 	var plot_index=0
 	for plot in plan.get("plots",[]):
+		if covers(clear,Vector2(plot[0],plot[1]),max(plot[2],plot[3])*.5):
+			plot_index+=1
+			continue
 		var at=pos+Vector3(plot[0],.06,plot[1])
 		var roof_color="687575" if int(plot[6])==2 else ["a95f3e","746550","594f4c"][plot_index%3]
 		house(at,Vector3(plot[2],plot[4],plot[3]),colors[plot_index%colors.size()],roof_color,plot[5],int(plot[6]))
@@ -446,6 +477,9 @@ func windmill(pos: Vector3) -> void:
 		beam(pos+Vector3(-1.25,2.2-sign_value*1.25,.6),pos+Vector3(1.25,2.2+sign_value*1.25,.6),.14,"e4d5ae")
 
 func bake() -> void:
+	# The kit points back at this scenery; drop it so the RefCounted cycle
+	# does not keep every material alive after the world is freed.
+	kit=null
 	# One draw surface per palette colour rather than one node per window/tree.
 	for color in surfaces:
 		var node=MeshInstance3D.new()
