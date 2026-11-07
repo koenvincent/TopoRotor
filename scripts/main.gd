@@ -2552,40 +2552,55 @@ func build_pilots() -> void:
 	right.add_theme_constant_override("separation",6)
 	row.add_child(right)
 	right.add_child(kicker("ZO ZIET JE PILOOT ERUIT"))
+	# Two columns of steppers keep the screen within a 720 px phone height.
+	var looks=hangar_grid(2)
+	looks.add_theme_constant_override("h_separation",16)
+	looks.add_theme_constant_override("v_separation",4)
+	right.add_child(looks)
 	for entry in PilotFigure.ATTRIBUTES:
 		var attribute: String=entry[0]
+		var cell=VBoxContainer.new()
+		cell.add_theme_constant_override("separation",0)
+		cell.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		looks.add_child(cell)
+		cell.add_child(label(entry[1],13,MUTED))
 		var line=HBoxContainer.new()
-		line.add_theme_constant_override("separation",8)
-		right.add_child(line)
-		var caption=label(entry[1],16,MUTED)
-		caption.custom_minimum_size.x=130
-		line.add_child(caption)
+		line.add_theme_constant_override("separation",6)
+		cell.add_child(line)
 		var back=button("◀",step_look.bind(attribute,-1))
 		back.name="Prev_"+attribute
-		back.custom_minimum_size=Vector2(48,38)
+		back.custom_minimum_size=Vector2(44,38)
 		tone_button(back,"ghost",10,6)
 		line.add_child(back)
 		var swatch: ColorRect=null
 		if attribute in LOOK_COLOURS:
 			swatch=ColorRect.new()
-			swatch.custom_minimum_size=Vector2(26,26)
+			swatch.custom_minimum_size=Vector2(22,22)
 			swatch.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 			line.add_child(swatch)
-		var value=label("",17,CREAM)
+		var value=label("",15,CREAM)
 		value.name="Value_"+attribute
 		value.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 		value.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+		value.clip_text=true
 		line.add_child(value)
 		var next=button("▶",step_look.bind(attribute,1))
 		next.name="Next_"+attribute
-		next.custom_minimum_size=Vector2(48,38)
+		next.custom_minimum_size=Vector2(44,38)
 		tone_button(next,"ghost",10,6)
 		line.add_child(next)
 		pilot_values[attribute]={"label":value,"swatch":swatch}
+	# The free tenth cell: everything at random.
+	var surprise_cell=VBoxContainer.new()
+	surprise_cell.add_theme_constant_override("separation",0)
+	surprise_cell.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	looks.add_child(surprise_cell)
+	surprise_cell.add_child(label("Alles tegelijk",13,MUTED))
 	var surprise=button("Verras me",random_look)
 	surprise.name="RandomLook"
-	surprise.custom_minimum_size.y=42
-	right.add_child(surprise)
+	surprise.custom_minimum_size.y=38
+	tone_button(surprise,"teal",10,6)
+	surprise_cell.add_child(surprise)
 	var done=button("Klaar · naar de hangar  →",close_pilots,true)
 	done.custom_minimum_size.y=50
 	col.add_child(done)
@@ -3835,6 +3850,8 @@ func smoke_test() -> void:
 	await get_tree().process_frame
 	print("Pilot panel: %s" % pilots_panel.get_global_rect().size)
 	assert(screen.encloses(pilots_panel.get_global_rect()),"Pilot screen fits on screen")
+	# The stretch aspect never makes the viewport shorter than 720 px.
+	assert(pilots_panel.get_global_rect().size.y<=720-32 and pilots_panel.get_global_rect().size.x<=1280-32,"Pilot screen fits a 720 px landscape phone")
 	go_back(false)
 	assert(not pilots_open and state=="menu","Back closes the pilot screen")
 	saved=pilots_before
