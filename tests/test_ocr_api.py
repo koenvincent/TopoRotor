@@ -28,7 +28,7 @@ def png(width=12, height=12):
 
 class OCRAPITests(unittest.TestCase):
     def setUp(self):
-        self.env = patch.dict(os.environ, {"TOPOROTOR_OCR_TOKEN": TOKEN})
+        self.env = patch.dict(os.environ, {"TOPOROTOR_OCR_TOKEN": TOKEN,"TOPOROTOR_OCR_TOKENS":""})
         self.env.start()
         api.OCR_SLOTS = asyncio.Semaphore(2)
         self.client = TestClient(api.app)
@@ -36,6 +36,29 @@ class OCRAPITests(unittest.TestCase):
     def tearDown(self):
         self.client.close()
         self.env.stop()
+
+    def test_readiness_checks_token_engine_and_languages(self):
+        with patch.object(api, "TESSERACT_LANGS", {"nld", "eng"}):
+            self.assertEqual(self.client.get("/ready").status_code, 200)
+            with patch.dict(os.environ, {"TOPOROTOR_OCR_TOKEN": ""}):
+                self.assertEqual(self.client.get("/ready").status_code, 503)
+        for languages in [None, {"eng"}]:
+            with self.subTest(languages=languages), patch.object(api, "TESSERACT_LANGS", languages):
+                self.assertEqual(self.client.get("/ready").status_code, 503)
+                self.assertEqual(self.client.get("/health").status_code, 200)
+
+    def test_multiple_tokens_can_be_revoked_independently(self):
+        second = "second-device-token-" * 3
+        output = subprocess.CompletedProcess([], 0, b"Arnhem", b"")
+        with patch.dict(os.environ, {"TOPOROTOR_OCR_TOKEN": "", "TOPOROTOR_OCR_TOKENS": TOKEN + "," + second}), patch.object(api.subprocess, "run", return_value=output):
+            for token in [TOKEN, second]:
+                response = self.client.post("/extract", headers={**HEADERS, "Authorization": "Bearer " + token}, content=png())
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["api_version"], 1)
+                self.assertEqual(response.json()["catalog_version"], api.CATALOG_VERSION)
+            with patch.dict(os.environ, {"TOPOROTOR_OCR_TOKENS": second}):
+                self.assertEqual(self.client.post("/extract", headers=HEADERS, content=png()).status_code, 401)
+                self.assertEqual(self.client.post("/extract", headers={**HEADERS, "Authorization": "Bearer " + second}, content=png()).status_code, 200)
 
     def test_missing_configuration_fails_closed(self):
         with patch.dict(os.environ, {"TOPOROTOR_OCR_TOKEN": ""}):
@@ -94,9 +117,9 @@ class OCRConcurrencyTests(unittest.IsolatedAsyncioTestCase):
                 if active == 2:
                     started.set()
             release.wait(2)
-            return {"candidates": [], "text": "", "review_required": True}
+            return {"api_version":api.API_VERSION,"catalog_version":api.CATALOG_VERSION,"candidates": [], "text": "", "review_required": True}
 
-        with patch.dict(os.environ, {"TOPOROTOR_OCR_TOKEN": TOKEN}), patch.object(api, "recognize", side_effect=slow_recognize):
+        with patch.dict(os.environ, {"TOPOROTOR_OCR_TOKEN": TOKEN,"TOPOROTOR_OCR_TOKENS":""}), patch.object(api, "recognize", side_effect=slow_recognize):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api.app), base_url="http://test") as client:
                 begin = time.monotonic()
                 requests = [asyncio.create_task(client.post("/extract", headers=HEADERS, content=png())) for _ in range(2)]

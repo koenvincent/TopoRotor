@@ -6,6 +6,11 @@ build
 **/.env
 **/.env.*
 **/__pycache__
+**/*.keystore
+**/*.jks
+**/*.apk
+**/*.aab
+**/*.idsig
 .venv
 docs
 tests
