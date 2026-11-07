@@ -85,6 +85,12 @@ als je de optionele OCR gebruikt.
 
 ## Voorbeelden
 
+![Istanbul met Blauwe Moskee, Hagia Sophia en Bosporusbrug](screenshots/preview-europe-istanbul.png)
+
+![Wenen en Bratislava delen de grond](screenshots/preview-europe-wenen.png)
+
+![Alpen van hoog, met steden, meren en windparken](screenshots/preview-europe-alpen.png)
+
 ![Parijs](screenshots/preview-europe-parijs.png)
 
 ![Rome](screenshots/preview-europe-rome.png)
