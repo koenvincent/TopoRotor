@@ -68,7 +68,18 @@ GODOT_BIN=/pad/naar/godot python3 tools/check_godot.py
 .venv/bin/pip-audit -r ocr-service/requirements.lock.txt
 ```
 
-Met Tesseract (`nld` en `eng`) geïnstalleerd draait ook de echte OCR-test:
+Installeer Tesseract met Nederlandse en Engelse taaldata voor lokale OCR-tests:
+
+```sh
+# macOS (Homebrew)
+brew install tesseract tesseract-lang
+# Ubuntu / Debian
+sudo apt-get install tesseract-ocr tesseract-ocr-nld tesseract-ocr-eng
+# Controleer dat nld en eng beschikbaar zijn
+tesseract --list-langs
+```
+
+De Docker-image en GitHub Actions installeren deze taaldata al. Met Tesseract (`nld` en `eng`) geïnstalleerd draait ook de echte OCR-test:
 
 ```
 TOPOROTOR_TEST_REAL_OCR=1 .venv/bin/python -m unittest discover -s tests -v
