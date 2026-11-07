@@ -2,7 +2,8 @@
 
 - **Godot Engine 4.5.1**: MIT. Enginebinary in de Android-APK. Licentietekst in `assets/GODOT-LICENSE.txt`. https://godotengine.org/license/
 - **Natural Earth**: public domain. Administratieve landcontouren, rivieren en meren uit `ne_50m_admin_0_countries`, `ne_50m_rivers_lake_centerlines` en `ne_50m_lakes`, gedownload 3 oktober 2026, uitgesneden en vereenvoudigd voor deze game. De standaardlaag volgt de feitelijke situatie; voor de landcontrole rekent `scripts/world.gd` de Krim tot Oekraïne, Noord-Cyprus tot Cyprus en Åland tot Finland (Nederlands standpunt / schooltopografie). https://www.naturalearthdata.com/about/terms-of-use/ ; https://github.com/nvkelso/natural-earth-vector
-- **DejaVu Sans**: fontlicentie zie `assets/FONT-LICENSE.txt`. https://dejavu-fonts.github.io/
+- **Lilita One** (Juan Montoreano) en **Nunito** (The Nunito Project Authors): SIL Open Font License 1.1, licentieteksten in `assets/fonts/`. Gebundeld als WOFF2-subsets (latin en latin-ext) uit de Fontsource-pakketten `@fontsource/lilita-one` en `@fontsource/nunito` 5.3.0. https://fonts.google.com/specimen/Lilita+One ; https://github.com/googlefonts/nunito
+- **DejaVu Sans**: fontlicentie zie `assets/FONT-LICENSE.txt`. Vangnet voor symbolen (★ ✓ → ❚). https://dejavu-fonts.github.io/
 - **Tesseract OCR** (optionele service, direct via stdin/stdout aangeroepen): Apache 2.0. https://github.com/tesseract-ocr/tesseract
 - **FastAPI**: MIT; **Uvicorn**: BSD-3-Clause; **Pillow 13**: MIT-CMU. Dit zijn optionele pip-/Docker-afhankelijkheden, niet de Android-app. Hun distributies bevatten de betreffende licenties.
 

@@ -1,7 +1,7 @@
 class_name LandmarkKit
 extends RefCounted
 
-# Recognisable miniature silhouettes for real Dutch landmarks. Every piece is
+# Recognisable miniature silhouettes for real Dutch (and European) landmarks. Every piece is
 # merged into the shared DutchScenery colour surfaces, so 100+ landmarks cost
 # no extra draw calls. Positions/types come from data/landmarks_nl.json.
 const WATER = "318c9a"
@@ -77,7 +77,7 @@ func build(pos: Vector3,entry: Dictionary) -> void:
 		"gothic_hall": gothic_hall(pos,c,int(entry.get("towers",0)))
 
 func put(mesh: Mesh,origin: Vector3,basis: Basis,color: String) -> void:
-	s.surface(color).append_from(mesh,0,Transform3D(basis,origin))
+	s.put_mesh(mesh,origin,basis,color)
 
 func column(pos: Vector3,radius: float,height: float,color: String,mesh: Mesh=null) -> void:
 	put(cyl if mesh==null else mesh,pos+Vector3(0,height*.5,0),Basis.from_scale(Vector3(radius*2,height,radius*2)),color)

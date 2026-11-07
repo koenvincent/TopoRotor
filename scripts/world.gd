@@ -16,6 +16,8 @@ var water_material: ShaderMaterial
 var target: Node3D
 var helipads: Dictionary = {}
 var country_polys: Dictionary = {}
+# Bounding boxes per country polygon, so land checks skip far-away outlines.
+var country_boxes: Dictionary = {}
 var lake_polys: Array = []
 var boundary_data: Dictionary = {}
 var boundary_paths: Dictionary = {}
@@ -29,6 +31,7 @@ var label_font: Font
 # topography (and the Dutch government position) counts these areas as part of
 # the country below, so the land check uses that assignment.
 const COUNTRY_MERGE = {"CYN":"CYP","ALD":"FIN"}
+const KIND_INK = {"stad":Color("153c48"),"eigen punt":Color("153c48"),"water":Color("135d8c"),"gebied":Color("7a4b22"),"eiland":Color("2d6a36"),"land":Color("5b2f61"),"provincie":Color("5b2f61")}
 
 # Map files are the single source of truth for region extents: [min_lon,min_lat,max_lon,max_lat].
 static func map_bounds(map_region: String) -> Array:
@@ -127,6 +130,10 @@ func build(new_region: String, catalog: TopoCatalog) -> void:
 		line(points,Color("377f94"),.12,.65 if region=="nl" else .38)
 	if region=="eu":
 		europe_scenery=EuropeScenery.new(self)
+		for p in catalog.places:
+			if p.kind == "stad" and (p.region == "eu" or p.name == "Amsterdam"):
+				var anchor = project(p.lon,p.lat)
+				europe_scenery.city_anchors.append(Vector2(anchor.x,anchor.z))
 		europe_scenery.landscape()
 	rng.seed = 1206
 	for p in catalog.places:
@@ -258,13 +265,27 @@ func reassign_crimea() -> void:
 				country_polys["UKR"] = []
 			country_polys["UKR"].append(rus[i])
 			rus.remove_at(i)
+	country_boxes.clear()
 
 func has_country(code: String) -> bool:
 	return not country_polys.get(code,[]).is_empty()
 
 func country_contains(code: String, position3: Vector3) -> bool:
-	for polygon in country_polys.get(code,[]):
-		if Geometry2D.is_point_in_polygon(Vector2(position3.x,position3.z),polygon):
+	var polygons: Array = country_polys.get(code,[])
+	if polygons.is_empty():
+		return false
+	if not country_boxes.has(code):
+		var boxes: Array = []
+		for polygon in polygons:
+			var box := Rect2(polygon[0],Vector2.ZERO)
+			for point in polygon:
+				box = box.expand(point)
+			boxes.append(box)
+		country_boxes[code] = boxes
+	var point := Vector2(position3.x,position3.z)
+	var boxes: Array = country_boxes[code]
+	for i in polygons.size():
+		if boxes[i].has_point(point) and Geometry2D.is_point_in_polygon(point,polygons[i]):
 			return true
 	return false
 
@@ -337,11 +358,12 @@ func add_place_marker(p: Dictionary,with_scenery: bool = true) -> void:
 	label.text = p.name
 	label.position = pos+Vector3(0,3.8 if region=="nl" else 2.1,0)
 	if label_font == null:
-		label_font = load("res://assets/interface.ttf")
+		label_font = UiFonts.font("black")
 	label.font = label_font
 	label.font_size = 36 if p.kind == "stad" else 30
 	label.pixel_size = .035 if region=="nl" else .06
-	label.modulate = Color("153c48") if p.kind == "stad" else Color("2b5b63")
+	# Colour by kind, like a school atlas: water blue, relief brown, islands green.
+	label.modulate = KIND_INK.get(p.kind,Color("2b5b63"))
 	label.outline_modulate = Color("f6f2d7")
 	label.outline_size = 4 if region=="nl" else 8
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED

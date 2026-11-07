@@ -22,6 +22,13 @@ class CandidateTests(unittest.TestCase):
         for apostrophe in ["'", "’", "‘", "`"]:
             self.assertIn("Den Bosch", module.candidates(apostrophe + "s-Hertogenbosch"))
 
+    def test_shared_names_once(self):
+        found = module.candidates("Noordzee\nRijn\nAlpen\nMeer van Genève")
+        self.assertEqual(found.count("Noordzee"), 1)
+        self.assertEqual(found.count("Rijn"), 1)
+        self.assertIn("Alpen", found)
+        self.assertIn("Meer van Genève", found)
+
     def test_aliases(self):
         self.assertIn("Den Bosch", module.candidates("'s-Hertogenbosch"))
 

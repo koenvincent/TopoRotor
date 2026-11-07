@@ -1,0 +1,1315 @@
+{
+  "note": "Herkenningspunten per Europese stad. Gestileerde miniaturen rond het catalogusanker; 'at' is een offset in wereldeenheden.",
+  "cities": {
+    "Amsterdam": [
+      {
+        "name": "Rijksmuseum",
+        "type": "museum",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "color": "a9573f",
+        "towers": 2,
+        "length": 4.6
+      },
+      {
+        "name": "Grachtenpanden",
+        "type": "canal_houses",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Londen": [
+      {
+        "name": "Big Ben",
+        "type": "big_ben",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Tower Bridge",
+        "type": "tower_bridge",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      },
+      {
+        "name": "London Eye",
+        "type": "ferris_wheel",
+        "at": [
+          6.2,
+          5.6
+        ]
+      }
+    ],
+    "Parijs": [
+      {
+        "name": "Eiffeltoren",
+        "type": "eiffel",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Arc de Triomphe",
+        "type": "triumph_arch",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      },
+      {
+        "name": "Notre-Dame",
+        "type": "gothic_hall",
+        "at": [
+          6.2,
+          5.6
+        ],
+        "color": "d6cdb0",
+        "towers": 2
+      }
+    ],
+    "Berlijn": [
+      {
+        "name": "Brandenburger Tor",
+        "type": "brandenburg",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Fernsehturm",
+        "type": "needle",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "height": 10.0
+      },
+      {
+        "name": "Rijksdag",
+        "type": "dome",
+        "at": [
+          6.2,
+          5.6
+        ]
+      }
+    ],
+    "Brussel": [
+      {
+        "name": "Atomium",
+        "type": "atomium",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Stadhuis Grote Markt",
+        "type": "spire",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "d6c49a",
+        "height": 6.0
+      }
+    ],
+    "Luxemburg": [
+      {
+        "name": "Bockkazematten",
+        "type": "fortress",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Kathedraal",
+        "type": "spire",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "c9b48e",
+        "height": 5.0
+      }
+    ],
+    "Madrid": [
+      {
+        "name": "Koninklijk Paleis",
+        "type": "palace",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "scale": 1.3,
+        "gardens": true
+      },
+      {
+        "name": "Bernabéu",
+        "type": "stadium",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "roof": "closed"
+      }
+    ],
+    "Lissabon": [
+      {
+        "name": "Toren van Belém",
+        "type": "harbour_tower",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "round": false
+      },
+      {
+        "name": "Brug 25 april",
+        "type": "suspension_bridge",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Rome": [
+      {
+        "name": "Colosseum",
+        "type": "colosseum",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Pantheon",
+        "type": "dome",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      },
+      {
+        "name": "Sint-Pieter",
+        "type": "basilica_dome",
+        "at": [
+          6.2,
+          5.6
+        ]
+      }
+    ],
+    "Wenen": [
+      {
+        "name": "Schönbrunn",
+        "type": "palace",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "scale": 1.3,
+        "gardens": true
+      },
+      {
+        "name": "Stephansdom",
+        "type": "spire",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "c6b08a",
+        "height": 7.0
+      },
+      {
+        "name": "Reuzenrad",
+        "type": "ferris_wheel",
+        "at": [
+          6.2,
+          5.6
+        ]
+      }
+    ],
+    "Bern": [
+      {
+        "name": "Zytglogge",
+        "type": "spire",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "color": "c99a6b",
+        "height": 4.5
+      },
+      {
+        "name": "Bundeshaus",
+        "type": "basilica_dome",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Kopenhagen": [
+      {
+        "name": "Nyhavn",
+        "type": "canal_houses",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Amalienborg",
+        "type": "palace",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "scale": 1.1
+      }
+    ],
+    "Oslo": [
+      {
+        "name": "Opera",
+        "type": "opera",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Vikingschip",
+        "type": "ship",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "7a5634",
+        "masts": 1
+      }
+    ],
+    "Stockholm": [
+      {
+        "name": "Stadshuis",
+        "type": "nordic_hall",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Vasa",
+        "type": "ship",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "6b4a2e",
+        "masts": 3
+      }
+    ],
+    "Helsinki": [
+      {
+        "name": "Domkerk",
+        "type": "basilica_dome",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Oespenski-kathedraal",
+        "type": "onion_domes",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Warschau": [
+      {
+        "name": "Cultuurpaleis",
+        "type": "spire_tower",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Koninklijk Slot",
+        "type": "castle",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Praag": [
+      {
+        "name": "Praagse Burcht",
+        "type": "castle",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Sint-Vituskathedraal",
+        "type": "gothic_hall",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "b9ab8c",
+        "towers": 2
+      },
+      {
+        "name": "Karelsbrug",
+        "type": "stone_bridge",
+        "at": [
+          6.2,
+          5.6
+        ]
+      }
+    ],
+    "Boedapest": [
+      {
+        "name": "Parlementsgebouw",
+        "type": "parliament",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Kettingbrug",
+        "type": "suspension_bridge",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Bratislava": [
+      {
+        "name": "Burcht van Bratislava",
+        "type": "castle",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "UFO-brug",
+        "type": "saucer",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Ljubljana": [
+      {
+        "name": "Burcht van Ljubljana",
+        "type": "castle",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "round": true
+      },
+      {
+        "name": "Drakenbrug",
+        "type": "stone_bridge",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Zagreb": [
+      {
+        "name": "Kathedraal van Zagreb",
+        "type": "gothic_hall",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "color": "d9cfb4",
+        "towers": 2
+      },
+      {
+        "name": "Sint-Marcuskerk",
+        "type": "church",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "d8cba8",
+        "length": 2.6
+      }
+    ],
+    "Sarajevo": [
+      {
+        "name": "Gazi Husrev-begmoskee",
+        "type": "mosque",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Latijnse Brug",
+        "type": "stone_bridge",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Belgrado": [
+      {
+        "name": "Kalemegdan",
+        "type": "fortress",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Sint-Savatempel",
+        "type": "basilica_dome",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Tirana": [
+      {
+        "name": "Et'hem Bey-moskee",
+        "type": "mosque",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Gekleurde gevels",
+        "type": "canal_houses",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Athene": [
+      {
+        "name": "Akropolis",
+        "type": "parthenon",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Panathinaiko-stadion",
+        "type": "stadium",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Sofia": [
+      {
+        "name": "Alexander Nevski-kathedraal",
+        "type": "onion_domes",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Nationaal Paleis",
+        "type": "palace",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Boekarest": [
+      {
+        "name": "Parlementspaleis",
+        "type": "palace",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "scale": 1.6
+      },
+      {
+        "name": "Triomfboog",
+        "type": "triumph_arch",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Dublin": [
+      {
+        "name": "The Spire",
+        "type": "needle",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "height": 9.0
+      },
+      {
+        "name": "Ha'penny Bridge",
+        "type": "stone_bridge",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Tallinn": [
+      {
+        "name": "Oude stadspoort",
+        "type": "gate",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "color": "cfc2a4",
+        "pointed": true,
+        "single": false
+      },
+      {
+        "name": "Olaikerk",
+        "type": "spire",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "c7b48c",
+        "height": 7.5
+      }
+    ],
+    "Riga": [
+      {
+        "name": "Sint-Petruskerk",
+        "type": "spire",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "color": "b4835c",
+        "height": 7.0
+      },
+      {
+        "name": "Zwarthoofdenhuis",
+        "type": "gothic_hall",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "c4553f",
+        "towers": 0
+      }
+    ],
+    "Vilnius": [
+      {
+        "name": "Gediminastoren",
+        "type": "castle",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "round": true
+      },
+      {
+        "name": "Kathedraal van Vilnius",
+        "type": "temple_front",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Kyiv": [
+      {
+        "name": "Sint-Sofiakathedraal",
+        "type": "onion_domes",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Holenklooster",
+        "type": "spire",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "e0d9c2",
+        "height": 6.5
+      }
+    ],
+    "Minsk": [
+      {
+        "name": "Nationale Bibliotheek",
+        "type": "crystal",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Onafhankelijkheidsplein",
+        "type": "basilica_dome",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Reykjavik": [
+      {
+        "name": "Hallgrímskirkja",
+        "type": "hallgrims",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Harpa",
+        "type": "skyscraper",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "height": 3.0,
+        "width": 3.0,
+        "color": "8fb6c4",
+        "glass": true
+      }
+    ],
+    "Moskou": [
+      {
+        "name": "Kremlin",
+        "type": "kremlin",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Basiliuskathedraal",
+        "type": "onion_domes",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      },
+      {
+        "name": "Moskou-City",
+        "type": "skyscraper",
+        "at": [
+          6.2,
+          5.6
+        ],
+        "height": 9.0,
+        "width": 1.4,
+        "color": "7ea3b3",
+        "glass": true
+      }
+    ],
+    "Valletta": [
+      {
+        "name": "Stadswallen",
+        "type": "fortress",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Karmelietenkerk",
+        "type": "basilica_dome",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Nicosia": [
+      {
+        "name": "Venetiaanse muren",
+        "type": "fortress",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Selimiye-moskee",
+        "type": "mosque",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Podgorica": [
+      {
+        "name": "Millenniumbrug",
+        "type": "suspension_bridge",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Opstandingskathedraal",
+        "type": "basilica_dome",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Skopje": [
+      {
+        "name": "Kale-vesting",
+        "type": "fortress",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Stenen Brug",
+        "type": "stone_bridge",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Chisinau": [
+      {
+        "name": "Triomfboog Chisinau",
+        "type": "triumph_arch",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Geboortekathedraal",
+        "type": "basilica_dome",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Monaco": [
+      {
+        "name": "Casino",
+        "type": "palace",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "scale": 0.9
+      },
+      {
+        "name": "Jachthaven",
+        "type": "ship",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "f0f0ea",
+        "masts": 1
+      }
+    ],
+    "Andorra la Vella": [
+      {
+        "name": "Sant Esteve",
+        "type": "church",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "color": "a99272",
+        "length": 2.6
+      },
+      {
+        "name": "Pyreneeëntoppen",
+        "type": "volcano",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "snow": true
+      }
+    ],
+    "Vaduz": [
+      {
+        "name": "Slot Vaduz",
+        "type": "castle",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Kathedraal van Vaduz",
+        "type": "spire",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "b3aa96",
+        "height": 4.5
+      }
+    ],
+    "Barcelona": [
+      {
+        "name": "Sagrada Família",
+        "type": "sagrada",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Camp Nou",
+        "type": "stadium",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Milaan": [
+      {
+        "name": "Duomo",
+        "type": "duomo",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "San Siro",
+        "type": "stadium",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "roof": "closed"
+      }
+    ],
+    "München": [
+      {
+        "name": "Frauenkirche",
+        "type": "twin_domes",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Allianz Arena",
+        "type": "stadium",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "roof": "closed"
+      }
+    ],
+    "Hamburg": [
+      {
+        "name": "Elbphilharmonie",
+        "type": "elbphilharmonie",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Rickmer Rickmers",
+        "type": "ship",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "2f5a7a",
+        "masts": 3
+      }
+    ],
+    "Istanbul": [
+      {
+        "name": "Blauwe Moskee",
+        "type": "mosque",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "minarets": 6
+      },
+      {
+        "name": "Hagia Sophia",
+        "type": "mosque",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      },
+      {
+        "name": "Bosporusbrug",
+        "type": "suspension_bridge",
+        "at": [
+          6.2,
+          5.6
+        ]
+      }
+    ],
+    "Marseille": [
+      {
+        "name": "Notre-Dame de la Garde",
+        "type": "spire",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "color": "d8ccb0",
+        "height": 5.0
+      },
+      {
+        "name": "Fort Saint-Jean",
+        "type": "harbour_tower",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "round": true
+      }
+    ],
+    "Lyon": [
+      {
+        "name": "Basiliek van Fourvière",
+        "type": "four_towers",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Saint-Jean",
+        "type": "gothic_hall",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "d6c9a8",
+        "towers": 2
+      }
+    ],
+    "Napels": [
+      {
+        "name": "Vesuvius",
+        "type": "volcano",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Castel Nuovo",
+        "type": "castle",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Venetië": [
+      {
+        "name": "Campanile",
+        "type": "spire",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "color": "b8573f",
+        "height": 7.0
+      },
+      {
+        "name": "San Marco",
+        "type": "onion_domes",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      },
+      {
+        "name": "Rialtobrug",
+        "type": "stone_bridge",
+        "at": [
+          6.2,
+          5.6
+        ]
+      }
+    ],
+    "Florence": [
+      {
+        "name": "Duomo van Florence",
+        "type": "red_dome",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Ponte Vecchio",
+        "type": "stone_bridge",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Porto": [
+      {
+        "name": "Dom Luís I-brug",
+        "type": "suspension_bridge",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Rabelo-boot",
+        "type": "ship",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "6b4a2e",
+        "masts": 1
+      }
+    ],
+    "Sevilla": [
+      {
+        "name": "Giralda",
+        "type": "spire",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "color": "d0a676",
+        "height": 7.0
+      },
+      {
+        "name": "Alcázar",
+        "type": "palace",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "gardens": true
+      }
+    ],
+    "Krakau": [
+      {
+        "name": "Wawel",
+        "type": "castle",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Mariakerk",
+        "type": "gothic_hall",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "a9563f",
+        "towers": 2
+      }
+    ],
+    "Gdańsk": [
+      {
+        "name": "Havenkraan",
+        "type": "harbour_tower",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Lange Markt",
+        "type": "canal_houses",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Keulen": [
+      {
+        "name": "Dom van Keulen",
+        "type": "cathedral_twin",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Hohenzollernbrug",
+        "type": "stone_bridge",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Frankfurt": [
+      {
+        "name": "Commerzbank Tower",
+        "type": "skyscraper",
+        "at": [
+          6.5,
+          -6.0
+        ],
+        "height": 10.0,
+        "width": 1.5,
+        "color": "9fb3bd",
+        "glass": true
+      },
+      {
+        "name": "Main Tower",
+        "type": "skyscraper",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "height": 8.5,
+        "width": 1.3,
+        "color": "6f8fa0",
+        "glass": true
+      }
+    ],
+    "Manchester": [
+      {
+        "name": "Old Trafford",
+        "type": "stadium",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Katoenspinnerij",
+        "type": "textile_mill",
+        "at": [
+          -6.5,
+          -5.8
+        ]
+      }
+    ],
+    "Edinburgh": [
+      {
+        "name": "Edinburgh Castle",
+        "type": "castle_hill",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Scott Monument",
+        "type": "spire",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "6e6656",
+        "height": 6.0
+      }
+    ],
+    "Sint-Petersburg": [
+      {
+        "name": "Kerk op het Bloed",
+        "type": "onion_domes",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Hermitage",
+        "type": "palace",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "scale": 1.4
+      },
+      {
+        "name": "Kruiser Aurora",
+        "type": "ship",
+        "at": [
+          6.2,
+          5.6
+        ],
+        "color": "6c7478",
+        "masts": 0
+      }
+    ],
+    "Göteborg": [
+      {
+        "name": "Liseberg",
+        "type": "ferris_wheel",
+        "at": [
+          6.5,
+          -6.0
+        ]
+      },
+      {
+        "name": "Barken Viking",
+        "type": "ship",
+        "at": [
+          -6.5,
+          -5.8
+        ],
+        "color": "f2f0e8",
+        "masts": 3
+      }
+    ]
+  }
+}

@@ -56,6 +56,10 @@ func piece(mesh: Mesh, pos: Vector3, dimensions: Vector3, color: String, angle: 
 	var basis=Basis(Vector3.UP,angle) * Basis.from_scale(dimensions)
 	surfaces[color].append_from(mesh,0,Transform3D(basis,pos))
 
+# Every free-form mesh placement goes through here, so a subclass can transform it.
+func put_mesh(mesh: Mesh,origin: Vector3,basis: Basis,color: String) -> void:
+	surface(color).append_from(mesh,0,Transform3D(basis,origin))
+
 func block(pos: Vector3, dimensions: Vector3, color: String, angle: float=0) -> void:
 	piece(box,pos,dimensions,color,angle)
 

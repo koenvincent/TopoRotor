@@ -60,6 +60,9 @@ def candidates(text: str) -> list[str]:
     text = normalized(text)
     matches = []
     for p in CATALOG:
+        # Seas and rivers such as the Noordzee exist once per region; report each name once.
+        if p["name"] in matches:
+            continue
         for alias in [p["name"], *p.get("aliases", [])]:
             if re.search(r"(?<!\w)" + re.escape(normalized(alias)) + r"(?!\w)", text):
                 matches.append(p["name"])
