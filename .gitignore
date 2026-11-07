@@ -1,0 +1,14 @@
+.godot/
+build/
+*.keystore
+*.jks
+*.apk
+*.aab
+*.idsig
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store

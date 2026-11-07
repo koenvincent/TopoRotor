@@ -1,0 +1,1425 @@
+[
+  {
+    "name": "Amsterdam",
+    "lat": 52.3676,
+    "lon": 4.9041,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Rotterdam",
+    "lat": 51.9244,
+    "lon": 4.4777,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Den Haag",
+    "lat": 52.0705,
+    "lon": 4.3007,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [
+      "'s-Gravenhage",
+      "s gravenhage"
+    ],
+    "code": ""
+  },
+  {
+    "name": "Utrecht",
+    "lat": 52.0907,
+    "lon": 5.1214,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Amersfoort",
+    "lat": 52.1561,
+    "lon": 5.3878,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Arnhem",
+    "lat": 51.9851,
+    "lon": 5.8987,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Nijmegen",
+    "lat": 51.8126,
+    "lon": 5.8372,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Eindhoven",
+    "lat": 51.4416,
+    "lon": 5.4697,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Groningen",
+    "lat": 53.2194,
+    "lon": 6.5665,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Leeuwarden",
+    "lat": 53.2012,
+    "lon": 5.7999,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Assen",
+    "lat": 52.9928,
+    "lon": 6.5642,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Zwolle",
+    "lat": 52.5168,
+    "lon": 6.083,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Lelystad",
+    "lat": 52.5185,
+    "lon": 5.4714,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Almere",
+    "lat": 52.3508,
+    "lon": 5.2647,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Haarlem",
+    "lat": 52.3874,
+    "lon": 4.6462,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Middelburg",
+    "lat": 51.4988,
+    "lon": 3.6109,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Den Bosch",
+    "lat": 51.6978,
+    "lon": 5.3037,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [
+      "'s-Hertogenbosch",
+      "s hertogenbosch"
+    ],
+    "code": ""
+  },
+  {
+    "name": "Maastricht",
+    "lat": 50.8514,
+    "lon": 5.691,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Breda",
+    "lat": 51.5719,
+    "lon": 4.7683,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Tilburg",
+    "lat": 51.5555,
+    "lon": 5.0913,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Enschede",
+    "lat": 52.2215,
+    "lon": 6.8937,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Deventer",
+    "lat": 52.255,
+    "lon": 6.1639,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Apeldoorn",
+    "lat": 52.2112,
+    "lon": 5.9699,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Doetinchem",
+    "lat": 51.965,
+    "lon": 6.288,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Gouda",
+    "lat": 52.0116,
+    "lon": 4.7105,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Delft",
+    "lat": 52.0116,
+    "lon": 4.3571,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Leiden",
+    "lat": 52.1601,
+    "lon": 4.497,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Alkmaar",
+    "lat": 52.6324,
+    "lon": 4.7534,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Den Helder",
+    "lat": 52.9563,
+    "lon": 4.7608,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Venlo",
+    "lat": 51.37,
+    "lon": 6.1724,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Roermond",
+    "lat": 51.1942,
+    "lon": 5.987,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Emmen",
+    "lat": 52.7858,
+    "lon": 6.8976,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Dordrecht",
+    "lat": 51.8133,
+    "lon": 4.69,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Hoorn",
+    "lat": 52.6424,
+    "lon": 5.0597,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Sneek",
+    "lat": 53.032,
+    "lon": 5.66,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Drachten",
+    "lat": 53.106,
+    "lon": 6.097,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Heerenveen",
+    "lat": 52.96,
+    "lon": 5.924,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Winschoten",
+    "lat": 53.144,
+    "lon": 7.035,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Zutphen",
+    "lat": 52.14,
+    "lon": 6.194,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Hengelo",
+    "lat": 52.265,
+    "lon": 6.793,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Harderwijk",
+    "lat": 52.342,
+    "lon": 5.62,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Wageningen",
+    "lat": 51.97,
+    "lon": 5.667,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Vlissingen",
+    "lat": 51.442,
+    "lon": 3.573,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Terneuzen",
+    "lat": 51.335,
+    "lon": 3.827,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Goes",
+    "lat": 51.504,
+    "lon": 3.889,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Bergen op Zoom",
+    "lat": 51.495,
+    "lon": 4.291,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Helmond",
+    "lat": 51.48,
+    "lon": 5.658,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Oss",
+    "lat": 51.765,
+    "lon": 5.518,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Sittard",
+    "lat": 50.998,
+    "lon": 5.869,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Heerlen",
+    "lat": 50.888,
+    "lon": 5.979,
+    "region": "nl",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Noord-Holland",
+    "lat": 52.65,
+    "lon": 4.88,
+    "region": "nl",
+    "kind": "provincie",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Zuid-Holland",
+    "lat": 51.98,
+    "lon": 4.55,
+    "region": "nl",
+    "kind": "provincie",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Utrecht provincie",
+    "lat": 52.08,
+    "lon": 5.28,
+    "region": "nl",
+    "kind": "provincie",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Flevoland",
+    "lat": 52.53,
+    "lon": 5.55,
+    "region": "nl",
+    "kind": "provincie",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Friesland",
+    "lat": 53.12,
+    "lon": 5.85,
+    "region": "nl",
+    "kind": "provincie",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Groningen provincie",
+    "lat": 53.25,
+    "lon": 6.75,
+    "region": "nl",
+    "kind": "provincie",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Drenthe",
+    "lat": 52.9,
+    "lon": 6.6,
+    "region": "nl",
+    "kind": "provincie",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Overijssel",
+    "lat": 52.44,
+    "lon": 6.43,
+    "region": "nl",
+    "kind": "provincie",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Gelderland",
+    "lat": 52.04,
+    "lon": 5.94,
+    "region": "nl",
+    "kind": "provincie",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Zeeland",
+    "lat": 51.51,
+    "lon": 3.8,
+    "region": "nl",
+    "kind": "provincie",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Noord-Brabant",
+    "lat": 51.52,
+    "lon": 5.12,
+    "region": "nl",
+    "kind": "provincie",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Limburg",
+    "lat": 51.24,
+    "lon": 5.95,
+    "region": "nl",
+    "kind": "provincie",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "IJsselmeer",
+    "lat": 52.8,
+    "lon": 5.33,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Markermeer",
+    "lat": 52.55,
+    "lon": 5.18,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Waddenzee",
+    "lat": 53.3,
+    "lon": 5.22,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Noordzee",
+    "lat": 52.55,
+    "lon": 3.7,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Rijn",
+    "lat": 51.88,
+    "lon": 6.03,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Waal",
+    "lat": 51.85,
+    "lon": 5.55,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "IJssel",
+    "lat": 52.31,
+    "lon": 6.13,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Maas",
+    "lat": 51.75,
+    "lon": 5.32,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Westerschelde",
+    "lat": 51.38,
+    "lon": 3.95,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Oosterschelde",
+    "lat": 51.62,
+    "lon": 3.95,
+    "region": "nl",
+    "kind": "water",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Texel",
+    "lat": 53.05,
+    "lon": 4.8,
+    "region": "nl",
+    "kind": "eiland",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Vlieland",
+    "lat": 53.27,
+    "lon": 4.98,
+    "region": "nl",
+    "kind": "eiland",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Terschelling",
+    "lat": 53.4,
+    "lon": 5.35,
+    "region": "nl",
+    "kind": "eiland",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Ameland",
+    "lat": 53.45,
+    "lon": 5.75,
+    "region": "nl",
+    "kind": "eiland",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Schiermonnikoog",
+    "lat": 53.48,
+    "lon": 6.19,
+    "region": "nl",
+    "kind": "eiland",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Londen",
+    "lat": 51.5074,
+    "lon": -0.1278,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [
+      "London"
+    ],
+    "code": ""
+  },
+  {
+    "name": "Parijs",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [
+      "Paris"
+    ],
+    "code": ""
+  },
+  {
+    "name": "Berlijn",
+    "lat": 52.52,
+    "lon": 13.405,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [
+      "Berlin"
+    ],
+    "code": ""
+  },
+  {
+    "name": "Brussel",
+    "lat": 50.8503,
+    "lon": 4.3517,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [
+      "Brussels"
+    ],
+    "code": ""
+  },
+  {
+    "name": "Luxemburg",
+    "lat": 49.6116,
+    "lon": 6.1319,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Madrid",
+    "lat": 40.4168,
+    "lon": -3.7038,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Lissabon",
+    "lat": 38.7223,
+    "lon": -9.1393,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [
+      "Lisbon"
+    ],
+    "code": ""
+  },
+  {
+    "name": "Rome",
+    "lat": 41.9028,
+    "lon": 12.4964,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [
+      "Roma"
+    ],
+    "code": ""
+  },
+  {
+    "name": "Wenen",
+    "lat": 48.2082,
+    "lon": 16.3738,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [
+      "Vienna"
+    ],
+    "code": ""
+  },
+  {
+    "name": "Bern",
+    "lat": 46.948,
+    "lon": 7.4474,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Kopenhagen",
+    "lat": 55.6761,
+    "lon": 12.5683,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [
+      "Copenhagen"
+    ],
+    "code": ""
+  },
+  {
+    "name": "Oslo",
+    "lat": 59.9139,
+    "lon": 10.7522,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Stockholm",
+    "lat": 59.3293,
+    "lon": 18.0686,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Helsinki",
+    "lat": 60.1699,
+    "lon": 24.9384,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Warschau",
+    "lat": 52.2297,
+    "lon": 21.0122,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [
+      "Warsaw"
+    ],
+    "code": ""
+  },
+  {
+    "name": "Praag",
+    "lat": 50.0755,
+    "lon": 14.4378,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [
+      "Prague"
+    ],
+    "code": ""
+  },
+  {
+    "name": "Boedapest",
+    "lat": 47.4979,
+    "lon": 19.0402,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [
+      "Budapest"
+    ],
+    "code": ""
+  },
+  {
+    "name": "Bratislava",
+    "lat": 48.1486,
+    "lon": 17.1077,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Ljubljana",
+    "lat": 46.0569,
+    "lon": 14.5058,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Zagreb",
+    "lat": 45.815,
+    "lon": 15.9819,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Sarajevo",
+    "lat": 43.8563,
+    "lon": 18.4131,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Belgrado",
+    "lat": 44.7866,
+    "lon": 20.4489,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Tirana",
+    "lat": 41.3275,
+    "lon": 19.8187,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Athene",
+    "lat": 37.9838,
+    "lon": 23.7275,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [
+      "Athens"
+    ],
+    "code": ""
+  },
+  {
+    "name": "Sofia",
+    "lat": 42.6977,
+    "lon": 23.3219,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Boekarest",
+    "lat": 44.4268,
+    "lon": 26.1025,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Dublin",
+    "lat": 53.3498,
+    "lon": -6.2603,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Tallinn",
+    "lat": 59.437,
+    "lon": 24.7536,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Riga",
+    "lat": 56.9496,
+    "lon": 24.1052,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Vilnius",
+    "lat": 54.6872,
+    "lon": 25.2797,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Kyiv",
+    "lat": 50.4501,
+    "lon": 30.5234,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [
+      "Kiev"
+    ],
+    "code": ""
+  },
+  {
+    "name": "Minsk",
+    "lat": 53.9006,
+    "lon": 27.559,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Nederland",
+    "lat": 52.2,
+    "lon": 5.3,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "NLD"
+  },
+  {
+    "name": "België",
+    "lat": 50.65,
+    "lon": 4.65,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [
+      "Belgie"
+    ],
+    "code": "BEL"
+  },
+  {
+    "name": "Duitsland",
+    "lat": 51.1,
+    "lon": 10.3,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "DEU"
+  },
+  {
+    "name": "Frankrijk",
+    "lat": 46.7,
+    "lon": 2.5,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "FRA"
+  },
+  {
+    "name": "Spanje",
+    "lat": 40.2,
+    "lon": -3.7,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "ESP"
+  },
+  {
+    "name": "Portugal",
+    "lat": 39.6,
+    "lon": -8.0,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "PRT"
+  },
+  {
+    "name": "Italië",
+    "lat": 43.1,
+    "lon": 12.4,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [
+      "Italie"
+    ],
+    "code": "ITA"
+  },
+  {
+    "name": "Verenigd Koninkrijk",
+    "lat": 54.0,
+    "lon": -2.5,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [
+      "UK",
+      "United Kingdom"
+    ],
+    "code": "GBR"
+  },
+  {
+    "name": "Ierland",
+    "lat": 53.2,
+    "lon": -8.0,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "IRL"
+  },
+  {
+    "name": "Noorwegen",
+    "lat": 60.5,
+    "lon": 8.0,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "NOR"
+  },
+  {
+    "name": "Zweden",
+    "lat": 59.4,
+    "lon": 15.0,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "SWE"
+  },
+  {
+    "name": "Finland",
+    "lat": 61.5,
+    "lon": 25.5,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "FIN"
+  },
+  {
+    "name": "Denemarken",
+    "lat": 56.0,
+    "lon": 9.5,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "DNK"
+  },
+  {
+    "name": "Polen",
+    "lat": 52.0,
+    "lon": 19.0,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "POL"
+  },
+  {
+    "name": "Tsjechië",
+    "lat": 49.8,
+    "lon": 15.5,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [
+      "Tsjechie"
+    ],
+    "code": "CZE"
+  },
+  {
+    "name": "Slowakije",
+    "lat": 48.7,
+    "lon": 19.5,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "SVK"
+  },
+  {
+    "name": "Oostenrijk",
+    "lat": 47.6,
+    "lon": 14.1,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "AUT"
+  },
+  {
+    "name": "Zwitserland",
+    "lat": 46.8,
+    "lon": 8.2,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "CHE"
+  },
+  {
+    "name": "Hongarije",
+    "lat": 47.0,
+    "lon": 19.5,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "HUN"
+  },
+  {
+    "name": "Roemenië",
+    "lat": 45.8,
+    "lon": 24.9,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [
+      "Roemenie"
+    ],
+    "code": "ROU"
+  },
+  {
+    "name": "Bulgarije",
+    "lat": 42.7,
+    "lon": 25.5,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "BGR"
+  },
+  {
+    "name": "Griekenland",
+    "lat": 39.0,
+    "lon": 22.5,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "GRC"
+  },
+  {
+    "name": "Kroatië",
+    "lat": 45.0,
+    "lon": 16.0,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [
+      "Kroatie"
+    ],
+    "code": "HRV"
+  },
+  {
+    "name": "Slovenië",
+    "lat": 46.0,
+    "lon": 14.8,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [
+      "Slovenie"
+    ],
+    "code": "SVN"
+  },
+  {
+    "name": "Estland",
+    "lat": 58.6,
+    "lon": 25.5,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "EST"
+  },
+  {
+    "name": "Letland",
+    "lat": 57.0,
+    "lon": 24.5,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "LVA"
+  },
+  {
+    "name": "Litouwen",
+    "lat": 55.2,
+    "lon": 24.0,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "LTU"
+  },
+  {
+    "name": "Oekraïne",
+    "lat": 49.0,
+    "lon": 30.0,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [
+      "Oekraine"
+    ],
+    "code": "UKR"
+  },
+  {
+    "name": "Luxemburg land",
+    "lat": 49.8,
+    "lon": 6.1,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "LUX"
+  },
+  {
+    "name": "Albanië",
+    "lat": 41.2,
+    "lon": 20.0,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [
+      "Albanie"
+    ],
+    "code": "ALB"
+  },
+  {
+    "name": "Servië",
+    "lat": 44.0,
+    "lon": 20.8,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [
+      "Servie"
+    ],
+    "code": "SRB"
+  },
+  {
+    "name": "Bosnië en Herzegovina",
+    "lat": 44.2,
+    "lon": 17.8,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [],
+    "code": "BIH"
+  },
+  {
+    "name": "Reykjavik",
+    "lat": 64.1466,
+    "lon": -21.9426,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Moskou",
+    "lat": 55.7558,
+    "lon": 37.6173,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Valletta",
+    "lat": 35.8992,
+    "lon": 14.5141,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Nicosia",
+    "lat": 35.1856,
+    "lon": 33.3823,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Podgorica",
+    "lat": 42.4304,
+    "lon": 19.2594,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Skopje",
+    "lat": 41.9981,
+    "lon": 21.4254,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Chisinau",
+    "lat": 47.0105,
+    "lon": 28.8638,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Monaco",
+    "lat": 43.7384,
+    "lon": 7.4246,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Andorra la Vella",
+    "lat": 42.5063,
+    "lon": 1.5218,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "Vaduz",
+    "lat": 47.141,
+    "lon": 9.5209,
+    "region": "eu",
+    "kind": "stad",
+    "aliases": [],
+    "code": ""
+  },
+  {
+    "name": "IJsland",
+    "lat": 64.9,
+    "lon": -19,
+    "region": "eu",
+    "kind": "land",
+    "aliases": [
+      "Ijsland"
+    ],
+    "code": "ISL"
+  }
+]
