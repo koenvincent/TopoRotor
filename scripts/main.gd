@@ -15,6 +15,16 @@ var detail_label: Label
 var progress_label: Label
 var status_label: Label
 var region_select: OptionButton
+var clock_select: OptionButton
+var timed: bool = false
+var time_limit: float = 0.0
+var timed_out: bool = false
+var content_http: HTTPRequest
+var content_status: Label
+var content_url: LineEdit
+var content_list: ItemList
+var content_dialog: AcceptDialog
+var online_packs: Array = []
 var mode_select: OptionButton
 var mute_button: Button
 var hint_button: Button
@@ -183,9 +193,13 @@ func build_ui() -> void:
 	menu.size=Vector2(450,648)
 	menu.add_theme_stylebox_override("panel",style(Color(.045,.13,.17,.96),24))
 	ui.add_child(menu)
+	var menu_scroll=ScrollContainer.new()
+	menu_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	menu.add_child(menu_scroll)
 	var col=VBoxContainer.new()
-	col.add_theme_constant_override("separation",13)
-	menu.add_child(col)
+	col.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	col.add_theme_constant_override("separation",8)
+	menu_scroll.add_child(col)
 	col.add_child(label("TOPOGRAFIE · VLIEGAVONTUUR",14,Color("9fc5bc")))
 	col.add_child(label("TopoRotor",52,GOLD))
 	var intro=label("De wereld is je speelveld.\nVlieg je huiswerk tegemoet.",22)
@@ -203,6 +217,12 @@ func build_ui() -> void:
 	mode_select.add_item("Testvlucht · zonder kaartnamen")
 	mode_select.custom_minimum_size.y=48
 	col.add_child(mode_select)
+	clock_select=OptionButton.new()
+	clock_select.add_item("Vrij vliegen · zonder tijdslimiet")
+	clock_select.add_item("Tijdrit · 90 seconden per locatie")
+	clock_select.custom_minimum_size.y=44
+	col.add_child(clock_select)
+	col.add_child(button("Online missies",open_online_content))
 	col.add_child(button("Start vliegmissie  →",func(): start_mission(),true))
 	col.add_child(button("Foto / eigen topo-opdrachten",open_photo_dialog))
 	var hint=label("Foto toevoegen, locaties controleren en vliegen.\nJe kunt ook een eigen lijst typen.",14,Color("b1c9c1"))
@@ -332,6 +352,9 @@ func start_mission(custom: Array = [],as_custom: bool = true) -> void:
 	completed=[]
 	mistakes=0
 	flight_time=0
+	timed=clock_select.selected==1
+	time_limit=90.0*mission.size()
+	timed_out=false
 	exam=mode_select.selected==1
 	show_hints=not exam
 	hint_button.text="Hints verbergen" if show_hints else "Hint / kaartnamen"
@@ -369,16 +392,22 @@ func _process(delta: float) -> void:
 	if state!="flight" or photo_open:
 		return
 	flight_time+=delta
+	if timed and flight_time>=time_limit:
+		flight_time=time_limit
+		timed_out=true
+		finish_mission()
+		return
 	answer_cooldown=max(0,answer_cooldown-delta)
 	keyboard=Vector2(float(Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT))-float(Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT)),float(Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN))-float(Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP)))
 	var direction=(keyboard+joystick.value).limit_length()
-	direction *= direction.length()
-	var speed=4.5 if region=="nl" else 24.0
-	velocity=velocity.lerp(direction*speed,min(delta*4,1.0))
+	var speed=10.0 if region=="nl" else 42.0
+	# Exponential smoothing keeps steering consistent across frame rates.
+	var response=9.0 if direction.is_zero_approx() else 6.0
+	velocity=velocity.lerp(direction*speed,1.0-exp(-response*delta))
 	helicopter.position.x=clamp(helicopter.position.x+velocity.x*delta,world.bounds.position.x+1,world.bounds.end.x-1)
 	helicopter.position.z=clamp(helicopter.position.z+velocity.y*delta,world.bounds.position.y+1,world.bounds.end.y-1)
 	if velocity.length()>1:
-		helicopter.rotation.y=lerp_angle(helicopter.rotation.y,atan2(-velocity.x,-velocity.y),min(delta*5,1.0))
+		helicopter.rotation.y=lerp_angle(helicopter.rotation.y,atan2(-velocity.x,-velocity.y),1.0-exp(-8.0*delta))
 	helicopter.lean(direction,delta)
 	helicopter.position.y=lerp(helicopter.position.y,flight_altitude(),min(delta*2.5,1.0))
 	var cam_goal=helicopter.position+(Vector3(0,38,44) if region=="nl" else Vector3(0,95,72))
@@ -394,7 +423,8 @@ func _process(delta: float) -> void:
 		var p: Dictionary=mission[mission_index]
 		var km=distance_km(p)
 		var nav="Afstand: %d km" % km if show_hints else "Gebruik de kustlijnen, rivieren en grenzen."
-		detail_label.text="%s  ·  %02d:%02d  ·  %d gevonden" % [nav,int(flight_time)/60,int(flight_time)%60,completed.size()]
+		var clock_seconds=int(ceil(max(0.0,time_limit-flight_time))) if timed else int(flight_time)
+		detail_label.text="%s  ·  %s %02d:%02d  ·  %d gevonden" % [nav,"Nog" if timed else "Vliegtijd",clock_seconds/60,clock_seconds%60,completed.size()]
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -497,7 +527,7 @@ func finish_mission() -> void:
 	world.target.hide()
 	rotor_audio.stop()
 	var stars=3 if mistakes==0 and exam and not hints_used else 2 if mistakes<=2 else 1
-	if not custom_mission:
+	if not custom_mission and not timed_out:
 		var key=region+("_test" if exam else "_oefenen")
 		saved.best[key]=max(int(saved.best.get(key,0)),stars)
 		save_data()
@@ -509,9 +539,9 @@ func finish_mission() -> void:
 	var col=VBoxContainer.new()
 	col.add_theme_constant_override("separation",18)
 	summary.add_child(col)
-	col.add_child(label("MISSIE VOLTOOID",16,Color("a8c8bf")))
-	col.add_child(label("Goed gevlogen, piloot!",32,GOLD))
-	col.add_child(label("★".repeat(stars)+"☆".repeat(3-stars),52,GOLD))
+	col.add_child(label("TIJD IS OM" if timed_out else "MISSIE VOLTOOID",16,Color("a8c8bf")))
+	col.add_child(label("Probeer het nog eens, piloot!" if timed_out else "Goed gevlogen, piloot!",32,GOLD))
+	col.add_child(label("%d / %d gevonden" % [completed.size(),mission.size()] if timed_out else "★".repeat(stars)+"☆".repeat(3-stars),52,GOLD))
 	col.add_child(label("%d locaties gevonden · %d pogingen mis\nVliegtijd %02d:%02d" % [completed.size(),mistakes,int(flight_time)/60,int(flight_time)%60],21))
 	var tip=label("Drie sterren: een foutloze testvlucht zonder hints.",16,Color("b5cec4"))
 	tip.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
@@ -1119,6 +1149,28 @@ func smoke_test() -> void:
 	photo_open=false
 	return_menu()
 	feedback_audio.stop()
+	clock_select.select(1)
+	start_mission([catalog.lookup.amsterdam])
+	var scores_before_timeout=JSON.stringify(saved.best)
+	flight_time=time_limit-.01
+	_process(.02)
+	assert(state=="summary" and timed_out and completed.is_empty(),"Expired time trial ends without awarding completion")
+	assert(JSON.stringify(saved.best)==scores_before_timeout,"Timeout does not award stars")
+	clock_select.select(0)
+	start_mission([catalog.lookup.amsterdam])
+	_process(100.0)
+	assert(state=="flight" and not timed_out,"Untimed flight has no deadline")
+	return_menu()
+	open_online_content()
+	assert(apply_online_content(FileAccess.get_file_as_string("res://content/missions.json")),"Online lesson example validates")
+	var pack_count=online_packs.size()
+	assert(not apply_online_content('{"version":1,"missions":[{"title":"Bad","places":["Unknown place"]}]}'),"Unknown online places rejected")
+	assert(online_packs.size()==pack_count,"Invalid download preserves previous lessons")
+	start_online_mission()
+	assert(state=="flight" and custom_mission and mission.size()==4,"Downloaded lesson starts as a custom mission")
+	content_dialog.hide()
+	return_menu()
+	feedback_audio.stop()
 	print("SMOKE TEST PASSED: parsing, coordinates, land boundaries, flight scoring, custom missions")
 	await get_tree().process_frame
 	get_tree().quit()
@@ -1185,3 +1237,100 @@ func capture_preview() -> void:
 	await get_tree().process_frame
 	print("VISUAL CHECK PASSED")
 	get_tree().quit()
+
+# Lesson packs contain catalog names, never executable resources.
+func open_online_content() -> void:
+	if not is_instance_valid(content_dialog):
+		content_dialog=AcceptDialog.new()
+		content_dialog.title="Online missiepakketten"
+		content_dialog.min_size=Vector2i(650,430)
+		content_dialog.ok_button_text="Sluiten"
+		ui.add_child(content_dialog)
+		var col=VBoxContainer.new()
+		content_dialog.add_child(col)
+		col.add_child(label("Plak de HTTPS-link naar je missiepakketten:",18))
+		content_url=LineEdit.new()
+		content_url.placeholder_text="https://…/missions.json"
+		col.add_child(content_url)
+		col.add_child(button("Missies ophalen",download_content))
+		content_status=label("Eerder geladen missies werken ook zonder internet.",16)
+		content_status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+		col.add_child(content_status)
+		content_list=ItemList.new()
+		content_list.custom_minimum_size=Vector2(600,170)
+		col.add_child(content_list)
+		col.add_child(button("Start geselecteerde missie",start_online_mission,true))
+		content_http=HTTPRequest.new()
+		content_http.timeout=20
+		content_http.body_size_limit=262144
+		content_http.max_redirects=0
+		add_child(content_http)
+		content_http.request_completed.connect(online_content_received)
+		if FileAccess.file_exists("user://missions.json"):
+			apply_online_content(FileAccess.get_file_as_string("user://missions.json"))
+	content_dialog.popup_centered()
+
+func download_content() -> void:
+	var url=content_url.text.strip_edges()
+	if not url.begins_with("https://"):
+		content_status.text="Gebruik een HTTPS-link naar een JSON-bestand."
+		return
+	content_http.cancel_request()
+	content_status.text="Missies worden geladen…"
+	if content_http.request(url)!=OK:
+		content_status.text="Download kon niet starten. Eerdere missies blijven beschikbaar."
+
+func online_content_received(result: int,code: int,_headers: PackedStringArray,body: PackedByteArray) -> void:
+	if result!=HTTPRequest.RESULT_SUCCESS or code!=200:
+		content_status.text="Ophalen mislukt (%d). Eerdere missies blijven beschikbaar." % code
+		return
+	var text=body.get_string_from_utf8()
+	if apply_online_content(text):
+		var file=FileAccess.open("user://missions.json",FileAccess.WRITE)
+		if file:
+			file.store_string(text)
+		else:
+			content_status.text="Missies geladen; offline bewaren is niet gelukt."
+
+func apply_online_content(text: String) -> bool:
+	var raw: Variant=JSON.parse_string(text)
+	if not raw is Dictionary or raw.get("version")!=1 or not raw.get("missions") is Array or raw.missions.is_empty() or raw.missions.size()>100:
+		content_status.text="Ongeldig missiepakket. Verwacht versie 1 met maximaal 100 missies."
+		return false
+	var packs: Array=[]
+	for pack in raw.missions:
+		if not pack is Dictionary or not pack.get("title") is String or pack.title.strip_edges().is_empty() or pack.title.length()>100 or not pack.get("places") is Array or pack.places.is_empty() or pack.places.size()>100:
+			content_status.text="Een missie heeft een ongeldige titel of locatielijst."
+			return false
+		var names=PackedStringArray()
+		for place in pack.places:
+			if not place is String or place.length()>120:
+				content_status.text="Een locatie is ongeldig."
+				return false
+			names.append(place)
+		var parsed=catalog.parse_list("\n".join(names))
+		if not parsed.unknown.is_empty() or parsed.found.is_empty():
+			content_status.text="Onbekende locaties in %s: %s" % [pack.title,", ".join(parsed.unknown)]
+			return false
+		packs.append({"title":pack.title,"places":parsed.found})
+	online_packs=packs
+	content_list.clear()
+	for pack in packs:
+		content_list.add_item("%s · %d locaties" % [pack.title,pack.places.size()])
+	content_list.select(0)
+	content_status.text="%d missies beschikbaar. Kies een missie en vertrek!" % packs.size()
+	return true
+
+func start_online_mission() -> void:
+	var selected=content_list.get_selected_items()
+	if selected.is_empty():
+		return
+	var places: Array=online_packs[selected[0]].places
+	var target_region="nl"
+	for place in places:
+		if place.region!="nl":
+			target_region="eu"
+	region_select.select(0 if target_region=="nl" else 1)
+	load_world(target_region)
+	content_dialog.hide()
+	start_mission(places)
