@@ -36,32 +36,72 @@ class NameChip:
 	func refresh() -> void:
 		add_theme_stylebox_override("panel",QuizBoard.chip_style(board.selected_name==place_name))
 
-	func _get_drag_data(_at: Vector2) -> Variant:
-		if board.checked:
-			return null
-		if get_viewport().gui_is_dragging():
-			set_drag_preview(QuizBoard.preview_chip(place_name))
-		return {"quiz_name":place_name}
-
+	# The drag starts on the press itself; the board follows the pointer from there.
 	func _gui_input(event: InputEvent) -> void:
-		if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and not event.pressed:
-			board.select_name(place_name)
+		if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed:
+			board.begin_drag(place_name,-1,event.global_position,event.device==InputEvent.DEVICE_ID_EMULATION,self)
+			accept_event()
+		elif event is InputEventMouseMotion and board.dragging():
+			# Keep the moves of a drag away from the tray's ScrollContainer, which would scroll instead.
 			accept_event()
 
-# The tray takes a name back that was dragged off the map.
+# The tray of names; a name dragged off the map onto it goes back.
 class Tray:
 	extends PanelContainer
 	var board: QuizBoard
 
-	func _can_drop_data(_at: Vector2,data: Variant) -> bool:
-		return not board.checked and data is Dictionary and data.has("quiz_name") and data.has("from")
+# The map is drawn once per test and size; dots and names on a layer above it,
+# so a drag only repaints the dots, never the provinces and water.
+class MapLayer:
+	extends Control
+	var board: QuizBoard
+	var draws: int = 0
+	func _draw() -> void:
+		draws+=1
+		board.draw_map(self)
 
-	func _drop_data(_at: Vector2,data: Variant) -> void:
-		board.unassign(data.quiz_name)
+class DotLayer:
+	extends Control
+	var board: QuizBoard
+	var draws: int = 0
+	func _draw() -> void:
+		draws+=1
+		board.draw_dots(self)
+
+# What follows the finger: a ring on the aim point and the name beside it.
+# Moving it costs one position change, no redraw of the map.
+class DragGhost:
+	extends Control
+	var chip: PanelContainer
+	var text_label: Label
+
+	func _init() -> void:
+		mouse_filter=Control.MOUSE_FILTER_IGNORE
+		chip=PanelContainer.new()
+		chip.mouse_filter=Control.MOUSE_FILTER_IGNORE
+		chip.add_theme_stylebox_override("panel",QuizBoard.chip_style(true))
+		chip.position=Vector2(14,-16)
+		text_label=Label.new()
+		text_label.add_theme_font_override("font",UiFonts.font("bold"))
+		text_label.add_theme_font_size_override("font_size",QuizBoard.CHIP_FONT)
+		text_label.add_theme_color_override("font_color",QuizBoard.CREAM)
+		text_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
+		chip.add_child(text_label)
+		add_child(chip)
+		hide()
+
+	func _draw() -> void:
+		draw_circle(Vector2.ZERO,QuizBoard.DOT_RADIUS+5,Color(QuizBoard.GOLD,.25))
+		draw_arc(Vector2.ZERO,QuizBoard.DOT_RADIUS+5,0,TAU,32,QuizBoard.GOLD,2.5,true)
+		draw_circle(Vector2.ZERO,2.5,QuizBoard.GOLD)
 
 const DOT_RADIUS = 11.0
 # Fingers are wider than a mouse pointer: a drop counts for the nearest dot within this distance.
-const DROP_RADIUS = 34.0
+const DROP_RADIUS = 40.0
+# A press that moves less than this is a tap (select a name, or place the selected one).
+const DRAG_START = 6.0
+# With a finger the aim sits this far above the touch, so the finger never hides the dot.
+const TOUCH_LIFT = Vector2(0,-48)
 # Dots closer than this on screen are pushed apart; a thin line keeps them tied to the real spot.
 const MIN_GAP = 26.0
 const CHIP_FONT = 16
@@ -93,11 +133,47 @@ var dot_at: PackedVector2Array = PackedVector2Array()
 var true_at: PackedVector2Array = PackedVector2Array()
 var river_paths: Array = []
 var laid_out_for: Vector2 = Vector2.ZERO
+var label_blocks: Array = []
+var labels_dirty: bool = true
+var map_layer: MapLayer
+var dot_layer: DotLayer
+# Set by the game: where the ghost is drawn (above everything) and the tray to drop names back on.
+var float_layer: Control
+var tray: Control
+var ghost: DragGhost
+var drag_name: String = ""
+var drag_from: int = -1
+var drag_origin: Vector2 = Vector2.ZERO
+var drag_moved: bool = false
+var drag_touch: bool = false
+var drag_chip: Control
+var aim: Vector2 = Vector2(-9999,-9999)
+var tap_pending: bool = false
 
 func _init() -> void:
 	mouse_filter=Control.MOUSE_FILTER_STOP
 	clip_contents=true
-	resized.connect(func(): laid_out_for=Vector2.ZERO; queue_redraw())
+	map_layer=MapLayer.new()
+	dot_layer=DotLayer.new()
+	for layer in [map_layer,dot_layer]:
+		layer.board=self
+		layer.mouse_filter=Control.MOUSE_FILTER_IGNORE
+		layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		add_child(layer)
+	ghost=DragGhost.new()
+	resized.connect(func():
+		laid_out_for=Vector2.ZERO
+		redraw_all()
+	)
+
+func redraw_all() -> void:
+	labels_dirty=true
+	map_layer.queue_redraw()
+	dot_layer.queue_redraw()
+
+func redraw_dots() -> void:
+	labels_dirty=true
+	dot_layer.queue_redraw()
 
 static func chip_style(selected: bool) -> StyleBoxFlat:
 	var s=StyleBoxFlat.new()
@@ -110,21 +186,6 @@ static func chip_style(selected: bool) -> StyleBoxFlat:
 	s.content_margin_top=4
 	s.content_margin_bottom=5
 	return s
-
-static func preview_chip(name_text: String) -> Control:
-	var chip=PanelContainer.new()
-	chip.add_theme_stylebox_override("panel",chip_style(true))
-	var l=Label.new()
-	l.text=name_text
-	l.add_theme_font_override("font",UiFonts.font("bold"))
-	l.add_theme_font_size_override("font_size",CHIP_FONT)
-	l.add_theme_color_override("font_color",CREAM)
-	chip.add_child(l)
-	# The finger sits on the chip's left edge, so the name stays readable while dragging.
-	chip.position=Vector2(-12,-36)
-	var holder=Control.new()
-	holder.add_child(chip)
-	return holder
 
 # A new test on these places; their order is the dot numbering.
 func setup(on_world: TopoWorld,quiz_places: Array) -> void:
@@ -148,7 +209,8 @@ func setup(on_world: TopoWorld,quiz_places: Array) -> void:
 	laid_out_for=Vector2.ZERO
 	dot_at=PackedVector2Array()
 	true_at=PackedVector2Array()
-	queue_redraw()
+	cancel_drag()
+	redraw_all()
 	changed.emit()
 
 func names_left() -> PackedStringArray:
@@ -179,7 +241,7 @@ func assign(dot: int,name_text: String) -> void:
 	placed[dot]=name_text
 	if selected_name==name_text:
 		selected_name=""
-	queue_redraw()
+	redraw_dots()
 	changed.emit()
 
 func unassign(name_text: String) -> void:
@@ -187,7 +249,7 @@ func unassign(name_text: String) -> void:
 	if checked or dot<0 or locked[dot]:
 		return
 	placed[dot]=""
-	queue_redraw()
+	redraw_dots()
 	changed.emit()
 
 func select_name(name_text: String) -> void:
@@ -199,6 +261,7 @@ func select_name(name_text: String) -> void:
 
 # Marks the test: how many dots carry their own name.
 func grade() -> Dictionary:
+	cancel_drag()
 	checked=true
 	selected_name=""
 	hover=-1
@@ -206,7 +269,7 @@ func grade() -> Dictionary:
 	for i in places.size():
 		if placed[i]==places[i].name:
 			right+=1
-	queue_redraw()
+	redraw_dots()
 	changed.emit()
 	return {"right":right,"total":places.size()}
 
@@ -221,7 +284,7 @@ func retry_wrong() -> void:
 		else:
 			placed[i]=""
 	checked=false
-	queue_redraw()
+	redraw_dots()
 	changed.emit()
 
 func all_locked() -> bool:
@@ -241,45 +304,116 @@ func nearest_dot(at: Vector2,reach: float=DROP_RADIUS,open_only: bool=true) -> i
 			best_d=d
 	return best
 
-func _can_drop_data(at: Vector2,data: Variant) -> bool:
-	if checked or not (data is Dictionary and data.has("quiz_name")):
-		return false
-	var dot=nearest_dot(at)
+# --- dragging ----------------------------------------------------------------
+# The drag is the game's own: it starts on the press, follows every pointer
+# move without a threshold delay or a drag preview, and snaps to the nearest
+# open dot within DROP_RADIUS of the aim. Positions are canvas coordinates.
+
+func dragging() -> bool:
+	return not drag_name.is_empty()
+
+func board_point(canvas_pos: Vector2) -> Vector2:
+	return get_global_transform_with_canvas().affine_inverse()*canvas_pos
+
+func begin_drag(name_text: String,from: int,canvas_pos: Vector2,touch: bool,chip: Control=null) -> void:
+	if checked or name_text.is_empty() or (from>=0 and locked[from]):
+		return
+	tap_pending=false
+	drag_name=name_text
+	drag_from=from
+	drag_origin=canvas_pos
+	drag_moved=false
+	drag_touch=touch
+	drag_chip=chip
+	ghost.text_label.text=name_text
+	move_drag(canvas_pos)
+
+func move_drag(canvas_pos: Vector2) -> void:
+	if not dragging():
+		return
+	if not drag_moved and canvas_pos.distance_to(drag_origin)>=DRAG_START:
+		drag_moved=true
+		if is_instance_valid(drag_chip):
+			drag_chip.modulate.a=.35
+		if is_instance_valid(float_layer):
+			if ghost.get_parent()!=float_layer:
+				if ghost.get_parent():
+					ghost.get_parent().remove_child(ghost)
+				float_layer.add_child(ghost)
+			ghost.move_to_front()
+			ghost.show()
+	var aim_canvas=canvas_pos+(TOUCH_LIFT if drag_touch else Vector2.ZERO)
+	aim=board_point(aim_canvas)
+	if ghost.is_inside_tree():
+		ghost.position=(ghost.get_parent() as Control).get_global_transform_with_canvas().affine_inverse()*aim_canvas
+	var dot=nearest_dot(aim) if drag_moved else -1
 	if dot!=hover:
 		hover=dot
-		queue_redraw()
-	return dot>=0
+		dot_layer.queue_redraw()
 
-func _drop_data(at: Vector2,data: Variant) -> void:
-	hover=-1
-	assign(nearest_dot(at),data.quiz_name)
+func end_drag(canvas_pos: Vector2) -> void:
+	if not dragging():
+		return
+	move_drag(canvas_pos)
+	var name_text=drag_name
+	var from=drag_from
+	var moved=drag_moved
+	var target=nearest_dot(aim) if moved else -1
+	cancel_drag()
+	if not moved:
+		# A tap: on a name it selects it, on a placed dot it puts the selected name there.
+		if from<0:
+			select_name(name_text)
+		elif not selected_name.is_empty():
+			assign(from,selected_name)
+		return
+	if target>=0:
+		assign(target,name_text)
+	elif from>=0 and is_instance_valid(tray) and tray.get_global_rect().has_point(canvas_pos):
+		unassign(name_text)
 
-func _get_drag_data(at: Vector2) -> Variant:
-	var data=drag_payload(at)
-	if data!=null and get_viewport().gui_is_dragging():
-		set_drag_preview(preview_chip(data.quiz_name))
-	return data
-
-# The placed name under a point, to drag it to another dot or back to the tray.
-func drag_payload(at: Vector2) -> Variant:
-	if checked:
-		return null
-	var dot=nearest_dot(at,DOT_RADIUS+10)
-	if dot<0 or placed[dot].is_empty():
-		return null
-	return {"quiz_name":placed[dot],"from":dot}
+func cancel_drag() -> void:
+	if is_instance_valid(drag_chip):
+		drag_chip.modulate.a=1.0
+	drag_chip=null
+	drag_name=""
+	drag_from=-1
+	drag_moved=false
+	tap_pending=false
+	ghost.hide()
+	if hover>=0:
+		hover=-1
+		if is_instance_valid(dot_layer):
+			dot_layer.queue_redraw()
 
 func _gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and not event.pressed and not selected_name.is_empty():
-		var dot=nearest_dot(event.position)
+	if checked or not (event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed):
+		return
+	var dot=nearest_dot(event.position,DOT_RADIUS+12)
+	if dot>=0 and not placed[dot].is_empty():
+		begin_drag(placed[dot],dot,event.global_position,event.device==InputEvent.DEVICE_ID_EMULATION)
+		accept_event()
+	elif not selected_name.is_empty():
+		tap_pending=true
+		accept_event()
+
+# Moves and the release are followed here, wherever the pointer goes (over the tray, off the map).
+func _input(event: InputEvent) -> void:
+	if not is_visible_in_tree():
+		return
+	if dragging():
+		if event is InputEventMouseMotion:
+			move_drag(event.position)
+		elif event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and not event.pressed:
+			end_drag(event.position)
+	elif tap_pending and event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and not event.pressed:
+		tap_pending=false
+		var dot=nearest_dot(board_point(event.position))
 		if dot>=0:
 			assign(dot,selected_name)
-			accept_event()
 
-func _notification(what: int) -> void:
-	if what==NOTIFICATION_DRAG_END and hover>=0:
-		hover=-1
-		queue_redraw()
+func _exit_tree() -> void:
+	cancel_drag()
 
 # --- layout ----------------------------------------------------------------
 
@@ -350,26 +484,26 @@ static func spread(points: PackedVector2Array,gap: float,box: Rect2) -> PackedVe
 
 # --- drawing ---------------------------------------------------------------
 
-func fill(ring: PackedVector2Array,color: Color) -> void:
+func fill(c: CanvasItem,ring: PackedVector2Array,color: Color) -> void:
 	var points=PackedVector2Array()
 	for point in ring:
 		points.append(to_screen(point))
 	if points.size()>2 and not Geometry2D.triangulate_polygon(points).is_empty():
-		draw_colored_polygon(points,color)
+		c.draw_colored_polygon(points,color)
 
-func stroke(paths: Array,color: Color,width: float) -> void:
+func stroke(c: CanvasItem,paths: Array,color: Color,width: float) -> void:
 	for path in paths:
 		if path.size()>1:
 			var points=PackedVector2Array()
 			for point in path:
 				points.append(to_screen(point))
-			draw_polyline(points,color,width,true)
+			c.draw_polyline(points,color,width,true)
 
-func _draw() -> void:
+func draw_map(c: CanvasItem) -> void:
 	var back=StyleBoxFlat.new()
 	back.bg_color=SEA
 	back.set_corner_radius_all(16)
-	draw_style_box(back,Rect2(Vector2.ZERO,size))
+	c.draw_style_box(back,Rect2(Vector2.ZERO,size))
 	if not is_instance_valid(world) or places.is_empty():
 		return
 	layout()
@@ -377,39 +511,50 @@ func _draw() -> void:
 		return
 	for code in world.neighbour_polys:
 		for ring in world.neighbour_polys[code]:
-			fill(ring,Color(FlightMinimap.NEIGHBOUR_COLORS.get(code,"727a72")).darkened(.2))
+			fill(c,ring,Color(FlightMinimap.NEIGHBOUR_COLORS.get(code,"727a72")).darkened(.2))
 	for code in world.country_polys:
 		if code!="NLD":
 			for ring in world.country_polys[code]:
-				fill(ring,Color(FlightMinimap.NEIGHBOUR_COLORS.get(code,"727a72")).darkened(.2))
+				fill(c,ring,Color(FlightMinimap.NEIGHBOUR_COLORS.get(code,"727a72")).darkened(.2))
 	var index=0
 	for province in world.province_regions:
 		for polygon in province.polygons:
-			fill(polygon,Color(FlightMinimap.PROVINCE_COLORS[index%FlightMinimap.PROVINCE_COLORS.size()]).darkened(.18))
+			fill(c,polygon,Color(FlightMinimap.PROVINCE_COLORS[index%FlightMinimap.PROVINCE_COLORS.size()]).darkened(.18))
 		index+=1
 	for lake in world.lake_polys:
-		fill(lake,LAKE)
-	stroke(river_paths,RIVER,2.2)
-	stroke(world.boundary_paths.get("provincial",[]),Color(.97,.94,.85,.6),1.2)
-	stroke(world.boundary_paths.get("national",[]),GOLD,2.0)
+		fill(c,lake,LAKE)
+	stroke(c,river_paths,RIVER,2.2)
+	stroke(c,world.boundary_paths.get("provincial",[]),Color(.97,.94,.85,.6),1.2)
+	stroke(c,world.boundary_paths.get("national",[]),GOLD,2.0)
 	var font: Font=UiFonts.font("bold")
 	for entry in AREA_LABELS:
 		var at=to_screen(place_xy({"lon":entry[1],"lat":entry[2]}))
 		at.x-=font.get_string_size(entry[0],HORIZONTAL_ALIGNMENT_LEFT,-1,13).x*.5
-		draw_string_outline(font,at,entry[0],HORIZONTAL_ALIGNMENT_LEFT,-1,13,3,INK)
-		draw_string(font,at,entry[0],HORIZONTAL_ALIGNMENT_LEFT,-1,13,Color(1,1,1,.8))
+		c.draw_string_outline(font,at,entry[0],HORIZONTAL_ALIGNMENT_LEFT,-1,13,3,INK)
+		c.draw_string(font,at,entry[0],HORIZONTAL_ALIGNMENT_LEFT,-1,13,Color(1,1,1,.8))
 	for i in places.size():
 		if dot_at[i].distance_to(true_at[i])>4.0:
-			draw_line(true_at[i],dot_at[i],Color(INK,.8),1.5,true)
-			draw_circle(true_at[i],3.0,INK)
-			draw_circle(true_at[i],1.8,CREAM)
-	# Names first, dots on top: a label never hides a dot that still needs a name.
-	var labels=label_layout(font)
-	for block in labels:
-		draw_label(block,font)
+			c.draw_line(true_at[i],dot_at[i],Color(INK,.8),1.5,true)
+			c.draw_circle(true_at[i],3.0,INK)
+			c.draw_circle(true_at[i],1.8,CREAM)
+	draw_legend(c,font)
+
+# Names first, dots on top: a label never hides a dot that still needs a name.
+# The label spots are worked out once per change of names, not per frame of a drag.
+func draw_dots(c: CanvasItem) -> void:
+	if not is_instance_valid(world) or places.is_empty():
+		return
+	layout()
+	if dot_at.size()!=places.size():
+		return
+	var font: Font=UiFonts.font("bold")
+	if labels_dirty:
+		label_blocks=label_layout(font)
+		labels_dirty=false
+	for block in label_blocks:
+		draw_label(c,block,font)
 	for i in places.size():
-		draw_dot(i,font)
-	draw_legend(font)
+		draw_dot(c,i,font)
 
 func dot_color(i: int) -> Color:
 	if locked[i]:
@@ -418,16 +563,16 @@ func dot_color(i: int) -> Color:
 		return RIGHT if is_right(i) else WRONG
 	return KIND_COLORS.get(places[i].get("kind",""),CREAM)
 
-func draw_dot(i: int,font: Font) -> void:
+func draw_dot(c: CanvasItem,i: int,font: Font) -> void:
 	var at=dot_at[i]
 	if i==hover:
-		draw_circle(at,DOT_RADIUS+7,Color(GOLD,.35))
-		draw_arc(at,DOT_RADIUS+7,0,TAU,32,GOLD,2.0,true)
-	draw_circle(at,DOT_RADIUS+2,INK)
-	draw_circle(at,DOT_RADIUS,dot_color(i))
+		c.draw_circle(at,DOT_RADIUS+9,Color(GOLD,.4))
+		c.draw_arc(at,DOT_RADIUS+9,0,TAU,32,GOLD,2.5,true)
+	c.draw_circle(at,DOT_RADIUS+2,INK)
+	c.draw_circle(at,DOT_RADIUS,dot_color(i))
 	var number=str(i+1)
 	var w=font.get_string_size(number,HORIZONTAL_ALIGNMENT_LEFT,-1,NUMBER_FONT).x
-	draw_string(font,at+Vector2(-w*.5,NUMBER_FONT*.38),number,HORIZONTAL_ALIGNMENT_LEFT,-1,NUMBER_FONT,INK)
+	c.draw_string(font,at+Vector2(-w*.5,NUMBER_FONT*.38),number,HORIZONTAL_ALIGNMENT_LEFT,-1,NUMBER_FONT,INK)
 
 # The lines next to a dot: the placed name and, after marking a mistake, the right name in gold.
 func label_lines(i: int) -> Array:
@@ -488,27 +633,27 @@ func label_layout(font: Font) -> Array:
 		blocks.append({"box":best,"lines":lines,"dot":at})
 	return blocks
 
-func draw_label(block: Dictionary,font: Font) -> void:
+func draw_label(c: CanvasItem,block: Dictionary,font: Font) -> void:
 	var box: Rect2=block.box
 	var dot: Vector2=block.dot
 	var nearest=dot.clamp(box.position,box.end)
 	if nearest.distance_to(dot)>DOT_RADIUS+8:
-		draw_line(dot,nearest,Color(CREAM,.7),1.2,true)
-	draw_rect(box,Color(INK,.86))
+		c.draw_line(dot,nearest,Color(CREAM,.7),1.2,true)
+	c.draw_rect(box,Color(INK,.86))
 	var y=box.position.y+NAME_FONT+1
 	for entry in block.lines:
 		var x=box.position.x+4
-		draw_string(font,Vector2(x,y),entry[0],HORIZONTAL_ALIGNMENT_LEFT,-1,NAME_FONT,entry[1])
+		c.draw_string(font,Vector2(x,y),entry[0],HORIZONTAL_ALIGNMENT_LEFT,-1,NAME_FONT,entry[1])
 		if entry[2]:
 			var tw=font.get_string_size(entry[0],HORIZONTAL_ALIGNMENT_LEFT,-1,NAME_FONT).x
-			draw_line(Vector2(x,y-NAME_FONT*.35),Vector2(x+tw,y-NAME_FONT*.35),entry[1],2.0)
+			c.draw_line(Vector2(x,y-NAME_FONT*.35),Vector2(x+tw,y-NAME_FONT*.35),entry[1],2.0)
 		y+=LINE_HEIGHT
 
-func draw_legend(font: Font) -> void:
+func draw_legend(c: CanvasItem,font: Font) -> void:
 	var box=Rect2(10,size.y-LEGEND.size()*18-16,176,LEGEND.size()*18+8)
-	draw_rect(box,Color(INK,.75))
+	c.draw_rect(box,Color(INK,.75))
 	var y=box.position.y+14
 	for entry in LEGEND:
-		draw_circle(Vector2(box.position.x+12,y-4),6,KIND_COLORS[entry[0]])
-		draw_string(font,Vector2(box.position.x+24,y),entry[1],HORIZONTAL_ALIGNMENT_LEFT,-1,12,CREAM)
+		c.draw_circle(Vector2(box.position.x+12,y-4),6,KIND_COLORS[entry[0]])
+		c.draw_string(font,Vector2(box.position.x+24,y),entry[1],HORIZONTAL_ALIGNMENT_LEFT,-1,12,CREAM)
 		y+=18
