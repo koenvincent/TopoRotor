@@ -38,12 +38,25 @@ var label_font: Font
 # topography (and the Dutch government position) counts these areas as part of
 # the country below, so the land check uses that assignment.
 const COUNTRY_MERGE = {"CYN":"CYP","ALD":"FIN"}
+# Dutch map in overview: these cities keep their name (custom points always do).
+const OVERVIEW_CITIES = ["Amsterdam","Rotterdam","Den Haag","Utrecht","Arnhem","Groningen","Maastricht","Leeuwarden","Zwolle"]
 const KIND_INK = {"stad":Color("153c48"),"eigen punt":Color("153c48"),"water":Color("135d8c"),"gebied":Color("7a4b22"),"eiland":Color("2d6a36"),"land":Color("5b2f61"),"provincie":Color("5b2f61")}
 
 # Map files are the single source of truth for region extents: [min_lon,min_lat,max_lon,max_lat].
 static func map_bounds(map_region: String) -> Array:
 	var data = JSON.parse_string(FileAccess.get_file_as_string("res://data/map_%s.json" % map_region))
 	return data.bounds if data is Dictionary and data.get("bounds") is Array else []
+
+# Projection origin (lon, lat) and scale (world units per degree of latitude)
+# per region. data/projection.json is shared with tools/build_city_plans.py, so
+# the generated city plans cannot drift from the terrain.
+static func projection(map_region: String) -> Dictionary:
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/projection.json"))
+	var entry: Variant = data.get(map_region) if data is Dictionary else null
+	if not entry is Dictionary or not entry.get("origin") is Array or entry.origin.size() != 2 or not entry.get("scale") is float:
+		push_error("data/projection.json has no usable projection for '%s'" % map_region)
+		return {"origin":Vector2(5.3,52.2),"scale":85.0} if map_region == "nl" else {"origin":Vector2(10.5,49.0),"scale":14.0}
+	return {"origin":Vector2(entry.origin[0],entry.origin[1]),"scale":float(entry.scale)}
 
 static func in_bounds(b: Array, lat: float, lon: float) -> bool:
 	return b.size()==4 and lon>=b[0] and lon<=b[2] and lat>=b[1] and lat<=b[3]
@@ -70,8 +83,9 @@ func mat(color: Color, unshaded: bool = false, cull_disabled: bool = false) -> S
 
 func build(new_region: String, catalog: TopoCatalog) -> void:
 	region = new_region
-	geo_scale = 85.0 if region == "nl" else 14.0
-	origin = Vector2(5.3,52.2) if region == "nl" else Vector2(10.5,49.0)
+	var projection := TopoWorld.projection(region)
+	geo_scale = projection.scale
+	origin = projection.origin
 	map_data = JSON.parse_string(FileAccess.get_file_as_string("res://data/map_%s.json" % region))
 	var b = map_data.bounds
 	var a = project(b[0],b[3])
@@ -477,10 +491,16 @@ func ensure_mission_markers(places: Array) -> void:
 	for place in places:
 		add_place_marker(place,false)
 
+# Custom points ("eigen punt") get their own label key, so one that shares a
+# name with a catalogue place never moves or hides that place's label.
+static func label_key(p: Dictionary) -> String:
+	return "eigen:"+p.name if p.kind == "eigen punt" else p.name
+
 func add_place_marker(p: Dictionary,with_scenery: bool = true) -> void:
-	if label_names.has(p.name):
-		if p.kind == "eigen punt" and marker_labels.has(p.name):
-			marker_labels[p.name].position = project(p.lon,p.lat)+Vector3(0,3.8,0)
+	var key := label_key(p)
+	if marker_labels.has(key):
+		if p.kind == "eigen punt":
+			marker_labels[key].position = project(p.lon,p.lat)+Vector3(0,3.8,0)
 		return
 	label_names[p.name]=true
 	var pos = project(p.lon,p.lat)
@@ -488,7 +508,7 @@ func add_place_marker(p: Dictionary,with_scenery: bool = true) -> void:
 		make_city(pos,p.name)
 		make_pad(pos,p.name)
 	var label = Label3D.new()
-	label.text = p.name
+	label.text = LocatorCard.display_name(p)
 	label.position = pos+Vector3(0,3.8 if region=="nl" else 2.1,0)
 	if label_font == null:
 		label_font = UiFonts.font("black")
@@ -503,7 +523,7 @@ func add_place_marker(p: Dictionary,with_scenery: bool = true) -> void:
 	label.no_depth_test = true
 	add_child(label)
 	label.set_meta("kind",p.kind)
-	marker_labels[p.name]=label
+	marker_labels[key]=label
 	labels.append(label)
 
 func refresh_labels(focus: Vector3, overview: bool, view_size: float=46.0) -> void:
@@ -522,7 +542,7 @@ func refresh_labels(focus: Vector3, overview: bool, view_size: float=46.0) -> vo
 		var is_city = marker.get_meta("kind","") in ["stad","eigen punt"]
 		marker.visible = hints_enabled and (distance < (32.0 if is_city else 18.0)*reach)
 		if overview:
-			marker.visible = hints_enabled and is_city and marker.text in ["Amsterdam","Rotterdam","Den Haag","Utrecht","Arnhem","Groningen","Maastricht","Leeuwarden","Zwolle"]
+			marker.visible = hints_enabled and is_city and (marker.get_meta("kind","") == "eigen punt" or marker.text in OVERVIEW_CITIES)
 
 func lake_contains(position3: Vector3) -> bool:
 	for polygon in lake_polys:

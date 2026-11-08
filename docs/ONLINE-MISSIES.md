@@ -18,6 +18,17 @@ de game opgeslagen. De URL wordt momenteel per sessie ingevoerd.
 }
 ```
 
+Per missie mag je `"region": "eu"` (of `"nl"`) toevoegen. Dat bepaalt welke
+kaart telt voor namen die op beide kaarten staan, zoals de Noordzee en de Rijn:
+met `"eu"` krijg je de Europese zee en rivier. Zonder `region` geldt een missie
+als Europees zodra er een plaats in staat die alleen op de Europakaart bestaat
+(bijvoorbeeld Parijs of de Donau); anders blijven het de Nederlandse plaatsen.
+Een andere waarde dan `"nl"` of `"eu"` wordt geweigerd.
+
+```json
+{"title": "Zeeën", "region": "eu", "places": ["Noordzee", "Oostzee", "Rijn"]}
+```
+
 Pas online de titels en plaatsnamen aan om nieuwe opdrachten aan te bieden;
 hiervoor is geen nieuwe APK nodig. Namen moeten in de huidige locatiecatalogus
 staan. Nieuwe coördinaten, kaarten en graphics zijn nog onderdeel van de app.

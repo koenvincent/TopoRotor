@@ -30,3 +30,5 @@ data=json.loads(path.read_text())
 data["lakes"]=rings
 path.write_text(json.dumps(data,separators=(",",":"))+"\n")
 print(f"Imported {len(rings)} water polygons preserving islands/polders")
+print("The fields, province fills and city plans are cut against these lakes and are now stale. "
+      "Rebuild them in order (tools/build_data.py does this), then run tools/check_data.py.")

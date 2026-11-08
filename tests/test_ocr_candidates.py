@@ -42,5 +42,24 @@ class CandidateTests(unittest.TestCase):
                      "Afsluitdijk", "Schiphol", "Randstad", "Biesbos", "Alphen aan den Rijn"]:
             self.assertIn(name, found)
 
+    def test_parts_of_longer_names_do_not_match_on_their_own(self):
+        self.assertEqual(module.candidates("Neder-Rijn\nAmsterdam-Rijnkanaal"), ["Neder-Rijn", "Amsterdam-Rijnkanaal"])
+        self.assertEqual(module.candidates("Zuid-Limburg"), ["Zuid-Limburg"])
+        self.assertEqual(module.candidates("Kop van Noord-Holland"), ["Kop van Noord-Holland"])
+        self.assertEqual(module.candidates("Groningen provincie"), ["Groningen provincie"])
+
+    def test_a_part_listed_separately_still_matches(self):
+        self.assertEqual(module.candidates("Neder-Rijn\nRijn"), ["Rijn", "Neder-Rijn"])
+        self.assertEqual(module.candidates("Zuid-Limburg en Limburg"), ["Limburg", "Zuid-Limburg"])
+
+    def test_masked_text_cannot_join_neighbours_into_a_match(self):
+        # "Den" + "Haag" split by a masked name must not form "Den Haag".
+        self.assertNotIn("Den Haag", module.candidates("Den Rijn Haag"))
+
+    def test_regions_are_reported_per_name(self):
+        places = {m["name"]: m["regions"] for m in module.match_places("Noordzee Rijn Arnhem")}
+        self.assertEqual(places, {"Noordzee": ["nl", "eu"], "Rijn": ["nl", "eu"], "Arnhem": ["nl"]})
+
+
 if __name__ == '__main__':
     unittest.main()

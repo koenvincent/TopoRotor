@@ -8,7 +8,7 @@ reshapes a city the player already knows. Use it whenever places.json gains citi
 a full rebuild shrinks plans next to the new neighbours (Amsterdam next to Amstelveen
 no longer fits its landmark reserve and fails).
 """
-import json, math, random, sys, zlib
+import hashlib, json, math, random, sys, zlib
 from pathlib import Path
 from shapely.geometry import Point, Polygon, MultiPoint, box, shape
 from shapely.ops import transform, unary_union
@@ -34,7 +34,9 @@ for kind,names in {
  for name in names:types[name]=kind
 existing=json.loads((ROOT/'data/city_plans_nl.json').read_text())['cities'] if '--keep-existing' in sys.argv[2:] else {}
 plans={}
-sx=math.cos(math.radians(52.2))*85
+# The game's projection (data/projection.json, read by scripts/world.gd): world units per degree.
+projection=json.loads((ROOT/'data/projection.json').read_text())['nl']
+scale=projection['scale'];sx=math.cos(math.radians(projection['origin'][1]))*scale
 for place in places:
  name=place['name'];lon=place['lon'];lat=place['lat'];kind=types.get(name,'historic')
  if name in existing:
@@ -42,8 +44,8 @@ for place in places:
  rng=random.Random(zlib.crc32(name.encode()))
  city=Point(lon,lat);poly=urban[index.nearest(city)]
  supported=poly.distance(city)<.015
- local=transform(lambda x,y:((x-lon)*sx,-(y-lat)*85),poly) if supported else None
- nearest=min(math.hypot((other['lon']-lon)*sx,(other['lat']-lat)*85) for other in places if other is not place)
+ local=transform(lambda x,y:((x-lon)*sx,-(y-lat)*scale),poly) if supported else None
+ nearest=min(math.hypot((other['lon']-lon)*sx,(other['lat']-lat)*scale) for other in places if other is not place)
  radius=min(6.5,max(2.2,nearest*.43))
  angle=rng.uniform(-.55,.55)
  if local is not None and local.area<220:
@@ -71,7 +73,7 @@ for place in places:
   width=rng.uniform(.50,.82);depth=rng.uniform(.65,1.05)
   rect=box(xx-width*.65,zz-depth*.65,xx+width*.65,zz+depth*.65)
   if supported and not local.covers(rect):continue
-  geo=Point(lon+xx/sx,lat-zz/85)
+  geo=Point(lon+xx/sx,lat-zz/scale)
   if water.contains(geo):continue
   if any(rect.intersects(old) for old in occupied):continue
   h=rng.uniform(.85,2.4);style=rng.choice([0,0,1,1,3])
@@ -95,6 +97,11 @@ for place in places:
    if line.geom_type=='LineString' and line.length>.15:
     roads.append([[round(x,3),round(z,3)] for x,z in line.coords])
  plans[name]={'streets':roads,'kind':kind,'seed':zlib.crc32(name.encode()),'source_supported':supported,'angle':round(angle,3),'radius':round(radius,3),'plots':plots,'blocks':[[[round(x,3),round(z,3)] for x,z in p.exterior.coords] for p in rings if p.area>.1]}
-(ROOT/'data/city_plans_nl.json').write_text(json.dumps({'source':'Natural Earth 1:10m urban areas','note':'Synthetic plots within historical urban extents; symbolic roads and exaggerated landmarks, not a street map.','cities':plans},ensure_ascii=False,separators=(',',':'))+'\n')
+lakes_sha=hashlib.sha1(json.dumps(json.loads((ROOT/'data/map_nl.json').read_text())['lakes'],separators=(',',':')).encode()).hexdigest()[:12]
+# Layout of one plot, as read by DutchScenery.landscape(): x, z, width, depth, height (world units), angle (radians), roof style.
+header={'format_version':1,'generator':'tools/build_city_plans.py','lakes_sha':lakes_sha,
+ 'plot_fields':['x','z','width','depth','height','angle','roof_style'],
+ 'roof_styles':{'0':'pitched roof','1':'stepped gable at the front','2':'flat roof (post-war, offices, warehouses)','3':'pitched roof with dormer'}}
+(ROOT/'data/city_plans_nl.json').write_text(json.dumps({**header,'source':'Natural Earth 1:10m urban areas','note':'Synthetic plots within historical urban extents; symbolic roads and exaggerated landmarks, not a street map.','projection':projection,'cities':plans},ensure_ascii=False,separators=(',',':'))+'\n')
 print('Generated',len(plans),'distinct plans with',sum(len(p['plots']) for p in plans.values()),'building plots')
 print('Schematic fallback (not covered by source):',[n for n,p in plans.items() if not p['source_supported']])

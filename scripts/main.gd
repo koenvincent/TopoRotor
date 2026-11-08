@@ -32,11 +32,13 @@ var content_status: Label
 var content_url: LineEdit
 var content_list: ItemList
 var content_dialog: AcceptDialog
+var credits_dialog: AcceptDialog
 var online_packs: Array = []
 var europe_route_select: OptionButton
 var nl_route_select: OptionButton
 var mode_select: OptionButton
 var mute_button: Button
+var calm_button: Button
 var hint_button: Button
 var photo_dialog: PanelContainer
 var photo_backdrop: ColorRect
@@ -183,6 +185,10 @@ var best_label: Label
 var rank_label: Label
 var custom_mission: bool = false
 var progress_readonly: bool = false
+# Dutch notice about progress that is not (or could not be) saved; shown as a pill for a few seconds.
+var save_notice: String = ""
+var save_notice_label: Label
+var save_notice_serial: int = 0
 
 var nl_bounds: Array = TopoWorld.map_bounds("nl")
 
@@ -192,6 +198,8 @@ const CREAM = Color("fff7e6")
 const GOLD = Color("ffc94a")
 const TEAL = Color("1d6577")
 const MUTED = Color("9fd3d6")
+# Text on locked or disabled controls: about 7:1 on the dark faces, still clearly dimmer than live text.
+const DIM_INK = Color(CREAM,.7)
 const SKY = Color("4fd8ff")
 const PANEL = Color(.02,.085,.12,.93)
 const PANEL_SOLID = Color(.025,.1,.14,.98)
@@ -203,7 +211,7 @@ const BUTTON_TONES = {
 	"teal":{"base":Color("1d6577"),"hover":Color("27839a"),"pressed":Color("164f5d"),"edge":Color("082a33"),"ink":Color("fff7e6"),"glow":Color(.31,.85,1,.4)},
 	"ghost":{"base":Color(1,1,1,.08),"hover":Color(.31,.85,1,.18),"pressed":Color(1,1,1,.04),"edge":Color(0,0,0,.35),"ink":Color("fff7e6"),"glow":Color(.31,.85,1,.3)},
 	# Locked items: dim glass and faded text, but still tappable for a preview.
-	"locked":{"base":Color(1,1,1,.04),"hover":Color(1,1,1,.09),"pressed":Color(1,1,1,.02),"edge":Color(0,0,0,.3),"ink":Color(1,.97,.9,.5),"glow":Color(1,1,1,.12)},
+	"locked":{"base":Color(1,1,1,.04),"hover":Color(1,1,1,.09),"pressed":Color(1,1,1,.02),"edge":Color(0,0,0,.3),"ink":Color(1,.97,.9,.7),"glow":Color(1,1,1,.12)},
 	# The locked item shown in the preview right now: a faint gold plate.
 	"peek":{"base":Color(1,.79,.29,.14),"hover":Color(1,.79,.29,.2),"pressed":Color(1,.79,.29,.08),"edge":Color(.72,.39,.06,.65),"ink":Color("ffdb7a"),"glow":Color(1,.79,.29,.3)},
 }
@@ -221,6 +229,8 @@ func _ready() -> void:
 	helicopter.configure(equipped())
 	helicopter.apply_paint(saved.get("paint",{}))
 	build_ui()
+	show_save_notice(save_notice)
+	apply_calm()
 	load_world("nl")
 	state="menu"
 	get_tree().quit_on_go_back=false
@@ -428,7 +438,7 @@ func tone_button(b: Control,tone: String,radius: int=14,margin: int=16,skew: flo
 	b.add_theme_stylebox_override("focus",focus_ring(radius,skew))
 	for key in ["font_color","font_hover_color","font_pressed_color","font_focus_color","font_hover_pressed_color"]:
 		b.add_theme_color_override(key,t.ink)
-	b.add_theme_color_override("font_disabled_color",Color(CREAM,.35))
+	b.add_theme_color_override("font_disabled_color",DIM_INK)
 
 # A small padlock drawn in code (the bundled fonts have no lock glyph): a
 # shackle over a rounded body with a keyhole, edges smoothed by distance.
@@ -500,7 +510,7 @@ func build_theme() -> Theme:
 		theme.set_stylebox("focus",type,focus_ring())
 		for key in ["font_color","font_hover_color","font_pressed_color","font_focus_color","font_hover_pressed_color"]:
 			theme.set_color(key,type,CREAM)
-		theme.set_color("font_disabled_color",type,Color(CREAM,.35))
+		theme.set_color("font_disabled_color",type,DIM_INK)
 	# Dropdowns read as fields: dark inset with a gold arrow.
 	var field_face=face(Color("0b2a35"),Color("061a21"),false,14,16)
 	field_face.border_color=Color(SKY,.35)
@@ -538,7 +548,7 @@ func build_theme() -> Theme:
 	theme.set_font("font","PopupMenu",UiFonts.font("bold"))
 	theme.set_color("font_color","PopupMenu",CREAM)
 	theme.set_color("font_hover_color","PopupMenu",GOLD)
-	theme.set_color("font_disabled_color","PopupMenu",Color(CREAM,.35))
+	theme.set_color("font_disabled_color","PopupMenu",DIM_INK)
 	theme.set_color("font_accelerator_color","PopupMenu",MUTED)
 	theme.set_constant("v_separation","PopupMenu",16)
 	theme.set_constant("item_start_padding","PopupMenu",14)
@@ -948,6 +958,14 @@ func build_menu() -> void:
 	credits.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	credits.pressed.connect(show_credits)
 	footer.add_child(credits)
+	# Reduced motion and flashes; a row of its own keeps the footer (and menu) width as it was.
+	calm_button=button("",toggle_calm)
+	calm_button.custom_minimum_size=Vector2(0,40)
+	calm_button.add_theme_font_size_override("font_size",15)
+	calm_button.tooltip_text="Zet schudden, felle flitsen, confetti en pulserende effecten uit. Het goed- of fout-signaal blijft staan."
+	tone_button(calm_button,"ghost",12,12)
+	col.add_child(calm_button)
+	update_calm_button()
 
 # Keeps the region tiles in step with the picker they drive.
 func sync_menu_controls() -> void:
@@ -960,6 +978,10 @@ func sync_menu_controls() -> void:
 
 # Panels pop in instead of appearing: a short fade and a slight scale-up.
 func reveal(c: Control,delay: float=0.0) -> void:
+	if calm_on():
+		c.modulate.a=1.0
+		c.scale=Vector2.ONE
+		return
 	c.pivot_offset=c.size*.5
 	c.modulate.a=0.0
 	c.scale=Vector2.ONE*.96
@@ -1142,6 +1164,7 @@ func show_credits() -> AcceptDialog:
 	dialog.title="Nieks TopoRadar · bronnen en licenties"
 	dialog.dialog_text="Grensgegevens: Kadaster NL / PDOK, Bestuurlijke Gebieden 2026.\nCC BY 4.0: https://creativecommons.org/licenses/by/4.0/\nBron: https://api.pdok.nl/kadaster/brk-bestuurlijke-gebieden/ogc/v1\nGebundeld op 7 november 2026; uitgesneden en vereenvoudigd.\n\nLand-, water- en stadscontouren: Natural Earth, public domain.\nDe buurten en gebouwen zijn gestileerde modellen, geen echte stratenkaart.\nEigen code en modellen: MIT. Godot: MIT. Lilita One en Nunito: SIL OFL 1.1. DejaVu: fontlicentie.\nZie THIRD-PARTY.md voor bronverwijzingen en overige licenties."
 	ui.add_child(dialog)
+	credits_dialog=dialog
 	dialog.get_label().autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	dialog.get_label().custom_minimum_size.x=600
 	dialog.confirmed.connect(dialog.queue_free)
@@ -1188,12 +1211,40 @@ func update_best_label() -> void:
 		pilot_button.text="Piloot: "+pilot_name()
 	sync_menu_controls()
 
+# Best times and boards are keyed on the place names of a route. Coordinates only count for a
+# player's own points, which have no other identity, so a data fix in places.json keeps old records.
 func record_key(places: Array) -> String:
+	var key=route_hash(places,false)
+	migrate_route_key(route_hash(places,true),key)
+	return key
+
+func route_hash(places: Array,with_coordinates: bool) -> String:
 	var route: Array=[]
 	for place in places:
-		route.append([place.name,place.lat,place.lon])
+		route.append([place.name,place.lat,place.lon] if with_coordinates or place.get("kind")=="eigen punt" else [place.name])
 	route.sort_custom(func(a,b): return JSON.stringify(a)<JSON.stringify(b))
 	return region+"_"+JSON.stringify(route).sha256_text()
+
+# Saves from before name-based keys hold the record and boards of a route under the key that also
+# hashed its coordinates. They move to the current key the first time the route is used.
+func migrate_route_key(legacy: String,key: String) -> void:
+	if legacy==key:
+		return
+	var records: Variant=saved.get("records")
+	if records is Dictionary and records.has(legacy):
+		if not records.has(key) or float(records[legacy])<float(records[key]):
+			records[key]=records[legacy]
+		records.erase(legacy)
+	var boards: Variant=saved.get("boards")
+	if boards is Dictionary:
+		for mode in Leaderboard.MODE_IDS.size():
+			var old_board=Leaderboard.key(legacy,mode)
+			if not boards.has(old_board):
+				continue
+			var entries: Array=boards[old_board]
+			boards.erase(old_board)
+			for entry in entries:
+				Leaderboard.add(boards,Leaderboard.key(key,mode),entry)
 
 
 func start_mission(custom: Array = [],as_custom: bool = true) -> void:
@@ -1207,6 +1258,7 @@ func start_mission(custom: Array = [],as_custom: bool = true) -> void:
 		hud_card_style.border_color=MODE_COLORS[game_mode]
 		progress_label.add_theme_color_override("font_color",MODE_COLORS[game_mode])
 	sfx.muted=saved.mute
+	apply_calm()
 	fx.clear_effects()
 	hud_fx.clear()
 	locator.dismiss()
@@ -1381,7 +1433,8 @@ func update_effects(delta: float) -> void:
 	in_zone=now_inside
 	fx.set_inside(in_zone)
 	fx.update_sight(helicopter.position,not show_overview)
-	var pulse=.5+.5*sin(flight_time*9.0) if in_zone else 0.0
+	# Calm mode holds the button at its bright, enlarged pulse peak instead of pulsing.
+	var pulse=(1.0 if calm_on() else .5+.5*sin(flight_time*9.0)) if in_zone else 0.0
 	found_button.modulate=Color(1,1,1).lerp(Color(1.35,1.3,1.0),pulse)
 	found_button.scale=Vector2.ONE*(1.0+pulse*.04)
 	found_button.pivot_offset=found_button.size*.5
@@ -1455,19 +1508,50 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			elif event.physical_keycode in [KEY_E,KEY_MINUS,KEY_KP_SUBTRACT]:
 				change_height(1)
 
+# Overlay registry: every screen or dialog that sits on top of the menu, in
+# Back priority (topmost first). The open_* guards and go_back share it, so a
+# new overlay is added here and in the two helpers below, nowhere else.
+const OVERLAYS = ["credits","content","board","pilots","themes","homework","paint","photo"]
+
+func overlay_is_open(overlay: String) -> bool:
+	match overlay:
+		"credits":
+			return is_instance_valid(credits_dialog) and credits_dialog.visible
+		"content":
+			return is_instance_valid(content_dialog) and content_dialog.visible
+	return get(overlay+"_open")==true
+
+# Name of the topmost open overlay, or "" when none is open.
+func top_overlay() -> String:
+	for overlay in OVERLAYS:
+		if overlay_is_open(overlay):
+			return overlay
+	return ""
+
+func close_overlay(overlay: String) -> void:
+	match overlay:
+		"credits":
+			credits_dialog.hide()
+			credits_dialog.queue_free()
+		"content":
+			content_dialog.hide()
+		"board":
+			close_leaderboard()
+		"pilots":
+			close_pilots()
+		"themes":
+			close_themes()
+		"homework":
+			close_homework()
+		"paint":
+			close_paint_shop()
+		"photo":
+			close_photo_dialog()
+
 func go_back(allow_quit: bool) -> void:
-	if board_open:
-		close_leaderboard()
-	elif pilots_open:
-		close_pilots()
-	elif themes_open:
-		close_themes()
-	elif homework_open:
-		close_homework()
-	elif paint_open:
-		close_paint_shop()
-	elif photo_open:
-		close_photo_dialog()
+	var overlay=top_overlay()
+	if not overlay.is_empty():
+		close_overlay(overlay)
 	elif state=="flight":
 		pause_flight()
 	elif state=="paused":
@@ -1568,7 +1652,7 @@ func answer() -> void:
 		sfx.play("buzzer")
 		fx.miss_mark(ground)
 		hud_fx.show_miss("MIS!" if goal_mistakes<3 else "NOG NIET!")
-		shake=1.0
+		shake=0.0 if calm_on() else 1.0
 		answer_cooldown=1.0
 
 # The praise grows with a run of first-try answers.
@@ -1660,7 +1744,8 @@ func finish_mission() -> void:
 			missed.append("%s (%d×)" % [c.name,c.mistakes])
 	fx.show_radar([])
 	var stars=mission_stars(first_try)
-	if not custom_mission:
+	# Leren shows every hint, so only Oefenen and Records feed the stars on the menu.
+	if not custom_mission and game_mode!=GameMode.LEARN:
 		var key=region+("_test" if exam else "_oefenen")
 		saved.best[key]=max(int(saved.best.get(key,0)),stars)
 		save_data()
@@ -1672,7 +1757,7 @@ func finish_mission() -> void:
 			saved.records={}
 		var previous=float(saved.records.get(key,0.0))
 		if previous<=0 or score<previous:
-			saved.records[key]=score
+			ProgressStore.remember_record(saved.records,key,score)
 			new_record=true
 			record_result="Nieuw record: %.1f sec (+%d sec straf)!" % [score,mistakes*10]
 			save_data()
@@ -1802,13 +1887,14 @@ func star_row(stars: int) -> HBoxContainer:
 	for i in 3:
 		var star=title("★" if i<stars else "☆",66,GOLD if i<stars else Color("5d7f86"))
 		star.resized.connect(func(): star.pivot_offset=star.size*.5)
-		star.scale=Vector2.ZERO
+		star.scale=Vector2.ONE if calm_on() else Vector2.ZERO
 		row.add_child(star)
 		var tween=star.create_tween()
 		tween.tween_interval(.35+i*.28)
 		if i<stars:
 			tween.tween_callback(func(): sfx.play("star",1.0+i*.12))
-		tween.tween_property(star,"scale",Vector2.ONE,.45).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+		if not calm_on():
+			tween.tween_property(star,"scale",Vector2.ONE,.45).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 	return row
 
 func pause_flight() -> void:
@@ -1878,6 +1964,29 @@ func position_menu_camera() -> void:
 	camera.look_at(view_target,Vector3.UP)
 	world.set_boundary_detail(camera.size)
 
+# 'Rustige beelden': no screen shake, full-screen flashes, confetti or pulsing.
+# Feedback stays readable through the cross, banner and text.
+func calm_on() -> bool:
+	return saved.get("calm",false)==true
+
+func apply_calm() -> void:
+	if is_instance_valid(hud_fx):
+		hud_fx.calm=calm_on()
+	if is_instance_valid(fx):
+		fx.set_calm(calm_on())
+	if calm_on():
+		shake=0.0
+
+func update_calm_button() -> void:
+	if is_instance_valid(calm_button):
+		calm_button.text="Rustige beelden: aan" if calm_on() else "Rustige beelden: uit"
+
+func toggle_calm() -> void:
+	saved.calm=not calm_on()
+	apply_calm()
+	update_calm_button()
+	save_data()
+
 func toggle_sound() -> void:
 	saved.mute=not saved.mute
 	sfx.muted=saved.mute
@@ -1897,29 +2006,54 @@ func load_save() -> void:
 			if DirAccess.rename_absolute(save_path,backup)!=OK:
 				progress_readonly=true
 				push_warning("Kon onleesbare voortgang niet veiligstellen; opslaan uitgeschakeld.")
+				show_save_notice("Je voortgang wordt niet bewaard: het oude bestand is onleesbaar en kon niet veiliggesteld worden.")
 			else:
 				progress_readonly=false
 				push_warning("Onleesbare voortgang bewaard als "+backup+".")
+				show_save_notice("Je voortgangsbestand was onleesbaar. Je begint opnieuw; het oude bestand is bewaard.")
 		else:
 			progress_readonly=ProgressStore.is_newer(raw)
 		if ProgressStore.is_newer(raw):
 			push_warning("Voortgang komt uit een nieuwere app-versie; het bestand wordt niet overschreven.")
+			show_save_notice("Je voortgang wordt niet bewaard: het bestand komt uit een nieuwere versie van de app.")
 		saved=ProgressStore.clean(raw)
 	custom_places=saved.custom
 
 func save_data() -> void:
-	if is_capture_mode or progress_readonly:
+	if is_capture_mode:
+		return
+	if progress_readonly:
+		show_save_notice(save_notice)
 		return
 	saved.version=ProgressStore.VERSION
 	sync_profile()
-	var f=FileAccess.open(save_path+".tmp",FileAccess.WRITE)
-	if f==null:
-		push_warning("Kon de voortgang niet opslaan.")
+	# The old file is only replaced after the new one was written and read back intact.
+	var failed=ProgressStore.write_atomic(save_path,JSON.stringify(saved,"\t"))
+	if failed.is_empty():
+		save_notice=""
 		return
-	f.store_string(JSON.stringify(saved,"\t"))
-	f.close()
-	if DirAccess.rename_absolute(save_path+".tmp",save_path)!=OK:
-		push_warning("Kon het voortgangsbestand niet vervangen.")
+	push_warning("Kon de voortgang niet opslaan (%s)." % failed)
+	show_save_notice("Opslaan van je voortgang is niet gelukt. Is de opslagruimte vol? Je oude voortgang blijft bewaard.")
+
+# Tells the player, in a short pill, that progress is not (or could not be) saved.
+func show_save_notice(text: String) -> void:
+	save_notice=text
+	if text.is_empty() or not is_instance_valid(ui) or is_capture_mode:
+		return
+	if not is_instance_valid(save_notice_label):
+		save_notice_label=pill("",GOLD,INK,16)
+		save_notice_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+		save_notice_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+		save_notice_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
+		save_notice_label.custom_minimum_size=Vector2(620,0)
+		save_notice_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP,Control.PRESET_MODE_MINSIZE,14)
+		save_notice_label.grow_horizontal=Control.GROW_DIRECTION_BOTH
+		ui.add_child(save_notice_label)
+	save_notice_label.text=text
+	save_notice_label.show()
+	save_notice_serial+=1
+	var serial=save_notice_serial
+	get_tree().create_timer(9.0).timeout.connect(func(): if serial==save_notice_serial and is_instance_valid(save_notice_label): save_notice_label.hide())
 
 # Hangar: a live, slowly turning 3D preview (rendered in its own little world)
 # beside four tabs: type, colours, accessories and upgrades. Locked items say
@@ -2242,7 +2376,7 @@ func style_swatch(swatch: Button,scheme: Dictionary,mode: String) -> void:
 	var body=Color(scheme.body)
 	var trim=Color(scheme.trim)
 	var open=mode=="open"
-	var ink=(INK if body.get_luminance()>.55 else CREAM) if open else Color(CREAM,.7)
+	var ink=(INK if body.get_luminance()>.55 else CREAM) if open else DIM_INK
 	for state_name in ["normal","hover","pressed","hover_pressed","disabled"]:
 		var face_style=face(body.lightened(.12) if state_name=="hover" else body,trim,state_name.contains("pressed"),12,6)
 		face_style.border_width_bottom=0 if state_name.contains("pressed") else 6
@@ -2255,7 +2389,7 @@ func style_swatch(swatch: Button,scheme: Dictionary,mode: String) -> void:
 		swatch.add_theme_stylebox_override(state_name,face_style)
 	for key in ["font_color","font_hover_color","font_pressed_color","font_focus_color","font_hover_pressed_color"]:
 		swatch.add_theme_color_override(key,ink)
-	swatch.add_theme_color_override("font_disabled_color",Color(CREAM,.55))
+	swatch.add_theme_color_override("font_disabled_color",DIM_INK)
 	swatch.icon=null if open else lock_icon()
 
 func build_accessory_page(page: VBoxContainer) -> void:
@@ -2501,7 +2635,7 @@ func set_paint(paint: Dictionary,sync_pickers: bool=true) -> void:
 			paint_pickers[part].color=Color(saved.paint[part])
 
 func open_paint_shop() -> void:
-	if state!="menu" or pilots_open or themes_open or board_open or homework_open:
+	if state!="menu" or not top_overlay().is_empty():
 		return
 	paint_open=true
 	apply_garage()
@@ -2602,7 +2736,7 @@ func board_route_title() -> String:
 	return picker.get_item_text(maxi(picker.selected,0))
 
 func open_leaderboard() -> void:
-	if state not in ["menu","summary"] or paint_open or pilots_open or themes_open or homework_open:
+	if state not in ["menu","summary"] or not top_overlay().is_empty():
 		return
 	board_open=true
 	board_pilot.text="Je vliegt als %s. Alle piloten op dit apparaat staan op dezelfde lijst." % pilot_name()
@@ -2707,7 +2841,7 @@ func build_themes() -> void:
 	col.add_child(button("Sluiten",close_themes))
 
 func open_themes() -> void:
-	if state!="menu" or paint_open or board_open or pilots_open or homework_open:
+	if state!="menu" or not top_overlay().is_empty():
 		return
 	themes_open=true
 	for child in themes_grid.get_children():
@@ -2781,7 +2915,7 @@ func build_homework() -> void:
 
 # Homework is Dutch topography: from the Europe map it switches to Nederland.
 func open_homework() -> void:
-	if state!="menu" or paint_open or board_open or pilots_open or themes_open:
+	if state!="menu" or not top_overlay().is_empty():
 		return
 	if region!="nl":
 		region_select.select(0)
@@ -3036,7 +3170,7 @@ func build_pilots() -> void:
 	footer.add_child(done)
 
 func open_pilots() -> void:
-	if state!="menu" or paint_open or themes_open or board_open or homework_open:
+	if state!="menu" or not top_overlay().is_empty():
 		return
 	pilots_open=true
 	pilot_delete_armed=false
@@ -3091,7 +3225,7 @@ func refresh_pilots() -> void:
 		var trying=pilot_trial.has(attribute)
 		var option=PilotFigure.find_option(attribute,shown[attribute])
 		cell.label.text=PilotFigure.option_name(attribute,shown[attribute])+(" · %s" % (str(option[2].points) if option[2].has("points") else "medaille") if trying else "")
-		cell.label.add_theme_color_override("font_color",Color(CREAM,.5) if trying else CREAM)
+		cell.label.add_theme_color_override("font_color",DIM_INK if trying else CREAM)
 		cell.label.tooltip_text="%d van %d vrijgespeeld" % [open.size(),PilotFigure.options(attribute).size()]
 		cell.lock.visible=trying
 		cell.count.text="%d/%d" % [open.size(),PilotFigure.options(attribute).size()]
@@ -3319,6 +3453,8 @@ func close_photo_dialog() -> void:
 	photo_open=false
 
 func open_photo_dialog() -> void:
+	if not top_overlay().is_empty():
+		return
 	photo_open=true
 	if mission_text.text.is_empty() and not custom_places.is_empty():
 		var names=PackedStringArray()
@@ -3466,7 +3602,7 @@ func parse_custom() -> Dictionary:
 			manual.append({"name":parts[0].strip_edges(),"lat":lat,"lon":lon,"region":"nl" if TopoWorld.in_bounds(nl_bounds,lat,lon) else "eu","kind":"eigen punt","code":""})
 		else:
 			ordinary.append(raw)
-	var result=catalog.parse_list("\n".join(ordinary))
+	var result=catalog.parse_list("\n".join(ordinary),region)
 	var names: Dictionary={}
 	for place in result.found:
 		names[catalog.normalize(place.name)]=true
@@ -3551,6 +3687,20 @@ func request_ocr() -> void:
 		saved.endpoint=url
 		save_data()
 
+# Retry-After is delta-seconds or an HTTP date ("Wed, 21 Oct 2026 07:28:00 GMT"). Anything else waits 5 s.
+static func retry_after_seconds(value: String,now_unix: float) -> int:
+	var v=value.strip_edges()
+	if v.is_valid_int():
+		return clampi(int(v),1,300)
+	var parts=v.replace(","," ").split(" ",false)
+	if parts.size()==6 and parts[5]=="GMT" and parts[1].is_valid_int() and parts[3].is_valid_int() and parts[4].count(":")==2:
+		var month=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"].find(parts[2].to_lower())+1
+		var clock=parts[4].split(":")
+		if month>0 and clock[0].is_valid_int() and clock[1].is_valid_int() and clock[2].is_valid_int():
+			var at=Time.get_unix_time_from_datetime_dict({"year":int(parts[3]),"month":month,"day":int(parts[1]),"hour":int(clock[0]),"minute":int(clock[1]),"second":int(clock[2])})
+			return clampi(ceili(at-now_unix),1,300)
+	return 5
+
 func ocr_error_message(result: int,code: int,headers: PackedStringArray) -> String:
 	match result:
 		HTTPRequest.RESULT_TIMEOUT:
@@ -3574,9 +3724,7 @@ func ocr_error_message(result: int,code: int,headers: PackedStringArray) -> Stri
 			var wait=5
 			for h in headers:
 				if h.to_lower().begins_with("retry-after:"):
-					var v=h.substr(12).strip_edges()
-					if v.is_valid_int():
-						wait=clampi(int(v),1,300)
+					wait=retry_after_seconds(h.substr(12),Time.get_unix_time_from_system())
 			ocr_retry_after_msec=Time.get_ticks_msec()+wait*1000
 			return "De OCR-service is bezet. Probeer het over %d seconden opnieuw." % wait
 		503:
@@ -3641,6 +3789,10 @@ func ocr_response(result: int,code: int,headers: PackedStringArray,body: PackedB
 	import_status.text+=" Controleer of er namen missen of onterecht zijn toegevoegd."+note
 
 func _notification(what: int) -> void:
+	# Hangar and pilot choices live in memory until their panel closes: save when the app is
+	# backgrounded or closed, since the OS may end it without another chance.
+	if what in [NOTIFICATION_APPLICATION_PAUSED,NOTIFICATION_APPLICATION_FOCUS_OUT,NOTIFICATION_WM_CLOSE_REQUEST] and not is_capture_mode and is_instance_valid(ui):
+		save_data()
 	if is_test_mode or is_capture_mode:
 		return
 	if what==NOTIFICATION_WM_GO_BACK_REQUEST:
@@ -3883,7 +4035,7 @@ func smoke_test() -> void:
 	assert(not world.country_contains("FRA",world.project(13.405,52.52)),"Berlin not France")
 	assert(world.country_contains("UKR",world.project(34.1,44.95)) and not world.country_contains("RUS",world.project(34.1,44.95)),"Crimea counts as Ukraine")
 	assert(world.country_contains("CYP",world.project(33.9,35.3)),"Northern Cyprus counts as Cyprus")
-	assert(world.country_contains("FIN",world.project(19.95,60.2)),"Aland counts as Finland")
+	assert(world.country_contains("FIN",world.project(19.95,60.1)),"Aland counts as Finland")
 	for pair in [["rome","Rome ligt in Italië, ten zuidoosten van Nederland."],["londen","Londen ligt in het Verenigd Koninkrijk, ten westen van Nederland."],["duitsland","Duitsland ligt ten oosten van Nederland."]]:
 		if catalog.lookup.has(pair[0]):
 			var sentence=locator.describe(catalog.lookup[pair[0]])
@@ -4472,6 +4624,10 @@ func smoke_test() -> void:
 	choose_mode(GameMode.LEARN)
 	fly_menu_helicopter(1.0)
 	assert(helicopter.scale.x>FLIGHT_HELI_SCALE*2,"The hangar shows a big circling helicopter")
+	preload("res://scripts/smoke/ws1.gd").run(self)
+	preload("res://scripts/smoke/ws5b.gd").run(self)
+	preload("res://scripts/smoke/ws4.gd").run(self)
+	preload("res://scripts/smoke/ws5a.gd").run(self)
 	print("SMOKE TEST PASSED: parsing, coordinates, land boundaries, flight scoring, custom missions")
 	await get_tree().process_frame
 	get_tree().quit()
@@ -4836,6 +4992,8 @@ func capture_effects_only() -> void:
 
 # Lesson packs contain catalog names, never executable resources.
 func open_online_content() -> void:
+	if not top_overlay().is_empty():
+		return
 	if not is_instance_valid(content_dialog):
 		content_dialog=AcceptDialog.new()
 		content_dialog.title="Online missiepakketten"
@@ -4863,7 +5021,7 @@ func open_online_content() -> void:
 		add_child(content_http)
 		content_http.request_completed.connect(online_content_received)
 		if FileAccess.file_exists("user://missions.json"):
-			apply_online_content(FileAccess.get_file_as_string("user://missions.json"))
+			apply_online_content(FileAccess.get_file_as_string("user://missions.json"),true)
 	content_dialog.popup_centered()
 
 func download_content() -> void:
@@ -4876,53 +5034,93 @@ func download_content() -> void:
 	if content_http.request(url)!=OK:
 		content_status.text="Download kon niet starten. Eerdere missies blijven beschikbaar."
 
+# Says why a lesson-pack download failed. The HTTP code is 0 for every transport failure.
+func online_error_message(result: int,code: int) -> String:
+	var keep=" Eerdere missies blijven beschikbaar."
+	match result:
+		HTTPRequest.RESULT_TIMEOUT:
+			return "Het ophalen duurde te lang."+keep
+		HTTPRequest.RESULT_TLS_HANDSHAKE_ERROR:
+			return "Beveiligde verbinding mislukt (certificaat). Controleer de HTTPS-link."+keep
+		HTTPRequest.RESULT_CANT_RESOLVE, HTTPRequest.RESULT_CANT_CONNECT, HTTPRequest.RESULT_CONNECTION_ERROR, HTTPRequest.RESULT_NO_RESPONSE:
+			return "Geen verbinding. Controleer je internet en de link."+keep
+		HTTPRequest.RESULT_REDIRECT_LIMIT_REACHED:
+			return "De link stuurt door naar een ander adres. Gebruik de directe HTTPS-link naar het JSON-bestand."+keep
+		HTTPRequest.RESULT_BODY_SIZE_LIMIT_EXCEEDED:
+			return "Het missiepakket is groter dan 256 KB."+keep
+	if result!=HTTPRequest.RESULT_SUCCESS:
+		return "Ophalen mislukt."+keep
+	if code>=300 and code<400:
+		return "De link stuurt door naar een ander adres. Gebruik de directe HTTPS-link naar het JSON-bestand."+keep
+	return "Ophalen mislukt (%d)." % code+keep
+
 func online_content_received(result: int,code: int,_headers: PackedStringArray,body: PackedByteArray) -> void:
 	if result!=HTTPRequest.RESULT_SUCCESS or code!=200:
-		content_status.text="Ophalen mislukt (%d). Eerdere missies blijven beschikbaar." % code
+		push_warning("Missies ophalen mislukt: resultaat %d, status %d." % [result,code])
+		content_status.text=online_error_message(result,code)
 		return
 	var text=body.get_string_from_utf8()
-	if apply_online_content(text):
-		var file=FileAccess.open("user://missions.json",FileAccess.WRITE)
-		if file:
-			file.store_string(text)
-		else:
-			content_status.text="Missies geladen; offline bewaren is niet gelukt."
+	# The cache is replaced atomically, so an interrupted write keeps the previous packs.
+	if apply_online_content(text) and not ProgressStore.write_atomic("user://missions.json",text).is_empty():
+		content_status.text="Missies geladen; offline bewaren is niet gelukt."
 
-func apply_online_content(text: String) -> bool:
+# A downloaded pack must be valid as a whole. The offline copy (from_cache) skips the missions that
+# no longer validate, for instance after a catalog rename, and keeps the rest.
+func apply_online_content(text: String,from_cache: bool=false) -> bool:
 	var raw: Variant=JSON.parse_string(text)
 	if not raw is Dictionary or raw.get("version")!=1 or not raw.get("missions") is Array or raw.missions.is_empty() or raw.missions.size()>100:
 		content_status.text="Ongeldig missiepakket. Verwacht versie 1 met maximaal 100 missies."
 		return false
 	var packs: Array=[]
+	var skipped=0
+	var problem=""
 	for pack in raw.missions:
-		if not pack is Dictionary or not pack.get("title") is String or pack.title.strip_edges().is_empty() or pack.title.length()>100 or not pack.get("places") is Array or pack.places.is_empty() or pack.places.size()>100:
-			content_status.text="Een missie heeft een ongeldige titel of locatielijst."
+		var parsed=parse_online_pack(pack)
+		if parsed.error.is_empty():
+			packs.append(parsed.pack)
+			continue
+		problem=parsed.error
+		if not from_cache:
+			content_status.text=problem
 			return false
-		var names=PackedStringArray()
-		for place in pack.places:
-			if not place is String or place.length()>120:
-				content_status.text="Een locatie is ongeldig."
-				return false
-			names.append(place)
-		var parsed=catalog.parse_list("\n".join(names))
-		if not parsed.unknown.is_empty() or parsed.found.is_empty():
-			content_status.text="Onbekende locaties in %s: %s" % [pack.title,", ".join(parsed.unknown)]
-			return false
-		packs.append({"title":pack.title,"places":parsed.found})
+		skipped+=1
+	if packs.is_empty():
+		content_status.text=problem
+		return false
 	online_packs=packs
 	content_list.clear()
 	for pack in packs:
 		content_list.add_item("%s · %d locaties" % [pack.title,pack.places.size()])
 	content_list.select(0)
 	content_status.text="%d missies beschikbaar. Kies een missie en vertrek!" % packs.size()
+	if skipped>0:
+		content_status.text+=" %d overgeslagen: niet meer geldig." % skipped
 	return true
+
+# One mission of a lesson pack: {"pack": {title, places, region}} or {"error": Dutch reason}.
+func parse_online_pack(pack: Variant) -> Dictionary:
+	if not pack is Dictionary or not pack.get("title") is String or pack.title.strip_edges().is_empty() or pack.title.length()>100 or not pack.get("places") is Array or pack.places.is_empty() or pack.places.size()>100:
+		return {"error":"Een missie heeft een ongeldige titel of locatielijst."}
+	var names=PackedStringArray()
+	for place in pack.places:
+		if not place is String or place.length()>120:
+			return {"error":"Een locatie is ongeldig."}
+		names.append(place)
+	# Optional "region": "nl" or "eu" picks the map for names both maps have (Noordzee, Rijn).
+	var pack_region: String=String(pack.get("region","")) if pack.get("region","") is String else "?"
+	if pack_region not in ["","nl","eu"]:
+		return {"error":"Missie %s: region moet \"nl\" of \"eu\" zijn." % pack.title}
+	var parsed=catalog.parse_list("\n".join(names),pack_region)
+	if not parsed.unknown.is_empty() or parsed.found.is_empty():
+		return {"error":"Onbekende locaties in %s: %s" % [pack.title,", ".join(parsed.unknown)]}
+	return {"error":"","pack":{"title":pack.title,"places":parsed.found,"region":pack_region}}
 
 func start_online_mission() -> void:
 	var selected=content_list.get_selected_items()
 	if selected.is_empty():
 		return
 	var places: Array=online_packs[selected[0]].places
-	var target_region="nl"
+	var target_region="eu" if online_packs[selected[0]].region=="eu" else "nl"
 	for place in places:
 		if place.region!="nl":
 			target_region="eu"

@@ -25,6 +25,10 @@ const RIVERS = ["Rijn","Waal","IJssel","Maas","Merwede"]
 const AREA_LABELS = [["DUITSLAND",8.1,52.05],["BELGIË",4.35,51.0],["NOORDZEE",3.55,53.05]]
 # Country names that take an article in a Dutch sentence.
 const WITH_ARTICLE = ["Verenigd Koninkrijk"]
+# Dutch waters that take "het": lakes, canals and the delta's "-vliet" and "-diep".
+const HET_ENDINGS = ["meer","kanaal","vliet","diep"]
+# Size of the orientation labels (DUITSLAND, NOORDZEE, Nederland, N) on the card map.
+const AREA_FONT = 12
 const GOLD = Color("ffc35c")
 const CREAM = Color("f5efdc")
 const INK = Color(.03,.1,.13,.92)
@@ -86,7 +90,7 @@ func _init() -> void:
 		map_box.add_child(layer)
 	map_box.resized.connect(painter.queue_redraw)
 	var hint=_label(11,Color("9fc5bc"))
-	hint.text="Tik om te sluiten"
+	hint.text="Tik of druk op Enter om te sluiten"
 	hint.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
 	col.add_child(hint)
 	hide()
@@ -102,7 +106,7 @@ func present(found: Dictionary,before: Array) -> void:
 	place=found
 	found_before=before
 	shown_count+=1
-	title_label.text=found.name
+	title_label.text=title_for(found)
 	body_label.text=describe(found)
 	time_left=SHOW_SECONDS
 	if fade:
@@ -128,10 +132,20 @@ func _process(delta: float) -> void:
 			fade.tween_property(self,"modulate:a",0.0,.35)
 			fade.tween_callback(hide)
 
+# Keyboard: Enter or Escape closes the card. Space is left alone, it answers the next goal.
+func _unhandled_key_input(event: InputEvent) -> void:
+	if visible and event is InputEventKey and event.pressed and not event.echo and (event.keycode in [KEY_ENTER,KEY_KP_ENTER,KEY_ESCAPE] or event.physical_keycode==KEY_ESCAPE):
+		dismiss()
+		get_viewport().set_input_as_handled()
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed:
 		dismiss()
 		accept_event()
+
+# Heading of the card: a province says so, as the sentence below does.
+static func title_for(found: Dictionary) -> String:
+	return ("Provincie " if found.get("kind","")=="provincie" else "")+display_name(found)
 
 static func display_name(found: Dictionary) -> String:
 	return String(found.name).trim_suffix(" provincie").trim_suffix(" land")
@@ -141,7 +155,8 @@ static func country_phrase(name: String,start: bool) -> String:
 
 static func water_name(found: Dictionary) -> String:
 	var name=display_name(found)
-	return ("Het " if name.ends_with("meer") or name.begins_with("Meer ") else "De ")+name
+	var lower=name.to_lower()
+	return ("Het " if HET_ENDINGS.any(func(ending): return lower.ends_with(ending)) or lower.begins_with("meer ") else "De ")+name
 
 func lonlat(found: Dictionary) -> Vector2:
 	return Vector2(float(found.lon),float(found.lat))
@@ -284,13 +299,15 @@ func draw_map(canvas: Control) -> void:
 				var closed=ring.duplicate()
 				closed.append(ring[0])
 				line(canvas,[closed],Color(.94,.77,.43,.6),.8)
-	var font=ThemeDB.fallback_font
+	var font: Font=UiFonts.font("bold")
 	if world.region=="nl":
 		for entry in AREA_LABELS:
 			var at3=world.project(entry[1],entry[2])
 			var at=to_map(Vector2(at3.x,at3.z))
-			var width=font.get_string_size(entry[0],HORIZONTAL_ALIGNMENT_LEFT,-1,10).x
-			canvas.draw_string(font,at-Vector2(width*.5,-3),entry[0],HORIZONTAL_ALIGNMENT_LEFT,-1,10,Color("a9dbe6",.8) if entry[0]=="NOORDZEE" else Color(1,1,1,.55))
+			var width=font.get_string_size(entry[0],HORIZONTAL_ALIGNMENT_LEFT,-1,AREA_FONT).x
+			var label_at=at-Vector2(width*.5,-3)
+			canvas.draw_string_outline(font,label_at,entry[0],HORIZONTAL_ALIGNMENT_LEFT,-1,AREA_FONT,3,INK)
+			canvas.draw_string(font,label_at,entry[0],HORIZONTAL_ALIGNMENT_LEFT,-1,AREA_FONT,Color("a9dbe6",.95) if entry[0]=="NOORDZEE" else Color(1,1,1,.9))
 	for earlier in found_before:
 		if earlier.get("kind","")=="land":
 			continue
@@ -299,8 +316,8 @@ func draw_map(canvas: Control) -> void:
 		canvas.draw_circle(at,2.2,CREAM)
 	if world.region!="nl":
 		var home=to_map(Vector2(world.project(NL_CENTRE.x,NL_CENTRE.y).x,world.project(NL_CENTRE.x,NL_CENTRE.y).z))
-		canvas.draw_string_outline(font,home+Vector2(6,-4),"Nederland",HORIZONTAL_ALIGNMENT_LEFT,-1,10,3,INK)
-		canvas.draw_string(font,home+Vector2(6,-4),"Nederland",HORIZONTAL_ALIGNMENT_LEFT,-1,10,Color("ffb27a"))
+		canvas.draw_string_outline(font,home+Vector2(6,-4),"Nederland",HORIZONTAL_ALIGNMENT_LEFT,-1,AREA_FONT,3,INK)
+		canvas.draw_string(font,home+Vector2(6,-4),"Nederland",HORIZONTAL_ALIGNMENT_LEFT,-1,AREA_FONT,Color("ffb27a"))
 	var spot=place_point(place)
 	canvas.draw_circle(spot,6.5,INK)
 	canvas.draw_circle(spot,5.0,GOLD)
@@ -315,7 +332,7 @@ func draw_map(canvas: Control) -> void:
 	var n=Vector2(map_box.size.x-16,22)
 	canvas.draw_circle(n,11,INK)
 	canvas.draw_colored_polygon(PackedVector2Array([n+Vector2(0,-9),n+Vector2(5,2),n+Vector2(0,0),n+Vector2(-5,2)]),GOLD)
-	canvas.draw_string(font,n+Vector2(-4,10),"N",HORIZONTAL_ALIGNMENT_LEFT,-1,10,GOLD)
+	canvas.draw_string(font,n+Vector2(-4,10),"N",HORIZONTAL_ALIGNMENT_LEFT,-1,AREA_FONT,GOLD)
 
 func draw_pulse(canvas: Control) -> void:
 	if not is_instance_valid(world) or place.is_empty() or view.size.x<=0:

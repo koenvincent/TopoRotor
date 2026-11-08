@@ -1926,8 +1926,8 @@
   },
   {
     "name": "Kroatië",
-    "lat": 45.0,
-    "lon": 16.0,
+    "lat": 45.4,
+    "lon": 16.4,
     "region": "eu",
     "kind": "land",
     "aliases": [
@@ -2127,8 +2127,8 @@
   },
   {
     "name": "Belarus",
-    "lat": 53.9006,
-    "lon": 27.559,
+    "lat": 53.7,
+    "lon": 27.9,
     "region": "eu",
     "kind": "land",
     "aliases": [],
@@ -2136,8 +2136,8 @@
   },
   {
     "name": "Rusland",
-    "lat": 55.7558,
-    "lon": 37.6173,
+    "lat": 57.0,
+    "lon": 40.0,
     "region": "eu",
     "kind": "land",
     "aliases": [],
@@ -2145,8 +2145,8 @@
   },
   {
     "name": "Moldavië",
-    "lat": 47.0105,
-    "lon": 28.8638,
+    "lat": 47.2,
+    "lon": 28.5,
     "region": "eu",
     "kind": "land",
     "aliases": [],
@@ -2154,8 +2154,8 @@
   },
   {
     "name": "Montenegro",
-    "lat": 42.4304,
-    "lon": 19.2594,
+    "lat": 42.75,
+    "lon": 19.2,
     "region": "eu",
     "kind": "land",
     "aliases": [],
@@ -2163,8 +2163,8 @@
   },
   {
     "name": "Noord-Macedonië",
-    "lat": 41.9981,
-    "lon": 21.4254,
+    "lat": 41.6,
+    "lon": 21.7,
     "region": "eu",
     "kind": "land",
     "aliases": [],
@@ -2172,8 +2172,8 @@
   },
   {
     "name": "Malta",
-    "lat": 35.8992,
-    "lon": 14.5141,
+    "lat": 35.9,
+    "lon": 14.4,
     "region": "eu",
     "kind": "land",
     "aliases": [],
@@ -2181,8 +2181,8 @@
   },
   {
     "name": "Cyprus",
-    "lat": 35.1856,
-    "lon": 33.3823,
+    "lat": 35.0,
+    "lon": 33.2,
     "region": "eu",
     "kind": "land",
     "aliases": [],
@@ -2240,7 +2240,7 @@
     "region": "eu",
     "kind": "land",
     "aliases": [],
-    "code": "KOS"
+    "code": "XKX"
   },
   {
     "name": "Turkije",

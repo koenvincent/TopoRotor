@@ -107,6 +107,9 @@ const SCHEMES = [
 	{"name":"Recordzilver","body":"c0c6cc","trim":"2a2f35","dark":"1a1d21","accent":"e63946","medal":"eerste_record"},
 ]
 
+# Factory paint as hex strings without '#'. The helicopter view and the paint
+# rules both read it from here, so the rules do not depend on the view class.
+const DEFAULT_PAINT = {"body":"e67b34","tail":"e67b34","trim":"dce4dc","rotor":"263845","gear":"263845","glass":"1d3446","accent":"f2c14e"}
 const DEFAULT_GARAGE = {"model":"redder","accessories":[],"rotor":0,"motor":0,"lights":0}
 const MAX_POINTS = 10000000
 
@@ -117,8 +120,8 @@ static func scheme_paint(scheme: Dictionary) -> Dictionary:
 		"trim":scheme.trim,
 		"rotor":scheme.dark,
 		"gear":scheme.dark,
-		"glass":scheme.get("glass",RotorHelicopter.DEFAULT_PAINT.glass),
-		"accent":scheme.get("accent",RotorHelicopter.DEFAULT_PAINT.accent),
+		"glass":scheme.get("glass",DEFAULT_PAINT.glass),
+		"accent":scheme.get("accent",DEFAULT_PAINT.accent),
 	}
 
 static func unlocked(item: Dictionary,points: int,medals: Array) -> bool:

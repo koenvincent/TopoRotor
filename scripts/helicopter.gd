@@ -17,7 +17,7 @@ var running: bool = true
 var time: float = 0.0
 # Hex strings without '#'. "dark" was the single rotor/skid slot before 0.5;
 # saved paint that still has it fills rotor and gear from it.
-const DEFAULT_PAINT = {"body":"e67b34","tail":"e67b34","trim":"dce4dc","rotor":"263845","gear":"263845","glass":"1d3446","accent":"f2c14e"}
+const DEFAULT_PAINT = HangarCatalog.DEFAULT_PAINT
 const PAINT_PARTS = [["body","Romp"],["tail","Staart"],["trim","Strepen"],["rotor","Rotor en motor"],["gear","Onderstel"],["glass","Ramen"],["accent","Accessoires"]]
 var paint_materials: Dictionary = {}
 var rotor_disc: MeshInstance3D
@@ -141,9 +141,9 @@ func rebuild() -> void:
 	body = Node3D.new()
 	add_child(body)
 	kind = HangarCatalog.model_kind(config.model)
-	var builders = {"redder":build_redder,"libel":build_libel,"molen":build_molen,"pijl":build_pijl,"tandem":build_tandem,"wesp":build_wesp,
-		"kraan":build_kraan,"coax":build_coax,"sport":build_sport,"dubbel":build_dubbel,"zee":build_zee,"dakota":build_dakota,
-		"valk":build_valk,"delta":build_delta,"schaduw":build_schaduw}
+	var builders = model_builders()
+	if not builders.has(config.model):
+		push_warning("No builder for aircraft '%s'; showing the Redder instead." % config.model)
 	var builder: Callable = builders.get(config.model, build_redder)
 	ghost = airframe(config.model)
 	var anchors: Dictionary = fill_anchors(builder.call())
@@ -288,6 +288,12 @@ func skids(x: float, y: float, z: float, length: float, leg_z: Array, leg_top: f
 # stay procedural, because the rotor upgrade adds blades.
 const MODEL_DIR = "res://assets/models/"
 
+# The one registry of body builders; every HangarCatalog.MODELS id needs an entry.
+func model_builders() -> Dictionary:
+	return {"redder":build_redder,"libel":build_libel,"molen":build_molen,"pijl":build_pijl,"tandem":build_tandem,"wesp":build_wesp,
+		"kraan":build_kraan,"coax":build_coax,"sport":build_sport,"dubbel":build_dubbel,"zee":build_zee,"dakota":build_dakota,
+		"valk":build_valk,"delta":build_delta,"schaduw":build_schaduw}
+
 # While a Blender airframe stands in for the body, the procedural builder
 # still runs for its rotors, propellers and anchors, but its body parts are
 # phantoms that never enter the tree (freed at the end of rebuild).
@@ -298,14 +304,27 @@ var phantoms: Array[Node] = []
 static func has_airframe(id: String) -> bool:
 	return ResourceLoader.exists(MODEL_DIR + id + ".glb")
 
+# The imported scene at path, or null (with a warning naming the file) when it
+# is broken or not a scene, so the caller can fall back to the procedural body.
+static func load_scene(path: String) -> PackedScene:
+	var scene := load(path) as PackedScene
+	if scene == null:
+		push_warning("Model %s kon niet geladen worden; het ingebouwde model wordt gebruikt." % path)
+	return scene
+
 func airframe(id: String) -> bool:
 	if not has_airframe(id):
 		return false
-	var frame: Node3D = (load(MODEL_DIR + id + ".glb") as PackedScene).instantiate()
+	var scene := load_scene(MODEL_DIR + id + ".glb")
+	if scene == null:
+		return false
+	var frame: Node3D = scene.instantiate()
 	frame.name = "Airframe"
 	body.add_child(frame)
 	for mesh_node in frame.find_children("*", "MeshInstance3D", true, false):
 		var mesh_instance = mesh_node as MeshInstance3D
+		if mesh_instance.mesh == null:
+			continue
 		for surface in mesh_instance.mesh.get_surface_count():
 			var source = mesh_instance.mesh.surface_get_material(surface)
 			var slot = source.resource_name if source != null else "body"
@@ -752,14 +771,10 @@ func smoke_trail(at: Vector3, rainbow: bool) -> void:
 	fade.set_color(1, Color(1,1,1,0))
 	puff.color_ramp = fade
 	if rainbow:
-		var colours = Gradient.new()
-		colours.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CONSTANT
+		# Six equal bands; explicit offsets, because Gradient indexes follow offset order.
 		var bands = ["e8453a","ff9a3c","f4c51c","3fbf6a","3b7dd8","8a4fd8"]
-		colours.set_color(0, Color(bands[0]))
-		colours.set_color(1, Color(bands[5]))
-		for i in range(1,5):
-			colours.add_point(i / 6.0, Color(bands[i]))
-		colours.set_offset(1, 5.0 / 6.0)
+		var colours = FlightFx.gradient([0.0, 1.0 / 6.0, 2.0 / 6.0, 3.0 / 6.0, 4.0 / 6.0, 5.0 / 6.0], bands.map(func(h): return Color(h)))
+		colours.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CONSTANT
 		puff.color_initial_ramp = colours
 	else:
 		puff.color = ToyLook.color_of(paint_materials.accent).lightened(.35)

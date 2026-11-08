@@ -3,6 +3,7 @@
 Optional authoring dependency: uv run --with shapely python tools/build_nl_fields.py
 The game only reads the committed JSON and needs no Python/Shapely at runtime.
 """
+import hashlib
 import json
 import random
 from pathlib import Path
@@ -34,5 +35,7 @@ for cell in cells.geoms:
             continue
         fields.append({"polygon": [[round(x, 6), round(y, 6)] for x, y in polygon.exterior.coords], "tone": rng.randrange(7)})
 data["fields"] = fields
+# Fingerprint of the lakes these fields were cut against; tools/check_data.py fails when the lakes change without a rebuild.
+data["fields_lakes_sha"] = hashlib.sha1(json.dumps(data["lakes"], separators=(",", ":")).encode()).hexdigest()[:12]
 path.write_text(json.dumps(data, separators=(",", ":")) + "\n")
 print(f"Built {len(fields)} clipped decorative fields")

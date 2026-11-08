@@ -50,7 +50,7 @@ var k_pivot: Vector3 = Vector3.ZERO
 
 func _init(parent: Node3D) -> void:
 	super(parent)
-	landmark_data=JSON.parse_string(FileAccess.get_file_as_string("res://data/landmarks_eu.json")).cities
+	landmark_data=landmark_cities(JSON.parse_string(FileAccess.get_file_as_string("res://data/landmarks_eu.json")),"landmarks_eu.json")
 	ball.radius=.5
 	ball.height=1
 	ball.radial_segments=12
@@ -174,9 +174,9 @@ func town(pos: Vector3,place_name: String) -> void:
 	var built=0
 	var names: Array=[]
 	for entry in entries:
-		build_landmark(pos+Vector3(entry.at[0],0,entry.at[1]),entry)
-		names.append(entry.get("name",""))
-		built+=1
+		if build_landmark(pos+Vector3(entry.at[0],0,entry.at[1]),entry):
+			names.append(entry.get("name",""))
+			built+=1
 	if entries.is_empty():
 		palace(pos+Vector3(6,0,-6))
 	landmark_built[place_name]=built
@@ -193,7 +193,8 @@ func own_ground(anchor: Vector3,offset: Vector2) -> bool:
 			return false
 	return true
 
-func build_landmark(p: Vector3,entry: Dictionary) -> void:
+# False when the type is unknown and nothing was drawn.
+func build_landmark(p: Vector3,entry: Dictionary) -> bool:
 	var type: String=entry.get("type","")
 	match type:
 		"eiffel": eiffel(p)
@@ -229,10 +230,16 @@ func build_landmark(p: Vector3,entry: Dictionary) -> void:
 		"canal_houses": canal_houses(p)
 		"parliament": parliament(p)
 		_:
-			k_pivot=p
-			k_scale=KIT_SCALE
-			kit.build(p,entry)
-			k_scale=1.0
+			return at_kit_scale(p,func(): return kit.build(p,entry))
+	return true
+
+# Runs a kit call at Europe scale about p and always restores the scale after it.
+func at_kit_scale(p: Vector3,build: Callable) -> Variant:
+	k_pivot=p
+	k_scale=KIT_SCALE
+	var result: Variant=build.call()
+	k_scale=1.0
+	return result
 
 # --- Europe-only silhouettes, modelled at Europe scale --------------------
 
@@ -550,10 +557,7 @@ func volcano(p: Vector3,snow: bool) -> void:
 
 func castle_hill(p: Vector3) -> void:
 	mound(p,Vector2(4.0,3.4),2.0,"6f8a5a")
-	k_pivot=p
-	k_scale=KIT_SCALE
-	kit.castle(p+Vector3(0,1.1,0),false,false)
-	k_scale=1.0
+	at_kit_scale(p,func(): kit.castle(p+Vector3(0,1.1,0),false,false))
 
 func canal_houses(p: Vector3) -> void:
 	water_strip(p+Vector3(0,0,1.6),9.0,1.6)
@@ -581,10 +585,7 @@ func parliament(p: Vector3) -> void:
 		piece(cone,p+Vector3(x,5.4,0),Vector3(.5,1.4,.5),"b9473c")
 
 func palace(p: Vector3) -> void:
-	k_pivot=p
-	k_scale=KIT_SCALE
-	kit.palace(p,1.0,false)
-	k_scale=1.0
+	at_kit_scale(p,func(): kit.palace(p,1.0,false))
 
 # --- Landscape --------------------------------------------------------------
 
@@ -663,10 +664,7 @@ func sea_life() -> void:
 		var at=coast_near(world.project(spot[0],spot[1]))
 		if at==Vector3.INF:
 			continue
-		k_pivot=at
-		k_scale=KIT_SCALE
-		kit.lighthouse(at,"c4473a" if lighthouses_built%2==0 else "f2ede0",6.0)
-		k_scale=1.0
+		at_kit_scale(at,func(): kit.lighthouse(at,"c4473a" if lighthouses_built%2==0 else "f2ede0",6.0))
 		lighthouses_built+=1
 	for farm in WIND_FARMS:
 		var center=world.project(farm[0],farm[1])
