@@ -72,14 +72,17 @@ func report(message: String) -> void:
 	load_errors.append(message)
 	push_error("TopoCatalog: "+message)
 
-# Homework: the assignments from the worksheet photos, as their own routes.
-# name is the title without the "Huiswerk · " prefix the route picker shows.
+# Homework: the worksheet cards (Kaart A to F), each as its own route.
+# name is the card ("Kaart A"), subject what the card covers: the route title
+# "Huiswerk · Kaart A · Heel Nederland" without its prefix and card.
 func homework(region: String) -> Array:
 	var list: Array=[]
 	var all := routes(region)
 	for i in all.size():
 		if not String(all[i].homework).is_empty():
-			list.append({"index":i,"id":all[i].homework,"name":String(all[i].title).trim_prefix("Huiswerk · "),"source":all[i].source,
+			var card: String=all[i].source
+			var subject: String=String(all[i].title).trim_prefix("Huiswerk · ").trim_prefix(card+" · ")
+			list.append({"index":i,"id":all[i].homework,"name":card,"subject":subject,"source":card,
 				"about":all[i].about,"count":all[i].places.size(),"places":all[i].places})
 	return list
 

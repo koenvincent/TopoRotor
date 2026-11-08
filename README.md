@@ -1,6 +1,6 @@
 # Nieks TopoRadar
 
-Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland en Europa vliegt om opdrachten van school te oefenen. Met 311 locaties, de routes uit de TopoMaster-werkbladen Nederland (overzichtskaart, leerkaart en kaart A tot en met D), thema's (provincies, rivieren en water, gebieden en eilanden), spelersprofielen met een eigen piloot, foto-import, eigen missielijsten, een leer-, oefen- en recordmodus, hints en lokaal bewaarde scores.
+Vlieg je topografie: een Godot-game waarin je met een helikopter over Nederland en Europa vliegt om opdrachten van school te oefenen. Met 311 locaties, de routes uit de TopoMaster-werkbladen Nederland (kaart A tot en met E, plus kaart F met het totaal van de toetskaart), een overhoormodus waarin je de namen naar de stippen sleept, thema's (provincies, rivieren en water, gebieden en eilanden), spelersprofielen met een eigen piloot, foto-import, eigen missielijsten, een leer-, oefen- en recordmodus, hints en lokaal bewaarde scores.
 
 ## Download voor Android
 
@@ -63,7 +63,7 @@ Via **Hangar en upgrades** richt je je eigen toestel in. Een draaiend 3D-voorbee
 - **Accessoires:** 28 stuks, die op elk toestel passen: Nederlandse vlag, zoeklicht, stripogen, antennes, zwaailichten, wielen, wimpel, megafoon, camerabol, haaienbek, reddingslier, draaiende radarschotel, ballonnen, extra tanks, drijvers, knipperende lichtslinger, bagagekoffer, stompvleugels, ski's, rookspoor, meetneus, vrachtkrat, bluskorf, zonnepaneel, sleepbanner, vuurwerkpods, regenboogrook (medaille foutloos) en een gouden kroon (medaille huiswerk).
 - **Upgrades:** extra rotorbladen, een Turbo- en Superturbo-motor en een lichtpakket. De motor maakt je sneller bij Leren en Oefenen; bij Records vliegt iedereen even snel, zodat recordtijden eerlijk blijven.
 
-Elke voltooide missie levert **vliegpunten** op: meer bij Oefenen en Records, extra voor elke plek die in één keer goed is, voor sterren en voor een nieuw record. Punten worden nooit uitgegeven, dus je raakt niets meer kwijt. Bij vaste puntengrenzen gaan nieuwe types, kleuren, accessoires en upgrades open; je rang loopt mee van Leerling-piloot tot Luchtvaartlegende (5000 punten). Een paar items vragen een medaille: je eerste record, een foutloze Records-vlucht, een missie in Europa, twee huiswerkopdrachten in één vlucht of alle zes huiswerkopdrachten gevlogen. Het overzicht na een missie noemt wat er nieuw open is.
+Elke voltooide missie levert **vliegpunten** op: meer bij Oefenen en Records, extra voor elke plek die in één keer goed is, voor sterren en voor een nieuw record. Punten worden nooit uitgegeven, dus je raakt niets meer kwijt. Bij vaste puntengrenzen gaan nieuwe types, kleuren, accessoires en upgrades open; je rang loopt mee van Leerling-piloot tot Luchtvaartlegende (5000 punten). Een paar items vragen een medaille: je eerste record, een foutloze Records-vlucht, een missie in Europa, twee huiswerkkaarten in één vlucht of alle zes huiswerkkaarten gevlogen. Het overzicht na een missie noemt wat er nieuw open is.
 
 ![Alle vijftien toestellen van bovenaf](docs/screenshots/preview-toestellen.png)
 
@@ -79,9 +79,14 @@ Met **Piloot: …** in het menu open je het pilotenscherm. Maak tot acht piloten
 
 ### Huiswerk
 
-**Huiswerk** in het menu toont de zes opdrachten uit de TopoMaster-werkbladen, elk met een naam die zegt wat je leert: **Provincies en hoofdsteden** (overzichtskaart), **Rivieren, meren en dijken** (leerkaart), **De Randstad en Zeeland** (kaart A), **Het Noorden en de Wadden** (kaart B), **Het Oosten en de Veluwe** (kaart C) en **Het Zuiden: Brabant en Limburg** (kaart D). Tik er één aan, of meer tegelijk: die vlieg je dan als één missie, waarin plekken die op twee kaarten staan één keer voorkomen. Een opdracht die je hebt gevlogen krijgt een vinkje. De opdrachten staan ook in de routekiezer, als ‘Huiswerk · …’.
+**Huiswerk** in het menu toont de kaarten uit de TopoMaster-werkbladen, met precies de plekken die op elke kaart staan: **Kaart A** (heel Nederland: provincies, hoofdsteden, rivieren, kanalen, zeearmen, dijken en de Biesbos), **Kaart B** (het Noorden en de Wadden), **Kaart C** (het Oosten en de Veluwe), **Kaart D** (Utrecht, Brabant en Limburg), **Kaart E** (de Randstad en Zeeland) en **Kaart F** (het totaal: de 34 genummerde plekken van de toetskaart). Tik er één aan, of meer tegelijk. **Vliegen** oefent alleen wat op die kaarten staat, als één missie waarin plekken die op twee kaarten staan één keer voorkomen. Een kaart die je hebt gevlogen krijgt een vinkje. De kaarten staan ook in de routekiezer, als ‘Huiswerk · Kaart A · …’.
 
 ![Huiswerk](docs/screenshots/preview-huiswerk.png)
+
+**Overhoren** is de toets, zonder helikopter. Je ziet een kaart van het deel van Nederland dat de gekozen kaarten beslaan, met een genummerde stip voor elke plek; de kleur van de stip zegt of het een stad, provincie, water of gebied is. Sleep elke naam uit de lijst naar de juiste stip, of tik een naam en daarna de stip. Een naam die al op de kaart staat kun je naar een andere stip slepen, of terug naar de lijst. **Nakijken** kleurt elke stip groen of rood, zet bij een fout het goede antwoord in goud ernaast en geeft een cijfer van 1 tot 10. **Fouten over** laat de goede antwoorden staan en vraagt alleen de fouten opnieuw; **Nieuwe toets** nummert de stippen opnieuw en begint leeg. Het cijfer van de eerste keer nakijken telt: het beste cijfer per kaart wordt per piloot bewaard en staat op de tegel bij Huiswerk (‘toets 8,5’). Na Fouten over telt het cijfer niet mee.
+
+![Overhoren](docs/screenshots/preview-overhoren.png)
+![Overhoren nagekeken](docs/screenshots/preview-overhoren-nakijken.png)
 
 ### Thema's
 
@@ -211,8 +216,10 @@ Besturing en bochten reageren vloeiend; loslaten remt sneller af.
   dat bij elke stad (of elk water, eiland of provincie, net als het doel), dus
   hij verklapt niet welke de goede is. Een stopwatch meet
   je tijd; elk fout antwoord telt als 10 seconden straftijd. Beste tijden worden
-  lokaal per route bewaard. Dezelfde route heeft een vaste volgorde voor eerlijke
-  herhalingen; andere missies hebben hun eigen record. Er is geen tijdslimiet.
+  lokaal per route bewaard. Net als bij Leren en Oefenen komen de plekken elke
+  vlucht in een andere volgorde, zodat je de route niet uit je hoofd leert; het
+  record hoort bij de plekken, niet bij de volgorde. Andere missies hebben hun
+  eigen record. Er is geen tijdslimiet.
 
 De H-toets kan de regels van Oefenen en Records niet omzeilen.
 

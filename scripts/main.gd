@@ -54,7 +54,7 @@ var ocr_input_snapshot: String = ""
 var ocr_retry_after_msec: int = 0
 # Test/capture harness is only reachable from debug (editor/CI) builds, never from release exports.
 var is_test_mode: bool = OS.is_debug_build() and OS.get_cmdline_user_args().has("--smoke-test")
-var is_capture_mode: bool = OS.is_debug_build() and (OS.get_cmdline_user_args().has("--capture") or OS.get_cmdline_user_args().has("--capture-fx") or OS.get_cmdline_user_args().has("--capture-learn") or OS.get_cmdline_user_args().has("--capture-ui") or OS.get_cmdline_user_args().has("--capture-hangar"))
+var is_capture_mode: bool = OS.is_debug_build() and (OS.get_cmdline_user_args().has("--capture") or OS.get_cmdline_user_args().has("--capture-fx") or OS.get_cmdline_user_args().has("--capture-learn") or OS.get_cmdline_user_args().has("--capture-ui") or OS.get_cmdline_user_args().has("--capture-hangar") or OS.get_cmdline_user_args().has("--capture-quiz"))
 # Smoke tests exercise the real save path against a separate file, never the player's profile.
 var save_path: String = "user://smoke-progress.json" if is_test_mode else "user://progress.json"
 var http: HTTPRequest
@@ -166,7 +166,30 @@ var homework_open: bool = false
 var homework_grid: GridContainer
 var homework_status: Label
 var homework_start: Button
+var homework_quiz: Button
 var homework_selected: Array = []
+# Overhoren: drag the names of the chosen cards onto the numbered dots.
+var quiz_panel: PanelContainer
+var quiz_backdrop: ColorRect
+var quiz_open: bool = false
+var quiz_board: QuizBoard
+var quiz_tray: QuizBoard.Tray
+var quiz_names: HFlowContainer
+var quiz_kicker: Label
+var quiz_status: Label
+var quiz_check: Button
+var quiz_retry: Button
+var quiz_places: Array = []
+var quiz_tray_order: PackedStringArray = PackedStringArray()
+var quiz_result: Dictionary = {}
+# Save key of the cards under test ("water", "noord+west"); only a first marking counts as the mark.
+var quiz_key: String = ""
+var quiz_first_try: bool = true
+var quiz_best: float = 0.0
+# Mission order: an own generator, seeded fresh at start, so every flight
+# (Leren, Oefenen and Records) visits the places in a new order.
+var order_rng := RandomNumberGenerator.new()
+var last_order: PackedStringArray = PackedStringArray()
 var board_button: Button
 var last_board_key: String = ""
 var last_board_place: int = 0
@@ -223,6 +246,11 @@ const PHOTO_SIZE = Vector2(1140,640)
 
 func _ready() -> void:
 	get_tree().node_added.connect(touch_friendly)
+	# Tests and captures need a repeatable order; a real game gets a fresh one every launch.
+	if is_test_mode or is_capture_mode:
+		order_rng.seed=1206
+	else:
+		order_rng.randomize()
 	if not is_test_mode and not is_capture_mode:
 		load_save()
 	build_environment()
@@ -238,7 +266,7 @@ func _ready() -> void:
 		call_deferred("smoke_test")
 	if is_capture_mode:
 		var args=OS.get_cmdline_user_args()
-		call_deferred("capture_effects_only" if args.has("--capture-fx") else "capture_learning_only" if args.has("--capture-learn") else "capture_ui" if args.has("--capture-ui") else "capture_hangar" if args.has("--capture-hangar") else "capture_preview")
+		call_deferred("capture_effects_only" if args.has("--capture-fx") else "capture_learning_only" if args.has("--capture-learn") else "capture_ui" if args.has("--capture-ui") else "capture_hangar" if args.has("--capture-hangar") else "capture_quiz" if args.has("--capture-quiz") else "capture_preview")
 
 func build_environment() -> void:
 	var env = WorldEnvironment.new()
@@ -687,6 +715,7 @@ func build_ui() -> void:
 	build_leaderboard()
 	build_themes()
 	build_homework()
+	build_quiz()
 	build_pilots()
 
 # Big game titles: Lilita One with a thick outline and an extruded, warm
@@ -884,7 +913,7 @@ func build_menu() -> void:
 			b.tooltip_text="Oefen alleen provincies, rivieren en water, gebieden of eilanden."
 			tone_button(b,"teal",14,16)
 		elif entry[2]=="Homework":
-			b.tooltip_text="De opdrachten uit je werkbladen: kies er één of meer tegelijk."
+			b.tooltip_text="Kaart A tot en met F uit je werkbladen: vliegen of overhoren, één kaart of meer tegelijk."
 			tone_button(b,"teal",14,16)
 		elif entry[2]=="Online":
 			b.tooltip_text="Online missies"
@@ -1247,6 +1276,27 @@ func migrate_route_key(legacy: String,key: String) -> void:
 				Leaderboard.add(boards,Leaderboard.key(key,mode),entry)
 
 
+# A fresh order of the places (Fisher-Yates on order_rng). With three or more
+# places it never repeats the previous order or its first place, so a retry
+# of the same route visibly starts somewhere else.
+func shuffled_order(places: Array) -> Array:
+	var list=places.duplicate()
+	if list.size()<2:
+		return list
+	var names=PackedStringArray()
+	for _attempt in 8:
+		for i in range(list.size()-1,0,-1):
+			var j=order_rng.randi_range(0,i)
+			var keep=list[i]
+			list[i]=list[j]
+			list[j]=keep
+		names=PackedStringArray(list.map(func(p): return String(p.name)))
+		var same_set=last_order.size()==names.size() and Array(last_order).all(func(n): return names.has(n))
+		if not same_set or (names!=last_order and (list.size()<3 or names[0]!=last_order[0])):
+			break
+	last_order=names
+	return list
+
 func start_mission(custom: Array = [],as_custom: bool = true) -> void:
 	if is_instance_valid(summary):
 		summary.queue_free()
@@ -1264,11 +1314,9 @@ func start_mission(custom: Array = [],as_custom: bool = true) -> void:
 	locator.dismiss()
 	shake=0.0
 	in_zone=false
-	if game_mode==GameMode.RECORDS:
-		# Same start and route order make repeat record attempts comparable.
-		mission.sort_custom(func(a,b): return a.name<b.name)
-	else:
-		mission.shuffle()
+	# Every mode flies the places in a new order, so the route cannot be learnt by heart.
+	# Record times stay comparable: the record key is the set of places, not their order.
+	mission=shuffled_order(mission)
 	world.ensure_mission_markers(mission)
 	radar_places=build_radar_places() if game_mode==GameMode.RECORDS else []
 	radar_active=false
@@ -1511,7 +1559,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 # Overlay registry: every screen or dialog that sits on top of the menu, in
 # Back priority (topmost first). The open_* guards and go_back share it, so a
 # new overlay is added here and in the two helpers below, nowhere else.
-const OVERLAYS = ["credits","content","board","pilots","themes","homework","paint","photo"]
+const OVERLAYS = ["credits","content","quiz","board","pilots","themes","homework","paint","photo"]
 
 func overlay_is_open(overlay: String) -> bool:
 	match overlay:
@@ -1543,6 +1591,8 @@ func close_overlay(overlay: String) -> void:
 			close_themes()
 		"homework":
 			close_homework()
+		"quiz":
+			close_quiz()
 		"paint":
 			close_paint_shop()
 		"photo":
@@ -2874,16 +2924,17 @@ func start_theme(index: int) -> void:
 	sfx.play("whoosh",1.2)
 	start_mission()
 
-# Huiswerk: the assignments from the worksheet photos, one tile each. Tap
-# several to fly them in one mission; every place comes once.
+# Huiswerk: the worksheet cards Kaart A to F, one tile each. Tap several to
+# fly them in one mission (every place comes once), or to overhoren them:
+# drag the names onto the dots of a blank map.
 func build_homework() -> void:
 	var parts=overlay_panel(760)
 	homework_backdrop=parts[0]
 	homework_panel=parts[1]
 	var col: VBoxContainer=parts[2]
-	col.add_child(kicker("HUISWERK · DE OPDRACHTEN UIT JE WERKBLADEN"))
-	col.add_child(title("Wat moet je leren?",30))
-	var hint=label("Tik op één opdracht of op meer tegelijk. Een ✓ betekent dat je hem al hebt gevlogen.",15,MUTED)
+	col.add_child(kicker("HUISWERK · KAART A TOT EN MET F"))
+	col.add_child(title("Welke kaart moet je leren?",30))
+	var hint=label("Tik op één kaart of op meer tegelijk. Vliegen oefent alleen wat op die kaart staat; Overhoren is de toets: sleep de namen naar de stippen. Een ✓ betekent dat je de kaart al hebt gevlogen.",15,MUTED)
 	hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(hint)
 	homework_grid=hangar_grid(2)
@@ -2906,12 +2957,23 @@ func build_homework() -> void:
 	var close=button("Sluiten",close_homework)
 	close.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	row.add_child(close)
-	homework_start=button("START HUISWERK  ▶",start_homework,true)
+	var go_row=HBoxContainer.new()
+	go_row.add_theme_constant_override("separation",10)
+	col.add_child(go_row)
+	homework_start=button("VLIEGEN  ▶",start_homework,true)
 	homework_start.name="HomeworkStart"
 	homework_start.custom_minimum_size.y=56
+	homework_start.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	homework_start.add_theme_font_size_override("font_size",21)
 	tone_button(homework_start,"gold",16,16,.14)
-	col.add_child(homework_start)
+	go_row.add_child(homework_start)
+	homework_quiz=button("OVERHOREN  ✎",start_homework_quiz,true)
+	homework_quiz.name="HomeworkQuiz"
+	homework_quiz.tooltip_text="De toets zonder vliegen: sleep elke naam naar de juiste stip op de kaart."
+	homework_quiz.custom_minimum_size.y=56
+	homework_quiz.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	homework_quiz.add_theme_font_size_override("font_size",21)
+	go_row.add_child(homework_quiz)
 
 # Homework is Dutch topography: from the Europe map it switches to Nederland.
 func open_homework() -> void:
@@ -2930,7 +2992,8 @@ func open_homework() -> void:
 		b.name="Homework_"+item.id
 		b.set_meta("item",item)
 		b.tooltip_text=item.about
-		b.text="%s%s\n%s · %d plekken" % [item.name,"  ✓" if item.id in done else "",item.source,item.count]
+		var mark: Variant=saved.get("quiz",{}).get(item.id)
+		b.text="%s%s%s\n%s · %d plekken" % [item.name,"  ✓" if item.id in done else "","  · toets "+("%.1f" % float(mark)).replace(".",",") if mark!=null else "",item.subject,item.count]
 		homework_grid.add_child(b)
 	refresh_homework()
 	homework_backdrop.move_to_front()
@@ -2971,14 +3034,15 @@ func refresh_homework() -> void:
 		style_button(b,b.get_meta("item").id in homework_selected,12,10)
 	var places=TopoCatalog.merge_places(chosen.map(func(item): return item.places))
 	homework_start.disabled=chosen.is_empty()
-	homework_start.text="START HUISWERK  ▶" if chosen.size()<=1 else "START %d OPDRACHTEN  ▶" % chosen.size()
+	homework_quiz.disabled=chosen.is_empty()
+	homework_start.text="VLIEGEN  ▶" if chosen.size()<=1 else "VLIEG %d KAARTEN  ▶" % chosen.size()
 	var mode="Je vliegt in de modus %s." % ["Leren","Oefenen","Records"][mode_select.selected]
 	if chosen.is_empty():
 		homework_status.text="Nog niets gekozen. "+mode
 	elif chosen.size()==1:
-		homework_status.text="%s · %d plekken. %s" % [chosen[0].name,places.size(),mode]
+		homework_status.text="%s · %s · %d plekken. %s" % [chosen[0].name,chosen[0].subject,places.size(),mode]
 	else:
-		homework_status.text="%d opdrachten samen · %d plekken (dubbele plekken één keer). %s" % [chosen.size(),places.size(),mode]
+		homework_status.text="%d kaarten samen · %d plekken (dubbele plekken één keer). %s" % [chosen.size(),places.size(),mode]
 
 # One assignment is just its route in the picker, so best times and the
 # leaderboard match. Several fly as one merged mission.
@@ -2994,6 +3058,184 @@ func start_homework() -> void:
 		start_mission()
 	else:
 		start_mission(TopoCatalog.merge_places(chosen.map(func(item): return item.places)),false)
+
+# Overhoren: a full-screen test on the chosen cards. The map with numbered dots
+# fills the left, the names to place sit on the right. No helicopter, no hints.
+func build_quiz() -> void:
+	quiz_backdrop=ColorRect.new()
+	quiz_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	quiz_backdrop.color=Color(.015,.055,.07,.96)
+	ui.add_child(quiz_backdrop)
+	quiz_backdrop.hide()
+	quiz_panel=PanelContainer.new()
+	quiz_panel.name="QuizPanel"
+	var panel_style=card(PANEL_SOLID,22)
+	for side in [SIDE_LEFT,SIDE_RIGHT,SIDE_TOP,SIDE_BOTTOM]:
+		panel_style.set_content_margin(side,14)
+	quiz_panel.add_theme_stylebox_override("panel",panel_style)
+	ui.add_child(quiz_panel)
+	pin(quiz_panel,Rect2(0,0,1,1),12,12,-12,-12)
+	quiz_panel.hide()
+	var row=HBoxContainer.new()
+	row.add_theme_constant_override("separation",14)
+	quiz_panel.add_child(row)
+	quiz_board=QuizBoard.new()
+	quiz_board.name="QuizBoard"
+	quiz_board.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	quiz_board.size_flags_vertical=Control.SIZE_EXPAND_FILL
+	quiz_board.changed.connect(refresh_quiz)
+	row.add_child(quiz_board)
+	var side=VBoxContainer.new()
+	side.custom_minimum_size.x=350
+	side.add_theme_constant_override("separation",8)
+	row.add_child(side)
+	quiz_kicker=kicker("OVERHOREN")
+	side.add_child(quiz_kicker)
+	side.add_child(title("Sleep de namen naar de stippen",24))
+	quiz_status=label("",15,CREAM)
+	quiz_status.name="QuizStatus"
+	quiz_status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	side.add_child(quiz_status)
+	quiz_tray=QuizBoard.Tray.new()
+	quiz_tray.board=quiz_board
+	quiz_tray.size_flags_vertical=Control.SIZE_EXPAND_FILL
+	var tray_style=style(Color(.02,.07,.1,.9),14,EDGE)
+	for tray_side in [SIDE_LEFT,SIDE_RIGHT,SIDE_TOP,SIDE_BOTTOM]:
+		tray_style.set_content_margin(tray_side,8)
+	quiz_tray.add_theme_stylebox_override("panel",tray_style)
+	side.add_child(quiz_tray)
+	var scroll=ScrollContainer.new()
+	scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	quiz_tray.add_child(scroll)
+	quiz_names=HFlowContainer.new()
+	quiz_names.name="QuizNames"
+	quiz_names.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	quiz_names.add_theme_constant_override("h_separation",6)
+	quiz_names.add_theme_constant_override("v_separation",6)
+	scroll.add_child(quiz_names)
+	quiz_check=button("NAKIJKEN  ✓",check_quiz,true)
+	quiz_check.name="QuizCheck"
+	quiz_check.custom_minimum_size.y=54
+	tone_button(quiz_check,"gold",16,16,.14)
+	side.add_child(quiz_check)
+	var buttons=HBoxContainer.new()
+	buttons.add_theme_constant_override("separation",8)
+	side.add_child(buttons)
+	quiz_retry=button("Fouten over",retry_quiz)
+	quiz_retry.name="QuizRetry"
+	quiz_retry.tooltip_text="Wat goed was blijft staan; de rest sleep je opnieuw."
+	var again=button("Nieuwe toets",new_quiz_round)
+	again.name="QuizAgain"
+	var stop=button("Stoppen",close_quiz)
+	for b in [quiz_retry,again,stop]:
+		b.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		b.add_theme_font_size_override("font_size",16)
+		b.custom_minimum_size.y=46
+		buttons.add_child(b)
+
+func start_homework_quiz() -> void:
+	var chosen=chosen_homework()
+	if chosen.is_empty():
+		return
+	close_homework()
+	var ids: Array=chosen.map(func(item): return String(item.id))
+	ids.sort()
+	quiz_key="+".join(ids)
+	open_quiz(TopoCatalog.merge_places(chosen.map(func(item): return item.places)),"OVERHOREN · "+" + ".join(chosen.map(func(item): return String(item.name).to_upper())))
+
+func open_quiz(places: Array,heading: String) -> void:
+	if state!="menu" or places.is_empty() or region!="nl":
+		return
+	quiz_places=places.duplicate()
+	quiz_kicker.text=heading
+	quiz_open=true
+	new_quiz_round()
+	quiz_backdrop.move_to_front()
+	quiz_panel.move_to_front()
+	quiz_backdrop.show()
+	quiz_panel.show()
+	reveal(quiz_panel)
+	sfx.play("whoosh",1.1)
+
+func close_quiz() -> void:
+	if not quiz_open:
+		return
+	quiz_open=false
+	quiz_panel.hide()
+	quiz_backdrop.hide()
+
+# New numbering and a new order of the names: the test cannot be done from memory of the last one.
+func new_quiz_round() -> void:
+	quiz_result={}
+	quiz_first_try=true
+	quiz_board.setup(world,shuffled_order(quiz_places))
+	shuffle_quiz_tray()
+	refresh_quiz()
+
+func shuffle_quiz_tray() -> void:
+	quiz_tray_order=PackedStringArray(shuffled_order(quiz_places).map(func(p): return String(p.name)))
+
+func check_quiz() -> void:
+	if quiz_board.checked:
+		return
+	quiz_result=quiz_board.grade()
+	# Only the first marking of a test is its mark: after Fouten over the right answers are already given.
+	if quiz_first_try and not quiz_key.is_empty():
+		if not saved.get("quiz") is Dictionary:
+			saved.quiz={}
+		var mark=1.0+9.0*float(quiz_result.right)/float(maxi(1,quiz_result.total))
+		var before=float(saved.quiz.get(quiz_key,0.0))
+		quiz_best=ProgressStore.remember_quiz(saved.quiz,quiz_key,mark)
+		quiz_result.record=quiz_best>before
+		save_data()
+	quiz_first_try=false
+	sfx.play("fanfare" if quiz_result.right==quiz_result.total else "chime" if quiz_result.right*10>=quiz_result.total*6 else "buzzer")
+	refresh_quiz()
+
+func retry_quiz() -> void:
+	if not quiz_board.checked:
+		return
+	quiz_board.retry_wrong()
+	quiz_result={}
+	quiz_first_try=false
+	shuffle_quiz_tray()
+	refresh_quiz()
+
+# School mark from 1 to 10 for right answers out of total, with a decimal comma.
+static func quiz_mark(right: int,total: int) -> String:
+	if total<=0:
+		return "1,0"
+	return ("%.1f" % (1.0+9.0*float(right)/float(total))).replace(".",",")
+
+func refresh_quiz() -> void:
+	if not is_instance_valid(quiz_board):
+		return
+	for child in quiz_names.get_children():
+		quiz_names.remove_child(child)
+		child.queue_free()
+	var left=quiz_board.names_left()
+	if not quiz_board.checked:
+		for name_text in quiz_tray_order:
+			if left.has(name_text):
+				var chip=QuizBoard.NameChip.new(quiz_board,name_text)
+				quiz_names.add_child(chip)
+	var total=quiz_board.places.size()
+	if quiz_board.checked:
+		var right=int(quiz_result.get("right",0))
+		var best_text=""
+		if quiz_result.has("record"):
+			best_text=" Nieuw beste cijfer!" if quiz_result.record else " Je beste cijfer is %s." % ("%.1f" % quiz_best).replace(".",",")
+		else:
+			best_text=" Na Fouten over telt het cijfer niet mee."
+		quiz_status.text="%d van %d goed · cijfer %s.%s %s" % [right,total,quiz_mark(right,total),best_text,"Alles goed, knap!" if right==total else "Rood is fout: de gouden naam is het goede antwoord."]
+	else:
+		var fixed=quiz_board.locked.count(true)
+		var hint="Sleep een naam naar een stip, of tik een naam en daarna de stip."
+		if not quiz_board.selected_name.is_empty():
+			hint="Tik nu op de stip van %s." % quiz_board.selected_name
+		quiz_status.text="%d van %d geplaatst%s. %s" % [quiz_board.placed_count(),total," (%d al goed)" % fixed if fixed>0 else "",hint]
+	quiz_check.disabled=quiz_board.checked
+	quiz_retry.disabled=not quiz_board.checked or int(quiz_result.get("right",0))==total
 
 # "Huiswerk · A + B" when a mission is exactly some homework assignments.
 func homework_title(places: Array) -> String:
@@ -3826,10 +4068,10 @@ func smoke_test() -> void:
 			assert(stats.plots>0,"City plan is not empty: "+place.name)
 			layouts[stats.layout]=true
 	assert(dutch_cities==65 and layouts.size()==dutch_cities,"Dutch cities do not repeat the same layout")
-	# Worksheet routes: overview map, learning map and maps A-D of the textbook.
+	# Worksheet routes: Kaart A to E of the textbook and F, the numbered test map with the total.
 	assert(catalog.nl_routes.size()==11,"All Dutch worksheet routes and the four themes are bundled")
 	assert(catalog.presets("nl",0)==[catalog.lookup.utrecht,catalog.lookup.amsterdam,catalog.lookup["den haag"],catalog.lookup.rotterdam,catalog.lookup.middelburg,catalog.lookup["den bosch"],catalog.lookup.maastricht,catalog.lookup.arnhem,catalog.lookup.zwolle,catalog.lookup.assen,catalog.lookup.groningen,catalog.lookup.leeuwarden],"Short Dutch route is unchanged, so its best time stays")
-	assert(catalog.presets("nl",1).size()==34,"Overview map lists all 34 numbered places")
+	assert(catalog.presets("nl",1).size()==42 and catalog.presets("nl",6).size()==34,"Kaart A has its 42 places; Kaart F, the test map, all 34 numbered places")
 	for route in catalog.nl_routes:
 		for place in route.places:
 			assert(place.region=="nl" and TopoWorld.in_bounds(TopoWorld.map_bounds("nl"),place.lat,place.lon),"Route place lies on the Dutch map: "+place.name)
@@ -3912,7 +4154,7 @@ func smoke_test() -> void:
 	assert(world.lake_contains(world.project(5.33,52.8)),"IJsselmeer remains water")
 	assert(world.lake_contains(world.project(5.18,52.55)),"Markermeer remains water")
 	assert(world.lake_contains(world.project(catalog.lookup.houtribdijk.lon,catalog.lookup.houtribdijk.lat)),"Houtribdijk lies between IJsselmeer and Markermeer")
-	assert(catalog.lookup.houtribdijk in catalog.presets("nl",2),"Leerkaart includes the Houtribdijk drawn on the worksheet")
+	assert(catalog.lookup.houtribdijk in catalog.presets("nl",1),"Kaart A includes the Houtribdijk drawn on the worksheet")
 	start_mission([catalog.lookup.arnhem])
 	assert(world.mat(Color.WHITE)==world.mat(Color.WHITE),"Materials are reused")
 	assert(world.mat(Color.WHITE)!=world.mat(Color.WHITE,false,true),"Cull variants stay separate")
@@ -4575,39 +4817,141 @@ func smoke_test() -> void:
 	return_menu()
 	europe_route_select.select(picked_route)
 	update_best_label()
-	# Huiswerk: the six worksheet assignments, alone or several at once.
+	# Huiswerk: the worksheet cards Kaart A to F, alone or several at once.
 	var homework_before: Dictionary=saved.duplicate(true)
 	saved.homework=[]
 	saved.medals=[]
 	open_homework()
-	assert(homework_open and region=="nl" and homework_grid.get_child_count()==6,"Huiswerk lists the six worksheet assignments")
-	for item in catalog.homework("nl"):
-		assert(not item.name.begins_with("Kaart") and not item.name.contains("kaart") and not item.source.is_empty(),"Assignments have a fitting name and keep their worksheet: "+item.name)
+	var cards: Array=catalog.homework("nl")
+	assert(homework_open and region=="nl" and homework_grid.get_child_count()==6,"Huiswerk lists the six worksheet cards")
+	assert(cards.map(func(item): return item.name)==["Kaart A","Kaart B","Kaart C","Kaart D","Kaart E","Kaart F"],"The cards come in worksheet order, A to F")
+	for item in cards:
+		assert(not item.subject.is_empty() and not item.subject.begins_with("Kaart") and item.source==item.name,"Each card says what it covers: "+item.name)
+		assert(homework_grid.get_child(cards.find(item)).text.begins_with(item.name),"The tile leads with the card: "+item.name)
+	var card_of=func(id: String) -> Dictionary: return cards.filter(func(item): return item.id==id)[0]
+	var kaart_a: Dictionary=card_of.call("water")
+	assert(kaart_a.name=="Kaart A" and kaart_a.count==42 and kaart_a.places.any(func(p): return p.name=="Biesbos") and not kaart_a.places.any(func(p): return p.name=="Rotterdam"),"Kaart A is the overview map with the Biesbos, without Rotterdam")
+	assert(card_of.call("west").name=="Kaart E" and card_of.call("overzicht").name=="Kaart F" and card_of.call("overzicht").count==34,"Kaart E is the Randstad and Zeeland; Kaart F the numbered total of 34")
 	await get_tree().process_frame
 	await get_tree().process_frame
 	print("Homework panel: %s" % homework_panel.get_global_rect().size)
 	assert(screen.encloses(homework_panel.get_global_rect()),"Homework screen fits on screen")
 	select_all_homework(false)
-	assert(homework_start.disabled,"Nothing chosen, nothing to start")
+	assert(homework_start.disabled and homework_quiz.disabled,"Nothing chosen, nothing to start")
 	toggle_homework("west")
 	toggle_homework("noord")
-	var west_north=TopoCatalog.merge_places([catalog.homework("nl")[2].places,catalog.homework("nl")[3].places])
-	assert(not homework_start.disabled and homework_status.text.contains("2 opdrachten") and homework_status.text.contains("%d plekken" % west_north.size()),"Two assignments merge, every place once")
-	assert(west_north.size()<catalog.homework("nl")[2].count+catalog.homework("nl")[3].count,"Shared places (the Afsluitdijk, the IJsselmeer) are flown once")
+	var west_north=TopoCatalog.merge_places([card_of.call("west").places,card_of.call("noord").places])
+	assert(not homework_start.disabled and not homework_quiz.disabled and homework_status.text.contains("2 kaarten") and homework_status.text.contains("%d plekken" % west_north.size()),"Two cards merge, every place once")
+	assert(west_north.size()<card_of.call("west").count+card_of.call("noord").count,"Shared places (the Afsluitdijk, the IJsselmeer) are flown once")
 	start_homework()
-	assert(not homework_open and state=="flight" and mission.size()==west_north.size() and not custom_mission,"Several assignments fly as one mission")
-	assert(homework_title(mission)=="Huiswerk · De Randstad en Zeeland + Het Noorden en de Wadden","The combined mission is named after its assignments")
+	assert(not homework_open and state=="flight" and mission.size()==west_north.size() and not custom_mission,"Several cards fly as one mission")
+	assert(homework_title(mission)=="Huiswerk · Kaart B + Kaart E","The combined mission is named after its cards")
 	var flown=record_homework(mission)
-	assert(flown.size()==2 and "west" in saved.homework and "noord" in saved.homework and "combi" in saved.medals and not "huiswerk" in saved.medals,"Flown assignments are remembered; two at once earns a medal")
+	assert(flown.size()==2 and "west" in saved.homework and "noord" in saved.homework and "combi" in saved.medals and not "huiswerk" in saved.medals,"Flown cards are remembered; two at once earns a medal")
 	return_menu()
 	homework_selected=["zuid"]
 	start_homework()
-	assert(state=="flight" and nl_route_select.selected==catalog.homework("nl")[5].index and mission.size()==catalog.homework("nl")[5].count,"One assignment flies its own route")
+	assert(state=="flight" and nl_route_select.selected==card_of.call("zuid").index and mission.size()==card_of.call("zuid").count,"One card flies its own route, and only its own places")
+	var card_names: Array=card_of.call("zuid").places.map(func(p): return p.name)
+	assert(mission.all(func(p): return p.name in card_names),"A card's mission asks nothing that is not on the card")
 	return_menu()
-	record_homework(TopoCatalog.merge_places(catalog.homework("nl").map(func(item): return item.places)))
+	# Every mode flies a new order: a retry of the same route starts elsewhere.
+	for mode in [GameMode.LEARN,GameMode.PRACTICE,GameMode.RECORDS]:
+		mode_select.select(mode)
+		var firsts: Dictionary={}
+		var previous: Array=[]
+		for _attempt in 4:
+			start_mission(card_of.call("noord").places,false)
+			var order: Array=mission.map(func(p): return p.name)
+			assert(order!=previous and (previous.is_empty() or order[0]!=previous[0]),"%s: each new flight starts at another place" % MODE_NAMES[mode])
+			firsts[order[0]]=true
+			previous=order
+			return_menu()
+		assert(firsts.size()>=3,"%s: the first place varies" % MODE_NAMES[mode])
+	assert(record_key(shuffled_order(card_of.call("noord").places))==record_key(card_of.call("noord").places),"The record key ignores the order, so records stay comparable")
+	mode_select.select(GameMode.LEARN)
+	update_best_label()
+	record_homework(TopoCatalog.merge_places(cards.map(func(item): return item.places)))
 	assert(saved.homework.size()==6 and "huiswerk" in saved.medals,"All six flown earns the homework medal")
 	open_homework()
-	assert(homework_grid.get_child(0).text.contains("✓"),"Flown assignments get a tick")
+	assert(homework_grid.get_child(0).text.contains("✓"),"Flown cards get a tick")
+	# Overhoren: drag the names of the chosen cards onto the numbered dots.
+	homework_selected=["west"]
+	refresh_homework()
+	start_homework_quiz()
+	assert(quiz_open and not homework_open and state=="menu" and top_overlay()=="quiz","Overhoren opens the test, without flying")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	print("Quiz board: %s, tray: %s" % [quiz_board.get_global_rect().size,quiz_tray.get_global_rect().size])
+	assert(screen.encloses(quiz_panel.get_global_rect()) and quiz_board.size.x>500 and quiz_board.size.y>400,"The quiz map fills most of the screen")
+	var kaart_e: Dictionary=card_of.call("west")
+	assert(quiz_board.places.size()==kaart_e.count and quiz_names.get_child_count()==kaart_e.count and quiz_kicker.text.contains("KAART E"),"Every place of Kaart E is a dot, every name a chip")
+	quiz_board.layout()
+	var board_box=Rect2(Vector2.ZERO,quiz_board.size)
+	for i in quiz_board.dot_at.size():
+		assert(board_box.has_point(quiz_board.dot_at[i]),"Dot %d lies on the map" % (i+1))
+		for j in range(i+1,quiz_board.dot_at.size()):
+			assert(quiz_board.dot_at[i].distance_to(quiz_board.dot_at[j])>=QuizBoard.MIN_GAP-1.0,"Dots %d and %d do not overlap" % [i+1,j+1])
+	var tray_chips=quiz_names.get_children()
+	var tray_before=tray_chips.map(func(c): return c.place_name)
+	assert(tray_before!=quiz_board.places.map(func(p): return p.name),"The names are not listed in dot order")
+	# Drag and drop: a name dropped near the dot of its place lands there.
+	var first: Dictionary=quiz_board.places[0]
+	var drop_at: Vector2=quiz_board.dot_at[0]+Vector2(8,-6)
+	assert(quiz_board._can_drop_data(drop_at,{"quiz_name":first.name}) and quiz_board.nearest_dot(drop_at)==0,"A drop near a dot targets that dot")
+	assert(not quiz_board._can_drop_data(drop_at,"nonsense"),"Only names can be dropped")
+	quiz_board._drop_data(drop_at,{"quiz_name":first.name})
+	assert(quiz_board.placed[0]==first.name and not quiz_board.names_left().has(first.name) and quiz_names.get_child_count()==kaart_e.count-1,"The name moves from the tray to the dot")
+	var dragged=quiz_board.drag_payload(quiz_board.dot_at[0])
+	assert(dragged is Dictionary and dragged.quiz_name==first.name and dragged.from==0,"A placed name can be picked up again")
+	assert(quiz_tray._can_drop_data(Vector2.ZERO,dragged),"The tray takes a name back")
+	quiz_tray._drop_data(Vector2.ZERO,dragged)
+	assert(quiz_board.placed[0].is_empty() and quiz_board.names_left().has(first.name),"Back in the tray")
+	# Tap a name, then tap the dot.
+	quiz_board.select_name(first.name)
+	var tap=InputEventMouseButton.new()
+	tap.button_index=MOUSE_BUTTON_LEFT
+	tap.pressed=false
+	tap.position=quiz_board.dot_at[0]
+	quiz_board._gui_input(tap)
+	assert(quiz_board.placed[0]==first.name and quiz_board.selected_name.is_empty(),"Tap a name, then a dot, also places it")
+	# Fill in everything right except two swapped names, then mark it.
+	for i in quiz_board.places.size():
+		quiz_board.assign(i,quiz_board.places[i].name)
+	quiz_board.assign(1,quiz_board.places[2].name)
+	quiz_board.assign(2,quiz_board.places[1].name)
+	assert(quiz_board.placed_count()==kaart_e.count and quiz_board.names_left().is_empty(),"A name moved to another dot leaves its old dot empty")
+	quiz_board.assign(1,quiz_board.places[1].name)
+	check_quiz()
+	var total: int=kaart_e.count
+	assert(quiz_board.checked and quiz_result.right==total-1 and quiz_status.text.contains("%d van %d goed" % [total-1,total]) and quiz_status.text.contains("cijfer "+quiz_mark(total-1,total)),"Nakijken counts the right dots and gives a mark")
+	assert(not quiz_board._can_drop_data(drop_at,{"quiz_name":first.name}) and quiz_check.disabled and not quiz_retry.disabled,"After marking the map is closed until a retry")
+	var first_mark: float=snappedf(1.0+9.0*float(total-1)/float(total),.1)
+	assert(quiz_key=="west" and is_equal_approx(float(saved.quiz.west),first_mark) and quiz_result.record and quiz_status.text.contains("Nieuw beste cijfer"),"The first marking is saved as the best mark of Kaart E")
+	assert(quiz_mark(10,10)=="10,0" and quiz_mark(0,10)=="1,0" and quiz_mark(5,10)=="5,5","Marks run from 1 to 10 with a decimal comma")
+	retry_quiz()
+	assert(not quiz_board.checked and quiz_board.locked.count(true)==total-1 and quiz_board.names_left().size()==1 and quiz_names.get_child_count()==1,"Fouten over keeps the right answers and asks only the mistake again")
+	quiz_board.assign(0,quiz_board.places[2].name)
+	assert(quiz_board.placed[0]==quiz_board.places[0].name,"Fixed answers cannot be overwritten")
+	quiz_board.assign(2,quiz_board.places[2].name)
+	check_quiz()
+	assert(quiz_result.right==total and quiz_retry.disabled,"All right: nothing to retry")
+	assert(is_equal_approx(float(saved.quiz.west),first_mark) and quiz_status.text.contains("telt het cijfer niet mee"),"A mark after Fouten over does not count")
+	saved.quiz.west=6.0
+	new_quiz_round()
+	for i in quiz_board.places.size():
+		quiz_board.assign(i,quiz_board.places[(i+1)%total].name)
+	check_quiz()
+	assert(quiz_result.right==0 and not quiz_result.record and is_equal_approx(float(saved.quiz.west),6.0) and quiz_status.text.contains("beste cijfer is 6,0"),"A lower mark keeps the best one")
+	var numbered: Array=quiz_board.places.map(func(p): return p.name)
+	new_quiz_round()
+	assert(quiz_board.placed_count()==0 and quiz_board.locked.count(true)==0 and quiz_board.places.map(func(p): return p.name)!=numbered,"A new test renumbers the dots and starts empty")
+	go_back(false)
+	assert(not quiz_open and state=="menu","Back closes the test")
+	open_homework()
+	assert(homework_grid.get_child(4).text.contains("toets 6,0") and not homework_grid.get_child(0).text.contains("toets"),"The card tile shows its best test mark")
+	assert(ProgressStore.clean({"quiz":{"water":8.46,"oost":11,"zuid":"8","":5,"noord+west":1}}).quiz=={"water":8.5,"noord+west":1.0},"Saved test marks are validated")
+	assert("quiz" in ProgressStore.PROFILE_KEYS and ProgressStore.VERSION==2,"Test marks belong to a pilot and bump the save version")
 	go_back(false)
 	assert(not homework_open,"Back closes the homework screen")
 	assert(ProgressStore.clean({"homework":["west","west",5,"noord"]}).homework==["west","noord"],"Homework progress is validated")
@@ -4635,6 +4979,7 @@ func smoke_test() -> void:
 func capture_preview() -> void:
 	saved.mute=true
 	seed(1206)
+	order_rng.seed=1206
 	DirAccess.make_dir_recursive_absolute("res://build")
 	start_mission([catalog.lookup.amsterdam,catalog.lookup.rotterdam])
 	helicopter.position=world.project(5.0,52.23)+Vector3(0,9.0 if region=="nl" else 3.3,0)
@@ -4810,9 +5155,47 @@ func capture_effects() -> void:
 # Quick visual pass over the interface and Europe: hangar, flight, feedback and cities.
 # The homework screen, every aircraft with accessories, the accessory list
 # and a few earned pilot looks, plus a jet and a plane in flight.
+# Overhoren: Kaart A half filled in, then Kaart E marked with a few mistakes.
+func capture_quiz() -> void:
+	saved.mute=true
+	seed(1206)
+	order_rng.seed=1206
+	DirAccess.make_dir_recursive_absolute("res://build")
+	await get_tree().create_timer(.5).timeout
+	saved.homework=["overzicht","west"]
+	open_homework()
+	homework_selected=["water"]
+	refresh_homework()
+	await get_tree().create_timer(.5).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-huiswerk.png")
+	start_homework_quiz()
+	await get_tree().create_timer(.4).timeout
+	for i in quiz_board.places.size()/2:
+		quiz_board.assign(i,quiz_board.places[i].name)
+	quiz_board.select_name(quiz_names.get_child(0).place_name)
+	await get_tree().create_timer(.4).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-overhoren.png")
+	close_quiz()
+	open_homework()
+	homework_selected=["west"]
+	refresh_homework()
+	start_homework_quiz()
+	await get_tree().create_timer(.4).timeout
+	for i in quiz_board.places.size():
+		quiz_board.assign(i,quiz_board.places[i].name)
+	quiz_board.assign(3,quiz_board.places[7].name)
+	quiz_board.assign(7,quiz_board.places[3].name)
+	quiz_board.unassign(quiz_board.places[11].name)
+	check_quiz()
+	await get_tree().create_timer(.4).timeout
+	get_viewport().get_texture().get_image().save_png("res://build/preview-overhoren-nakijken.png")
+	print("QUIZ CAPTURE PASSED")
+	get_tree().quit()
+
 func capture_hangar() -> void:
 	saved.mute=true
 	seed(1206)
+	order_rng.seed=1206
 	DirAccess.make_dir_recursive_absolute("res://build")
 	saved.points=HangarCatalog.MAX_POINTS
 	saved.medals=HangarCatalog.MEDALS.keys()
@@ -4935,6 +5318,7 @@ func capture_learning() -> void:
 		load_world("nl")
 	mode_select.select(GameMode.LEARN)
 	seed(7)
+	order_rng.seed=7
 	start_mission([catalog.lookup.zwolle,catalog.lookup.assen,catalog.lookup.middelburg])
 	for index in 2:
 		var found: Dictionary=mission[mission_index]
