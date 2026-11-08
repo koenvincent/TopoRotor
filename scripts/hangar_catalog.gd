@@ -71,8 +71,8 @@ const MEDALS = {
 	"eerste_record":"Eerste record gevlogen",
 	"foutloos":"Foutloze Records-vlucht (drie sterren)",
 	"europa":"Een missie in Europa voltooid",
-	"combi":"Twee huiswerkopdrachten in één vlucht",
-	"huiswerk":"Alle zes huiswerkopdrachten gevlogen",
+	"combi":"Twee huiswerkkaarten in één vlucht",
+	"huiswerk":"Alle zes huiswerkkaarten gevlogen",
 }
 
 const RANKS = [[0,"Leerling-piloot"],[150,"Piloot"],[450,"Gezagvoerder"],[900,"Reddingspiloot"],[1500,"Topopiloot"],[2500,"Radarkapitein"],[3500,"Straaljagerpiloot"],[5000,"Luchtvaartlegende"]]
