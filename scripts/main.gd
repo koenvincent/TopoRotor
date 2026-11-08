@@ -182,6 +182,10 @@ var quiz_retry: Button
 var quiz_places: Array = []
 var quiz_tray_order: PackedStringArray = PackedStringArray()
 var quiz_result: Dictionary = {}
+# Save key of the cards under test ("water", "noord+west"); only a first marking counts as the mark.
+var quiz_key: String = ""
+var quiz_first_try: bool = true
+var quiz_best: float = 0.0
 # Mission order: an own generator, seeded fresh at start, so every flight
 # (Leren, Oefenen and Records) visits the places in a new order.
 var order_rng := RandomNumberGenerator.new()
@@ -2988,7 +2992,8 @@ func open_homework() -> void:
 		b.name="Homework_"+item.id
 		b.set_meta("item",item)
 		b.tooltip_text=item.about
-		b.text="%s%s\n%s · %d plekken" % [item.name,"  ✓" if item.id in done else "",item.subject,item.count]
+		var mark: Variant=saved.get("quiz",{}).get(item.id)
+		b.text="%s%s%s\n%s · %d plekken" % [item.name,"  ✓" if item.id in done else "","  · toets "+("%.1f" % float(mark)).replace(".",",") if mark!=null else "",item.subject,item.count]
 		homework_grid.add_child(b)
 	refresh_homework()
 	homework_backdrop.move_to_front()
@@ -3133,6 +3138,9 @@ func start_homework_quiz() -> void:
 	if chosen.is_empty():
 		return
 	close_homework()
+	var ids: Array=chosen.map(func(item): return String(item.id))
+	ids.sort()
+	quiz_key="+".join(ids)
 	open_quiz(TopoCatalog.merge_places(chosen.map(func(item): return item.places)),"OVERHOREN · "+" + ".join(chosen.map(func(item): return String(item.name).to_upper())))
 
 func open_quiz(places: Array,heading: String) -> void:
@@ -3159,6 +3167,7 @@ func close_quiz() -> void:
 # New numbering and a new order of the names: the test cannot be done from memory of the last one.
 func new_quiz_round() -> void:
 	quiz_result={}
+	quiz_first_try=true
 	quiz_board.setup(world,shuffled_order(quiz_places))
 	shuffle_quiz_tray()
 	refresh_quiz()
@@ -3170,6 +3179,16 @@ func check_quiz() -> void:
 	if quiz_board.checked:
 		return
 	quiz_result=quiz_board.grade()
+	# Only the first marking of a test is its mark: after Fouten over the right answers are already given.
+	if quiz_first_try and not quiz_key.is_empty():
+		if not saved.get("quiz") is Dictionary:
+			saved.quiz={}
+		var mark=1.0+9.0*float(quiz_result.right)/float(maxi(1,quiz_result.total))
+		var before=float(saved.quiz.get(quiz_key,0.0))
+		quiz_best=ProgressStore.remember_quiz(saved.quiz,quiz_key,mark)
+		quiz_result.record=quiz_best>before
+		save_data()
+	quiz_first_try=false
 	sfx.play("fanfare" if quiz_result.right==quiz_result.total else "chime" if quiz_result.right*10>=quiz_result.total*6 else "buzzer")
 	refresh_quiz()
 
@@ -3178,6 +3197,7 @@ func retry_quiz() -> void:
 		return
 	quiz_board.retry_wrong()
 	quiz_result={}
+	quiz_first_try=false
 	shuffle_quiz_tray()
 	refresh_quiz()
 
@@ -3202,7 +3222,12 @@ func refresh_quiz() -> void:
 	var total=quiz_board.places.size()
 	if quiz_board.checked:
 		var right=int(quiz_result.get("right",0))
-		quiz_status.text="%d van %d goed · cijfer %s. %s" % [right,total,quiz_mark(right,total),"Alles goed, knap!" if right==total else "Rood is fout: de gouden naam is het goede antwoord."]
+		var best_text=""
+		if quiz_result.has("record"):
+			best_text=" Nieuw beste cijfer!" if quiz_result.record else " Je beste cijfer is %s." % ("%.1f" % quiz_best).replace(".",",")
+		else:
+			best_text=" Na Fouten over telt het cijfer niet mee."
+		quiz_status.text="%d van %d goed · cijfer %s.%s %s" % [right,total,quiz_mark(right,total),best_text,"Alles goed, knap!" if right==total else "Rood is fout: de gouden naam is het goede antwoord."]
 	else:
 		var fixed=quiz_board.locked.count(true)
 		var hint="Sleep een naam naar een stip, of tik een naam en daarna de stip."
@@ -4901,6 +4926,8 @@ func smoke_test() -> void:
 	var total: int=kaart_e.count
 	assert(quiz_board.checked and quiz_result.right==total-1 and quiz_status.text.contains("%d van %d goed" % [total-1,total]) and quiz_status.text.contains("cijfer "+quiz_mark(total-1,total)),"Nakijken counts the right dots and gives a mark")
 	assert(not quiz_board._can_drop_data(drop_at,{"quiz_name":first.name}) and quiz_check.disabled and not quiz_retry.disabled,"After marking the map is closed until a retry")
+	var first_mark: float=snappedf(1.0+9.0*float(total-1)/float(total),.1)
+	assert(quiz_key=="west" and is_equal_approx(float(saved.quiz.west),first_mark) and quiz_result.record and quiz_status.text.contains("Nieuw beste cijfer"),"The first marking is saved as the best mark of Kaart E")
 	assert(quiz_mark(10,10)=="10,0" and quiz_mark(0,10)=="1,0" and quiz_mark(5,10)=="5,5","Marks run from 1 to 10 with a decimal comma")
 	retry_quiz()
 	assert(not quiz_board.checked and quiz_board.locked.count(true)==total-1 and quiz_board.names_left().size()==1 and quiz_names.get_child_count()==1,"Fouten over keeps the right answers and asks only the mistake again")
@@ -4909,12 +4936,22 @@ func smoke_test() -> void:
 	quiz_board.assign(2,quiz_board.places[2].name)
 	check_quiz()
 	assert(quiz_result.right==total and quiz_retry.disabled,"All right: nothing to retry")
+	assert(is_equal_approx(float(saved.quiz.west),first_mark) and quiz_status.text.contains("telt het cijfer niet mee"),"A mark after Fouten over does not count")
+	saved.quiz.west=6.0
+	new_quiz_round()
+	for i in quiz_board.places.size():
+		quiz_board.assign(i,quiz_board.places[(i+1)%total].name)
+	check_quiz()
+	assert(quiz_result.right==0 and not quiz_result.record and is_equal_approx(float(saved.quiz.west),6.0) and quiz_status.text.contains("beste cijfer is 6,0"),"A lower mark keeps the best one")
 	var numbered: Array=quiz_board.places.map(func(p): return p.name)
 	new_quiz_round()
 	assert(quiz_board.placed_count()==0 and quiz_board.locked.count(true)==0 and quiz_board.places.map(func(p): return p.name)!=numbered,"A new test renumbers the dots and starts empty")
 	go_back(false)
 	assert(not quiz_open and state=="menu","Back closes the test")
 	open_homework()
+	assert(homework_grid.get_child(4).text.contains("toets 6,0") and not homework_grid.get_child(0).text.contains("toets"),"The card tile shows its best test mark")
+	assert(ProgressStore.clean({"quiz":{"water":8.46,"oost":11,"zuid":"8","":5,"noord+west":1}}).quiz=={"water":8.5,"noord+west":1.0},"Saved test marks are validated")
+	assert("quiz" in ProgressStore.PROFILE_KEYS and ProgressStore.VERSION==2,"Test marks belong to a pilot and bump the save version")
 	go_back(false)
 	assert(not homework_open,"Back closes the homework screen")
 	assert(ProgressStore.clean({"homework":["west","west",5,"noord"]}).homework==["west","noord"],"Homework progress is validated")

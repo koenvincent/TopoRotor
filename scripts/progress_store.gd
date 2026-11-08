@@ -2,8 +2,9 @@ class_name ProgressStore
 extends RefCounted
 
 # Schema version of progress.json. Files without a version field are treated as version 1.
-const VERSION := 1
-const KNOWN_KEYS = ["version","best","records","custom","endpoint","mute","paint","minimap_rotate","calm","points","medals","garage","boards","pilot","look","profiles","homework"]
+# Version 2 adds "quiz": the best Overhoren mark per homework card (or set of cards).
+const VERSION := 2
+const KNOWN_KEYS = ["version","best","records","custom","endpoint","mute","paint","minimap_rotate","calm","points","medals","garage","boards","pilot","look","profiles","homework","quiz"]
 const DEFAULT_PILOT = "Niek"
 # Pilot profiles on one device. Each keeps its own points, medals, hangar,
 # paint, stars, record times and pilot look; the leaderboard is shared, so
@@ -11,10 +12,11 @@ const DEFAULT_PILOT = "Niek"
 # top level of the save, which is what the rest of the game reads.
 # A new per-pilot field must be added to PROFILE_KEYS and bump VERSION: an older build refuses
 # (read-only) a file with a higher version, so it never drops the field of a stored pilot.
-const PROFILE_KEYS = ["points","medals","garage","paint","best","records","look","homework"]
+const PROFILE_KEYS = ["points","medals","garage","paint","best","records","look","homework","quiz"]
 const MAX_PROFILES = 8
 # Caps of the saved lists. Past a cap the oldest entries go; the newest are the ones just earned.
 const MAX_HOMEWORK = 40
+const MAX_QUIZ = 40
 const MAX_RECORDS = 1000
 const MAX_CUSTOM = 200
 # Bounds of the Dutch map, read once: the map file is large and only four numbers are needed.
@@ -45,6 +47,15 @@ static func write_atomic(path: String,text: String) -> String:
 		return "rename"
 	return ""
 
+# Keeps the better of the stored and the new Overhoren mark, as the newest entry.
+static func remember_quiz(quiz: Dictionary,key: String,mark: float) -> float:
+	var best=maxf(float(quiz.get(key,0.0)),snappedf(mark,.1))
+	quiz.erase(key)
+	quiz[key]=best
+	while quiz.size()>MAX_QUIZ:
+		quiz.erase(quiz.keys()[0])
+	return best
+
 # Stores a record as the newest entry and drops the oldest ones past the cap.
 static func remember_record(records: Dictionary,key: String,score: float) -> void:
 	records.erase(key)
@@ -70,13 +81,13 @@ static func is_newer(raw: Variant) -> bool:
 	return typeof(v) in [TYPE_INT,TYPE_FLOAT] and is_finite(float(v)) and float(v)>VERSION
 
 static func defaults() -> Dictionary:
-	var data: Dictionary={"version":VERSION,"best":{},"records":{},"custom":[],"endpoint":"","mute":false,"points":0,"medals":[],"garage":HangarCatalog.DEFAULT_GARAGE.duplicate(true),"boards":{},"pilot":DEFAULT_PILOT,"look":PilotFigure.DEFAULT_LOOK.duplicate(),"homework":[]}
+	var data: Dictionary={"version":VERSION,"best":{},"records":{},"custom":[],"endpoint":"","mute":false,"points":0,"medals":[],"garage":HangarCatalog.DEFAULT_GARAGE.duplicate(true),"boards":{},"pilot":DEFAULT_PILOT,"look":PilotFigure.DEFAULT_LOOK.duplicate(),"homework":[],"quiz":{}}
 	data.profiles={DEFAULT_PILOT:snapshot(data)}
 	return data
 
 # Progress of one pilot, validated. Paint is only present when it was set.
 static func clean_profile(raw: Variant) -> Dictionary:
-	var data: Dictionary={"points":0,"medals":[],"garage":HangarCatalog.DEFAULT_GARAGE.duplicate(true),"best":{},"records":{},"look":PilotFigure.DEFAULT_LOOK.duplicate(),"homework":[]}
+	var data: Dictionary={"points":0,"medals":[],"garage":HangarCatalog.DEFAULT_GARAGE.duplicate(true),"best":{},"records":{},"look":PilotFigure.DEFAULT_LOOK.duplicate(),"homework":[],"quiz":{}}
 	if not raw is Dictionary:
 		return data
 	if raw.get("paint") is Dictionary:
@@ -103,6 +114,13 @@ static func clean_profile(raw: Variant) -> Dictionary:
 		if data.homework.size()>MAX_HOMEWORK:
 			push_warning("Voortgang: %d oudste huiswerk-ids weggelaten (maximaal %d)." % [data.homework.size()-MAX_HOMEWORK,MAX_HOMEWORK])
 			data.homework=data.homework.slice(data.homework.size()-MAX_HOMEWORK)
+	# Best Overhoren mark (1 to 10) per card key such as "water" or "noord+west"; the newest keys stay.
+	if raw.get("quiz") is Dictionary:
+		var quiz_keys: Array=raw.quiz.keys()
+		for key in quiz_keys.slice(maxi(0,quiz_keys.size()-MAX_QUIZ)):
+			var mark: Variant=raw.quiz[key]
+			if key is String and not key.is_empty() and key.length()<=80 and typeof(mark) in [TYPE_INT,TYPE_FLOAT] and is_finite(float(mark)) and float(mark)>=1.0 and float(mark)<=10.0:
+				data.quiz[key]=snappedf(float(mark),.1)
 	data.garage=HangarCatalog.clean_garage(raw.get("garage"))
 	data.look=PilotFigure.clean(raw.get("look"))
 	if raw.get("best") is Dictionary:
