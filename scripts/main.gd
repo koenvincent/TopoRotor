@@ -3098,6 +3098,8 @@ func build_quiz() -> void:
 	side.add_child(quiz_status)
 	quiz_tray=QuizBoard.Tray.new()
 	quiz_tray.board=quiz_board
+	quiz_board.tray=quiz_tray
+	quiz_board.float_layer=ui
 	quiz_tray.size_flags_vertical=Control.SIZE_EXPAND_FILL
 	var tray_style=style(Color(.02,.07,.1,.9),14,EDGE)
 	for tray_side in [SIDE_LEFT,SIDE_RIGHT,SIDE_TOP,SIDE_BOTTOM]:
@@ -3155,14 +3157,18 @@ func open_quiz(places: Array,heading: String) -> void:
 	quiz_backdrop.show()
 	quiz_panel.show()
 	reveal(quiz_panel)
+	# The test covers the whole screen: the 3D world behind it would only cost frames, so it pauses.
+	get_viewport().disable_3d=true
 	sfx.play("whoosh",1.1)
 
 func close_quiz() -> void:
 	if not quiz_open:
 		return
 	quiz_open=false
+	quiz_board.cancel_drag()
 	quiz_panel.hide()
 	quiz_backdrop.hide()
+	get_viewport().disable_3d=false
 
 # New numbering and a new order of the names: the test cannot be done from memory of the last one.
 func new_quiz_round() -> void:
@@ -4895,25 +4901,64 @@ func smoke_test() -> void:
 	var tray_chips=quiz_names.get_children()
 	var tray_before=tray_chips.map(func(c): return c.place_name)
 	assert(tray_before!=quiz_board.places.map(func(p): return p.name),"The names are not listed in dot order")
-	# Drag and drop: a name dropped near the dot of its place lands there.
+	assert(get_viewport().disable_3d,"The 3D world pauses behind the test")
+	# Dragging: the game's own drag starts on the press and follows every move.
 	var first: Dictionary=quiz_board.places[0]
+	var canvas_of=func(local: Vector2) -> Vector2: return quiz_board.get_global_transform_with_canvas()*local
+	var chip_of=func(name_text: String) -> Control: return quiz_names.get_children().filter(func(c): return c.place_name==name_text and not c.is_queued_for_deletion())[0]
+	var chip0: Control=chip_of.call(first.name)
+	var chip_at: Vector2=chip0.get_global_rect().get_center()
+	var map_draws: int=quiz_board.map_layer.draws
+	var press=InputEventMouseButton.new()
+	press.button_index=MOUSE_BUTTON_LEFT
+	press.pressed=true
+	press.global_position=chip_at
+	chip0._gui_input(press)
+	assert(quiz_board.dragging() and quiz_board.drag_name==first.name and not quiz_board.drag_moved and not quiz_board.ghost.visible,"A press on a name starts the drag at once")
 	var drop_at: Vector2=quiz_board.dot_at[0]+Vector2(8,-6)
-	assert(quiz_board._can_drop_data(drop_at,{"quiz_name":first.name}) and quiz_board.nearest_dot(drop_at)==0,"A drop near a dot targets that dot")
-	assert(not quiz_board._can_drop_data(drop_at,"nonsense"),"Only names can be dropped")
-	quiz_board._drop_data(drop_at,{"quiz_name":first.name})
-	assert(quiz_board.placed[0]==first.name and not quiz_board.names_left().has(first.name) and quiz_names.get_child_count()==kaart_e.count-1,"The name moves from the tray to the dot")
-	var dragged=quiz_board.drag_payload(quiz_board.dot_at[0])
-	assert(dragged is Dictionary and dragged.quiz_name==first.name and dragged.from==0,"A placed name can be picked up again")
-	assert(quiz_tray._can_drop_data(Vector2.ZERO,dragged),"The tray takes a name back")
-	quiz_tray._drop_data(Vector2.ZERO,dragged)
+	var motion=InputEventMouseMotion.new()
+	motion.position=canvas_of.call(drop_at)
+	quiz_board._input(motion)
+	assert(quiz_board.drag_moved and quiz_board.ghost.visible and quiz_board.ghost.get_parent()==ui and chip0.modulate.a<1.0 and quiz_board.hover==0,"The name follows the pointer and the dot under it lights up")
+	await get_tree().process_frame
+	assert(quiz_board.map_layer.draws==map_draws and quiz_board.dot_layer.draws>0,"A drag repaints only the dots, never the map")
+	var release=InputEventMouseButton.new()
+	release.button_index=MOUSE_BUTTON_LEFT
+	release.pressed=false
+	release.position=canvas_of.call(drop_at)
+	quiz_board._input(release)
+	assert(not quiz_board.dragging() and not quiz_board.ghost.visible and quiz_board.placed[0]==first.name and not quiz_board.names_left().has(first.name) and quiz_names.get_child_count()==kaart_e.count-1,"Let go near the dot: the name moves from the tray to the dot")
+	# With a finger the aim sits above the touch, so the finger does not cover the dot.
+	quiz_board.begin_drag(first.name,0,canvas_of.call(quiz_board.dot_at[0]),true)
+	quiz_board.move_drag(canvas_of.call(quiz_board.dot_at[1]-QuizBoard.TOUCH_LIFT))
+	assert(quiz_board.hover==1 and quiz_board.aim.distance_to(quiz_board.dot_at[1])<1.0,"A finger below a dot aims at that dot")
+	quiz_board.cancel_drag()
+	# Let go on the map but away from every dot: the name stays where it was.
+	var empty_spot=Vector2(6,6)
+	assert(quiz_board.nearest_dot(empty_spot)<0,"The map corner is free of dots")
+	quiz_board.begin_drag(first.name,0,canvas_of.call(quiz_board.dot_at[0]),false)
+	quiz_board.end_drag(canvas_of.call(empty_spot))
+	assert(quiz_board.placed[0]==first.name,"A miss on the map keeps the name on its dot")
+	# Dragged from its dot onto the tray: back in the tray.
+	var on_dot=InputEventMouseButton.new()
+	on_dot.button_index=MOUSE_BUTTON_LEFT
+	on_dot.pressed=true
+	on_dot.position=quiz_board.dot_at[0]
+	on_dot.global_position=canvas_of.call(quiz_board.dot_at[0])
+	quiz_board._gui_input(on_dot)
+	assert(quiz_board.dragging() and quiz_board.drag_from==0,"A placed name can be picked up again")
+	quiz_board.end_drag(quiz_tray.get_global_rect().get_center())
 	assert(quiz_board.placed[0].is_empty() and quiz_board.names_left().has(first.name),"Back in the tray")
 	# Tap a name, then tap the dot.
-	quiz_board.select_name(first.name)
-	var tap=InputEventMouseButton.new()
-	tap.button_index=MOUSE_BUTTON_LEFT
-	tap.pressed=false
-	tap.position=quiz_board.dot_at[0]
-	quiz_board._gui_input(tap)
+	await get_tree().process_frame
+	var chip1: Control=chip_of.call(first.name)
+	quiz_board.begin_drag(first.name,-1,chip1.get_global_rect().get_center(),true,chip1)
+	quiz_board.end_drag(chip1.get_global_rect().get_center())
+	assert(quiz_board.selected_name==first.name and not quiz_board.dragging(),"A tap on a name selects it")
+	quiz_board._gui_input(on_dot)
+	assert(quiz_board.tap_pending,"A tap on an empty dot waits for the release")
+	release.position=canvas_of.call(quiz_board.dot_at[0])
+	quiz_board._input(release)
 	assert(quiz_board.placed[0]==first.name and quiz_board.selected_name.is_empty(),"Tap a name, then a dot, also places it")
 	# Fill in everything right except two swapped names, then mark it.
 	for i in quiz_board.places.size():
@@ -4925,7 +4970,8 @@ func smoke_test() -> void:
 	check_quiz()
 	var total: int=kaart_e.count
 	assert(quiz_board.checked and quiz_result.right==total-1 and quiz_status.text.contains("%d van %d goed" % [total-1,total]) and quiz_status.text.contains("cijfer "+quiz_mark(total-1,total)),"Nakijken counts the right dots and gives a mark")
-	assert(not quiz_board._can_drop_data(drop_at,{"quiz_name":first.name}) and quiz_check.disabled and not quiz_retry.disabled,"After marking the map is closed until a retry")
+	quiz_board.begin_drag(quiz_board.places[3].name,3,canvas_of.call(quiz_board.dot_at[3]),false)
+	assert(not quiz_board.dragging() and quiz_check.disabled and not quiz_retry.disabled,"After marking the map is closed until a retry")
 	var first_mark: float=snappedf(1.0+9.0*float(total-1)/float(total),.1)
 	assert(quiz_key=="west" and is_equal_approx(float(saved.quiz.west),first_mark) and quiz_result.record and quiz_status.text.contains("Nieuw beste cijfer"),"The first marking is saved as the best mark of Kaart E")
 	assert(quiz_mark(10,10)=="10,0" and quiz_mark(0,10)=="1,0" and quiz_mark(5,10)=="5,5","Marks run from 1 to 10 with a decimal comma")
@@ -4947,7 +4993,7 @@ func smoke_test() -> void:
 	new_quiz_round()
 	assert(quiz_board.placed_count()==0 and quiz_board.locked.count(true)==0 and quiz_board.places.map(func(p): return p.name)!=numbered,"A new test renumbers the dots and starts empty")
 	go_back(false)
-	assert(not quiz_open and state=="menu","Back closes the test")
+	assert(not quiz_open and state=="menu" and not get_viewport().disable_3d,"Back closes the test and the 3D world runs again")
 	open_homework()
 	assert(homework_grid.get_child(4).text.contains("toets 6,0") and not homework_grid.get_child(0).text.contains("toets"),"The card tile shows its best test mark")
 	assert(ProgressStore.clean({"quiz":{"water":8.46,"oost":11,"zuid":"8","":5,"noord+west":1}}).quiz=={"water":8.5,"noord+west":1.0},"Saved test marks are validated")
@@ -5172,9 +5218,19 @@ func capture_quiz() -> void:
 	await get_tree().create_timer(.4).timeout
 	for i in quiz_board.places.size()/2:
 		quiz_board.assign(i,quiz_board.places[i].name)
-	quiz_board.select_name(quiz_names.get_child(0).place_name)
+	await get_tree().create_timer(.3).timeout
+	# A finger dragging the next name: the ring aims above the finger at its dot.
+	var next: int=quiz_board.places.size()/2
+	var to_canvas: Transform2D=quiz_board.get_global_transform_with_canvas()
+	# The capture window's own mouse would move the drag; only the scripted moves count here.
+	quiz_board.set_process_input(false)
+	var next_chip: Control=quiz_names.get_children().filter(func(c): return c.place_name==quiz_board.places[next].name)[0]
+	quiz_board.begin_drag(quiz_board.places[next].name,-1,next_chip.get_global_rect().get_center(),true,next_chip)
+	quiz_board.move_drag(to_canvas*(quiz_board.dot_at[next]+Vector2(6,4))-QuizBoard.TOUCH_LIFT)
 	await get_tree().create_timer(.4).timeout
 	get_viewport().get_texture().get_image().save_png("res://build/preview-overhoren.png")
+	quiz_board.cancel_drag()
+	quiz_board.set_process_input(true)
 	close_quiz()
 	open_homework()
 	homework_selected=["west"]
