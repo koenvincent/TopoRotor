@@ -5224,6 +5224,7 @@ func smoke_test() -> void:
 	saved.quiz_open.active=true
 	resume_session()
 	assert(quiz_open and Array(quiz_board.placed)==before_dots and homework_selected.is_empty(),"A test cut off by the system opens again at launch, as it was")
+	quiz_board.layout()
 	check_quiz()
 	var total: int=kaart_e.count
 	assert(quiz_board.checked and quiz_result.right==total-1 and quiz_status.text.contains("%d van %d goed" % [total-1,total]) and quiz_status.text.contains("cijfer "+quiz_mark(total-1,total)),"Nakijken counts the right dots and gives a mark")
