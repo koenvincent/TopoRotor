@@ -3236,7 +3236,7 @@ func refresh_quiz() -> void:
 		quiz_status.text="%d van %d goed · cijfer %s.%s %s" % [right,total,quiz_mark(right,total),best_text,"Alles goed, knap!" if right==total else "Rood is fout: de gouden naam is het goede antwoord."]
 	else:
 		var fixed=quiz_board.locked.count(true)
-		var hint="Sleep een naam naar een stip, of tik een naam en daarna de stip."
+		var hint="Sleep een naam naar een stip, of tik een naam en daarna de stip. Zoom in met twee vingers, het scrollwiel of +."
 		if not quiz_board.selected_name.is_empty():
 			hint="Tik nu op de stip van %s." % quiz_board.selected_name
 		quiz_status.text="%d van %d geplaatst%s. %s" % [quiz_board.placed_count(),total," (%d al goed)" % fixed if fixed>0 else "",hint]
@@ -4960,6 +4960,94 @@ func smoke_test() -> void:
 	release.position=canvas_of.call(quiz_board.dot_at[0])
 	quiz_board._input(release)
 	assert(quiz_board.placed[0]==first.name and quiz_board.selected_name.is_empty(),"Tap a name, then a dot, also places it")
+	# Zoom: + and − step about the middle, the wheel zooms about the pointer, a drag moves the map.
+	assert(Rect2(Vector2.ZERO,quiz_board.size).encloses(quiz_board.zoom_bar.get_rect()) and quiz_board.zoom_bar.get_rect().position.x>quiz_board.size.x*.5 and quiz_board.zoom_in_button.size.y>=48,"The zoom buttons sit in the bottom right corner of the map, big enough for a finger")
+	assert(quiz_board.zoom==1.0 and quiz_board.zoom_out_button.disabled and quiz_board.zoom_fit_button.disabled and not quiz_board.zoom_in_button.disabled,"A test starts zoomed out, showing every dot")
+	quiz_board.pan_by(Vector2(50,30))
+	assert(quiz_board.pan==Vector2.ZERO,"Zoomed out the map does not move")
+	quiz_board.zoom_in_button.pressed.emit()
+	assert(is_equal_approx(quiz_board.zoom,QuizBoard.ZOOM_STEP) and quiz_board.view_zoom==quiz_board.zoom and quiz_board.map_layer.scale==Vector2.ONE and not quiz_board.zoom_out_button.disabled,"+ zooms in and draws the map at once")
+	quiz_board.zoom_out_button.pressed.emit()
+	assert(is_equal_approx(quiz_board.zoom,1.0) and quiz_board.pan.length()<.001,"− zooms back out")
+	quiz_board.layout()
+	var aim_at: Vector2=quiz_board.true_at[3]
+	var wheel=InputEventMouseButton.new()
+	wheel.button_index=MOUSE_BUTTON_WHEEL_UP
+	wheel.pressed=true
+	wheel.factor=1.0
+	wheel.position=aim_at
+	for _notch in 6:
+		quiz_board._gui_input(wheel)
+	assert(quiz_board.zoom>2.0 and quiz_board.previewing() and quiz_board.map_layer.scale.x>1.0 and quiz_board.view_zoom==1.0,"The wheel zooms in; while it turns the drawn map is only scaled, not drawn again")
+	quiz_board.settle_view()
+	quiz_board.layout()
+	assert(not quiz_board.previewing() and quiz_board.true_at[3].distance_to(aim_at)<1.0,"The place under the pointer stays under it")
+	for i in quiz_board.dot_at.size():
+		if Rect2(Vector2.ZERO,quiz_board.size).has_point(quiz_board.dot_at[i]):
+			for j in range(i+1,quiz_board.dot_at.size()):
+				assert(quiz_board.dot_at[i].distance_to(quiz_board.dot_at[j])>=QuizBoard.MIN_GAP-1.0,"Zoomed in, dots %d and %d still do not overlap" % [i+1,j+1])
+	for _notch in 40:
+		quiz_board._gui_input(wheel)
+	assert(is_equal_approx(quiz_board.zoom,QuizBoard.ZOOM_MAX) and quiz_board.zoom_in_button.disabled,"Zooming in stops at the closest step")
+	quiz_board.reset_zoom()
+	assert(quiz_board.zoom==1.0 and quiz_board.pan==Vector2.ZERO and quiz_board.view_zoom==1.0,"Alles shows the whole test again")
+	# Two fingers pinch: further apart zooms in about their middle, the middle drags the map along.
+	var mid: Vector2=quiz_board.size*.5
+	var finger=func(index: int,at: Vector2,down: bool) -> void:
+		var touch=InputEventScreenTouch.new()
+		touch.index=index
+		touch.pressed=down
+		touch.position=canvas_of.call(at)
+		quiz_board._input(touch)
+	var slide=func(index: int,at: Vector2) -> void:
+		var move=InputEventScreenDrag.new()
+		move.index=index
+		move.position=canvas_of.call(at)
+		quiz_board._input(move)
+	finger.call(0,mid-Vector2(50,0),true)
+	assert(not quiz_board.pinching(),"One finger is no pinch")
+	finger.call(1,mid+Vector2(50,0),true)
+	assert(quiz_board.pinching() and not quiz_board.press_pending and not quiz_board.dragging(),"Two fingers on the map start a pinch")
+	slide.call(1,mid+Vector2(100,0))
+	assert(is_equal_approx(quiz_board.zoom,1.5),"Fingers 1.5 times as far apart zoom in 1.5 times")
+	slide.call(0,mid-Vector2(150,0))
+	slide.call(1,mid+Vector2(150,0))
+	assert(is_equal_approx(quiz_board.zoom,3.0),"Spreading further zooms in further")
+	finger.call(1,mid+Vector2(150,0),false)
+	finger.call(0,mid-Vector2(150,0),false)
+	assert(not quiz_board.pinching() and not quiz_board.previewing() and quiz_board.touches.is_empty(),"Lifting the fingers ends the pinch and draws the map sharp")
+	# Zoomed in, a drag on the empty map moves it; a short press is still a tap.
+	quiz_board.layout()
+	var free_spot=Vector2(-1,-1)
+	var probe=Vector2(30,30)
+	while free_spot.x<0 and probe.y<quiz_board.size.y-30:
+		if quiz_board.nearest_dot(probe,QuizBoard.DOT_RADIUS+12,false)<0 and quiz_board.nearest_dot(probe+Vector2(80,40),QuizBoard.DOT_RADIUS+12,false)<0:
+			free_spot=probe
+		probe.x+=17
+		if probe.x>quiz_board.size.x*.6:
+			probe=Vector2(30,probe.y+17)
+	assert(free_spot.x>=0,"Some of the zoomed map is free of dots")
+	var place_before: Vector2=quiz_board.true_at[3]
+	var pan_press=InputEventMouseButton.new()
+	pan_press.button_index=MOUSE_BUTTON_LEFT
+	pan_press.pressed=true
+	pan_press.position=free_spot
+	pan_press.global_position=canvas_of.call(free_spot)
+	quiz_board._gui_input(pan_press)
+	assert(quiz_board.press_pending and not quiz_board.dragging(),"A press on the empty map waits to see a tap or a drag")
+	var pan_move=InputEventMouseMotion.new()
+	pan_move.position=canvas_of.call(free_spot+Vector2(80,40))
+	quiz_board._input(pan_move)
+	assert(quiz_board.panning,"Moving the press moves the map")
+	release.position=canvas_of.call(free_spot+Vector2(80,40))
+	quiz_board._input(release)
+	quiz_board.layout()
+	assert(not quiz_board.panning and not quiz_board.press_pending and quiz_board.true_at[3].distance_to(place_before+Vector2(80,40))<1.0 and quiz_board.placed[0]==first.name,"The map follows the drag and nothing was placed")
+	quiz_board.pan_by(Vector2(1e6,1e6))
+	quiz_board.settle_view()
+	quiz_board.layout()
+	assert(Rect2(Vector2.ZERO,quiz_board.size).grow(8).intersects(Rect2(quiz_board.to_screen(quiz_board.view.position),quiz_board.view.size*quiz_board.fit_scale()*quiz_board.zoom)),"The map cannot be dragged out of sight")
+	quiz_board.reset_zoom()
 	# Fill in everything right except two swapped names, then mark it.
 	for i in quiz_board.places.size():
 		quiz_board.assign(i,quiz_board.places[i].name)
