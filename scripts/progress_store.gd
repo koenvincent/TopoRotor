@@ -3,8 +3,10 @@ extends RefCounted
 
 # Schema version of progress.json. Files without a version field are treated as version 1.
 # Version 2 adds "quiz": the best Overhoren mark per homework card (or set of cards).
-const VERSION := 2
-const KNOWN_KEYS = ["version","best","records","custom","endpoint","mute","paint","minimap_rotate","calm","points","medals","garage","boards","pilot","look","profiles","homework","quiz"]
+# Version 3 adds "quiz_open" and "flight_open": an Overhoren test or a flight that was under way,
+# so a tablet that is locked, closed or ended by the system picks up where the pilot was.
+const VERSION := 3
+const KNOWN_KEYS = ["version","best","records","custom","endpoint","mute","paint","minimap_rotate","calm","points","medals","garage","boards","pilot","look","profiles","homework","quiz","quiz_open","flight_open"]
 const DEFAULT_PILOT = "Niek"
 # Pilot profiles on one device. Each keeps its own points, medals, hangar,
 # paint, stars, record times and pilot look; the leaderboard is shared, so
@@ -12,7 +14,10 @@ const DEFAULT_PILOT = "Niek"
 # top level of the save, which is what the rest of the game reads.
 # A new per-pilot field must be added to PROFILE_KEYS and bump VERSION: an older build refuses
 # (read-only) a file with a higher version, so it never drops the field of a stored pilot.
-const PROFILE_KEYS = ["points","medals","garage","paint","best","records","look","homework","quiz"]
+const PROFILE_KEYS = ["points","medals","garage","paint","best","records","look","homework","quiz","quiz_open","flight_open"]
+# Bounds of an unfinished test or flight; anything larger is not from this game and is dropped.
+const MAX_SESSION_PLACES = 400
+const PLACE_KINDS = ["stad","land","provincie","water","eiland","gebied","plek","eigen punt"]
 const MAX_PROFILES = 8
 # Caps of the saved lists. Past a cap the oldest entries go; the newest are the ones just earned.
 const MAX_HOMEWORK = 40
@@ -121,6 +126,12 @@ static func clean_profile(raw: Variant) -> Dictionary:
 			var mark: Variant=raw.quiz[key]
 			if key is String and not key.is_empty() and key.length()<=80 and typeof(mark) in [TYPE_INT,TYPE_FLOAT] and is_finite(float(mark)) and float(mark)>=1.0 and float(mark)<=10.0:
 				data.quiz[key]=snappedf(float(mark),.1)
+	var quiz_open=clean_quiz_session(raw.get("quiz_open"))
+	if not quiz_open.is_empty():
+		data.quiz_open=quiz_open
+	var flight_open=clean_flight_session(raw.get("flight_open"))
+	if not flight_open.is_empty():
+		data.flight_open=flight_open
 	data.garage=HangarCatalog.clean_garage(raw.get("garage"))
 	data.look=PilotFigure.clean(raw.get("look"))
 	if raw.get("best") is Dictionary:
@@ -143,6 +154,85 @@ static func clean_profile(raw: Variant) -> Dictionary:
 		for key in picked:
 			data.records[key]=float(raw.records[key])
 	return data
+
+static func is_number(value: Variant) -> bool:
+	return typeof(value) in [TYPE_INT,TYPE_FLOAT] and is_finite(float(value))
+
+static func is_name(value: Variant) -> bool:
+	return value is String and not value.strip_edges().is_empty() and value.length()<=120
+
+# An Overhoren test under way: the card key, the names in dot order, what lies on each dot,
+# which dots were fixed in an earlier round, and whether it was marked. {} when unusable.
+static func clean_quiz_session(raw: Variant) -> Dictionary:
+	if not raw is Dictionary or not raw.get("key") is String or raw.key.is_empty() or raw.key.length()>80:
+		return {}
+	var places: Variant=raw.get("places")
+	var placed: Variant=raw.get("placed")
+	var locked: Variant=raw.get("locked")
+	var tray: Variant=raw.get("tray")
+	if not places is Array or places.is_empty() or places.size()>MAX_SESSION_PLACES or not placed is Array or not locked is Array or not tray is Array:
+		return {}
+	if placed.size()!=places.size() or locked.size()!=places.size() or tray.size()>places.size():
+		return {}
+	if not places.all(func(v): return is_name(v)) or not tray.all(func(v): return is_name(v)) or not locked.all(func(v): return v is bool):
+		return {}
+	var names: Dictionary={}
+	for name in places:
+		names[name]=true
+	if names.size()!=places.size():
+		return {}
+	# A name lies on one dot at most, and only a name of this test.
+	var on_map: Dictionary={}
+	for name in placed:
+		if not name is String or (not name.is_empty() and (not names.has(name) or on_map.has(name))):
+			return {}
+		if not name.is_empty():
+			on_map[name]=true
+	if not tray.all(func(name): return names.has(name)):
+		return {}
+	var session: Dictionary={"key":raw.key,"places":places.duplicate(),"placed":placed.duplicate(),"locked":locked.duplicate(),"tray":tray.duplicate(),
+		"checked":raw.get("checked") is bool and raw.checked,"first_try":not raw.get("first_try") is bool or raw.first_try,"active":raw.get("active") is bool and raw.active}
+	var result: Variant=raw.get("result")
+	if session.checked and result is Dictionary and is_number(result.get("right")) and is_number(result.get("total")) and int(result.total)==places.size() and int(result.right)>=0 and int(result.right)<=int(result.total):
+		session.result={"right":int(result.right),"total":int(result.total)}
+		if result.get("record") is bool:
+			session.result.record=result.record
+	return session
+
+# A flight under way: the places in the order flown, how far the pilot got and where the aircraft was.
+static func clean_flight_session(raw: Variant) -> Dictionary:
+	if not raw is Dictionary or not raw.get("region") in ["nl","eu"] or not is_number(raw.get("mode")):
+		return {}
+	var places: Variant=raw.get("places")
+	if not places is Array or places.is_empty() or places.size()>MAX_SESSION_PLACES:
+		return {}
+	var clean_places: Array=[]
+	for p in places:
+		if not p is Dictionary or not is_name(p.get("name")) or not is_number(p.get("lat")) or not is_number(p.get("lon")) or not p.get("kind") in PLACE_KINDS:
+			return {}
+		if float(p.lat)<34 or float(p.lat)>72 or float(p.lon) < -25 or float(p.lon)>45:
+			return {}
+		var place: Dictionary={"name":p.name,"lat":float(p.lat),"lon":float(p.lon),"kind":p.kind,"region":p.get("region") if p.get("region") in ["nl","eu"] else raw.region,"code":p.get("code") if p.get("code") is String and p.code.length()<=8 else ""}
+		clean_places.append(place)
+	var mode=int(raw.mode)
+	var index: Variant=raw.get("index")
+	if mode<0 or mode>2 or not is_number(index) or int(index)<0 or int(index)>=clean_places.size():
+		return {}
+	var completed: Array=[]
+	if raw.get("completed") is Array:
+		for c in raw.completed.slice(0,int(index)):
+			if c is Dictionary and is_name(c.get("name")) and is_number(c.get("mistakes")) and int(c.mistakes)>=0:
+				completed.append({"name":c.name,"hints":c.get("hints") is bool and c.hints,"mistakes":mini(int(c.mistakes),999)})
+	if completed.size()!=int(index):
+		return {}
+	var session: Dictionary={"region":raw.region,"mode":mode,"custom":raw.get("custom") is bool and raw.custom,"places":clean_places,"index":int(index),"completed":completed,
+		"mistakes":clampi(int(raw.get("mistakes")) if is_number(raw.get("mistakes")) else 0,0,99999),
+		"time":clampf(float(raw.get("time")) if is_number(raw.get("time")) else 0.0,0.0,604800.0),
+		"hints_used":raw.get("hints_used") is bool and raw.hints_used}
+	var at: Variant=raw.get("at")
+	if at is Array and at.size()==3 and at.all(func(v): return is_number(v)) and absf(float(at[0]))<1e5 and absf(float(at[1]))<1e5:
+		session.at=[float(at[0]),float(at[1]),wrapf(float(at[2]),-PI,PI)]
+	return session
 
 # The per-pilot part of the save, as a deep copy.
 static func snapshot(data: Dictionary) -> Dictionary:

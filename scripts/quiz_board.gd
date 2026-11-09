@@ -302,6 +302,21 @@ func setup(on_world: TopoWorld,quiz_places: Array) -> void:
 	update_zoom_buttons()
 	changed.emit()
 
+# Picks up a test that was under way: places in dot order, the name on each dot ("" for none),
+# the dots fixed in an earlier round and whether it was marked.
+func restore(on_world: TopoWorld,quiz_places: Array,on_dots: Array,fixed: Array,was_checked: bool) -> void:
+	setup(on_world,quiz_places)
+	for i in places.size():
+		placed[i]=String(on_dots[i])
+		locked[i]=bool(fixed[i])
+	checked=was_checked
+	redraw_dots()
+	changed.emit()
+
+# What restore needs, for the save.
+func session() -> Dictionary:
+	return {"places":places.map(func(p): return String(p.name)),"placed":Array(placed),"locked":locked.duplicate(),"checked":checked}
+
 func names_left() -> PackedStringArray:
 	var left=PackedStringArray()
 	for p in places:
@@ -858,8 +873,14 @@ func label_lines(i: int) -> Array:
 
 const LINE_HEIGHT = 18.0
 
+# A label never moves further than this from its dot (between the dot's edge and the label's).
+const LABEL_REACH = 36.0
+
 # A spot for every label beside its dot: right, left, above or below, or a
-# little higher or lower, whichever covers the fewest other labels and dots.
+# little further out, whichever covers the fewest other labels and dots. Close
+# to the dot weighs heavily, so a name does not wander off to a free spot far
+# away; the label starts with the dot's number, so even in a crowded corner it
+# is clear which dot it belongs to. Zooming in gives crowded parts room.
 func label_layout(font: Font) -> Array:
 	var blocks: Array=[]
 	var taken: Array=[]
@@ -871,25 +892,32 @@ func label_layout(font: Font) -> Array:
 		var lines=label_lines(i)
 		if lines.is_empty():
 			continue
+		var number=str(i+1)
+		var number_width=font.get_string_size(number,HORIZONTAL_ALIGNMENT_LEFT,-1,NAME_FONT).x+5
 		var width=0.0
 		for entry in lines:
 			width=maxf(width,font.get_string_size(entry[0],HORIZONTAL_ALIGNMENT_LEFT,-1,NAME_FONT).x)
-		var box_size=Vector2(width+8,lines.size()*LINE_HEIGHT+2)
+		var box_size=Vector2(number_width+width+8,lines.size()*LINE_HEIGHT+2)
 		var at=dot_at[i]
 		var gap=DOT_RADIUS+4
 		var half=box_size.y*.5
 		var options=[Vector2(at.x+gap,at.y-half),Vector2(at.x-gap-box_size.x,at.y-half),
-			Vector2(at.x-box_size.x*.5,at.y-gap-box_size.y),Vector2(at.x-box_size.x*.5,at.y+gap)]
-		# Further out, tied to the dot with a thin line, for crowded parts such as the Randstad.
-		for step in [1,2,3,4]:
-			for side_x in [at.x+gap+step*10,at.x-gap-step*10-box_size.x]:
-				for dy in [-step*LINE_HEIGHT,step*LINE_HEIGHT]:
+			Vector2(at.x-box_size.x*.5,at.y-gap-box_size.y),Vector2(at.x-box_size.x*.5,at.y+gap),
+			Vector2(at.x+gap*.6,at.y-gap-box_size.y),Vector2(at.x-gap*.6-box_size.x,at.y-gap-box_size.y),
+			Vector2(at.x+gap*.6,at.y+gap),Vector2(at.x-gap*.6-box_size.x,at.y+gap)]
+		# A little further out, tied to the dot with a thin line, for crowded parts such as the Randstad.
+		for step in [1,2]:
+			for side_x in [at.x+gap+step*8,at.x-gap-step*8-box_size.x]:
+				for dy in [-step*LINE_HEIGHT*.75,step*LINE_HEIGHT*.75]:
 					options.append(Vector2(side_x,at.y-half+dy))
 		var best=Rect2()
 		var best_cost=INF
 		for corner in options:
 			var box=Rect2(corner,box_size)
-			var cost=(0.0 if bounds.encloses(box) else 100.0)+corner.distance_to(options[0])*.01
+			var reach=box_gap(box,at)
+			if reach>LABEL_REACH:
+				continue
+			var cost=(0.0 if bounds.encloses(box) else 100.0)+maxf(0.0,reach-gap)*.12
 			for other in taken:
 				if box.intersects(other):
 					cost+=10.0
@@ -902,19 +930,24 @@ func label_layout(font: Font) -> Array:
 			if cost<.05:
 				break
 		taken.append(best)
-		blocks.append({"box":best,"lines":lines,"dot":at})
+		blocks.append({"box":best,"lines":lines,"dot":at,"number":number,"number_width":number_width})
 	return blocks
+
+# Distance from a dot's centre to the nearest point of a label box.
+static func box_gap(box: Rect2,dot: Vector2) -> float:
+	return dot.clamp(box.position,box.end).distance_to(dot)
 
 func draw_label(c: CanvasItem,block: Dictionary,font: Font) -> void:
 	var box: Rect2=block.box
 	var dot: Vector2=block.dot
 	var nearest=dot.clamp(box.position,box.end)
-	if nearest.distance_to(dot)>DOT_RADIUS+8:
-		c.draw_line(dot,nearest,Color(CREAM,.7),1.2,true)
+	if nearest.distance_to(dot)>DOT_RADIUS+5:
+		c.draw_line(dot,nearest,Color(GOLD,.8),1.5,true)
 	c.draw_rect(box,Color(INK,.86))
+	c.draw_string(font,Vector2(box.position.x+4,box.position.y+NAME_FONT+1),block.number,HORIZONTAL_ALIGNMENT_LEFT,-1,NAME_FONT,GOLD)
 	var y=box.position.y+NAME_FONT+1
 	for entry in block.lines:
-		var x=box.position.x+4
+		var x=box.position.x+4+block.number_width
 		c.draw_string(font,Vector2(x,y),entry[0],HORIZONTAL_ALIGNMENT_LEFT,-1,NAME_FONT,entry[1])
 		if entry[2]:
 			var tw=font.get_string_size(entry[0],HORIZONTAL_ALIGNMENT_LEFT,-1,NAME_FONT).x

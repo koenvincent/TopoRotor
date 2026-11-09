@@ -262,6 +262,9 @@ func _ready() -> void:
 	load_world("nl")
 	state="menu"
 	get_tree().quit_on_go_back=false
+	if not is_test_mode and not is_capture_mode:
+		# The app was ended in the middle of a flight or a test: pick it up again.
+		call_deferred("resume_session")
 	if is_test_mode:
 		call_deferred("smoke_test")
 	if is_capture_mode:
@@ -1297,7 +1300,8 @@ func shuffled_order(places: Array) -> Array:
 	last_order=names
 	return list
 
-func start_mission(custom: Array = [],as_custom: bool = true) -> void:
+# keep_order is for picking up a saved flight: the places come in the order they were flown.
+func start_mission(custom: Array = [],as_custom: bool = true,keep_order: bool = false) -> void:
 	if is_instance_valid(summary):
 		summary.queue_free()
 	custom_mission=as_custom and not custom.is_empty()
@@ -1316,7 +1320,8 @@ func start_mission(custom: Array = [],as_custom: bool = true) -> void:
 	in_zone=false
 	# Every mode flies the places in a new order, so the route cannot be learnt by heart.
 	# Record times stay comparable: the record key is the set of places, not their order.
-	mission=shuffled_order(mission)
+	if not keep_order:
+		mission=shuffled_order(mission)
 	world.ensure_mission_markers(mission)
 	radar_places=build_radar_places() if game_mode==GameMode.RECORDS else []
 	radar_active=false
@@ -1355,6 +1360,71 @@ func start_mission(custom: Array = [],as_custom: bool = true) -> void:
 	minimap.heading=heading
 	minimap.aircraft=helicopter.position
 	update_goal()
+	remember_flight()
+
+# --- picking up where the pilot was -------------------------------------------
+# A flight or an Overhoren test under way is kept in the save of the active
+# pilot: at its start, after every answer or placed name, and whenever the app
+# goes to the background (tablet locked, closed, or locked by Family Link).
+# Android may end a backgrounded app without warning; the next launch then
+# brings the flight back paused, or the test as it was.
+
+func remember_flight(write: bool = true) -> void:
+	if is_capture_mode or not state in ["flight","paused"] or mission.is_empty() or mission_index>=mission.size():
+		return
+	saved.flight_open={"region":region,"mode":game_mode,"custom":custom_mission,"index":mission_index,"completed":completed.duplicate(true),
+		"mistakes":mistakes,"time":flight_time,"hints_used":hints_used,"at":[helicopter.position.x,helicopter.position.z,heading],
+		"places":mission.map(func(p): return {"name":p.name,"lat":p.lat,"lon":p.lon,"kind":p.kind,"region":p.get("region",region),"code":p.get("code","")})}
+	if write:
+		save_data()
+
+func forget_flight() -> void:
+	if saved.has("flight_open"):
+		saved.erase("flight_open")
+		save_data()
+
+func resume_session() -> void:
+	if state!="menu":
+		return
+	var flight: Dictionary=ProgressStore.clean_flight_session(saved.get("flight_open"))
+	if not flight.is_empty():
+		resume_flight_session(flight)
+		return
+	var quiz: Dictionary=ProgressStore.clean_quiz_session(saved.get("quiz_open"))
+	if not quiz.is_empty() and quiz.active:
+		homework_selected=Array(quiz.key.split("+"))
+		if chosen_homework().size()==homework_selected.size():
+			start_homework_quiz()
+		homework_selected=[]
+
+func resume_flight_session(s: Dictionary) -> void:
+	if s.region!=region:
+		region_select.select(0 if s.region=="nl" else 1)
+		load_world(s.region)
+	mode_select.select(s.mode)
+	# Catalog places come from the current catalog, so data fixes reach a saved flight too.
+	var places: Array=[]
+	for p in s.places:
+		var same: Array=catalog.places.filter(func(c): return c.name==p.name and c.get("region","")==p.region and c.kind==p.kind)
+		places.append(same[0].duplicate() if p.kind!="eigen punt" and not same.is_empty() else p.duplicate())
+	start_mission(places,s.custom,true)
+	mission_index=s.index
+	completed=s.completed.duplicate(true)
+	mistakes=s.mistakes
+	flight_time=s.time
+	hints_used=s.hints_used
+	if s.has("at"):
+		helicopter.position=Vector3(s.at[0],helicopter.position.y,s.at[1])
+		heading=s.at[2]
+		helicopter.rotation.y=heading
+		compass.heading=heading
+		minimap.heading=heading
+		minimap.aircraft=helicopter.position
+		update_flight_camera(0.0,true)
+	update_goal()
+	status_label.text="Je was hier gebleven: nog %d van %d. Zoek %s." % [mission.size()-mission_index,mission.size(),mission[mission_index].name]
+	remember_flight()
+	pause_flight()
 
 func update_goal() -> void:
 	if mission_index>=mission.size():
@@ -1704,6 +1774,7 @@ func answer() -> void:
 		hud_fx.show_miss("MIS!" if goal_mistakes<3 else "NOG NIET!")
 		shake=0.0 if calm_on() else 1.0
 		answer_cooldown=1.0
+	remember_flight()
 
 # The praise grows with a run of first-try answers.
 func hit_word(first_try: bool) -> String:
@@ -1780,6 +1851,8 @@ func mission_stars(first_try: int) -> int:
 
 func finish_mission() -> void:
 	state="summary"
+	# Done: nothing to pick up any more. The saves below write the result without it.
+	saved.erase("flight_open")
 	hud.hide()
 	world.target.hide()
 	rotor_audio.stop()
@@ -1974,6 +2047,8 @@ func return_menu() -> void:
 	pause_backdrop.hide()
 	pause_panel.hide()
 	state="menu"
+	# Stopping a flight on purpose ends it; only a flight cut off by the system is picked up again.
+	forget_flight()
 	rotor_audio.stop()
 	fx.idle()
 	fx.clear_effects()
@@ -3151,7 +3226,9 @@ func open_quiz(places: Array,heading: String) -> void:
 	quiz_places=places.duplicate()
 	quiz_kicker.text=heading
 	quiz_open=true
-	new_quiz_round()
+	# The same cards as a test that was under way: carry on with it instead of starting over.
+	if not resume_quiz_round():
+		new_quiz_round()
 	quiz_backdrop.move_to_front()
 	quiz_panel.move_to_front()
 	quiz_backdrop.show()
@@ -3169,6 +3246,45 @@ func close_quiz() -> void:
 	quiz_panel.hide()
 	quiz_backdrop.hide()
 	get_viewport().disable_3d=false
+	# Kept for the next Overhoren of these cards, but not reopened at launch.
+	remember_quiz()
+
+func resume_quiz_round() -> bool:
+	var s: Dictionary=ProgressStore.clean_quiz_session(saved.get("quiz_open"))
+	if s.is_empty() or s.key!=quiz_key:
+		return false
+	var by_name: Dictionary={}
+	for p in quiz_places:
+		by_name[String(p.name)]=p
+	if by_name.size()!=s.places.size() or not s.places.all(func(n): return by_name.has(n)):
+		return false
+	quiz_result=s.get("result",{}).duplicate()
+	quiz_first_try=s.first_try
+	quiz_best=float(saved.get("quiz",{}).get(quiz_key,0.0))
+	quiz_tray_order=PackedStringArray(s.tray)
+	for name_text in shuffled_order(quiz_places).map(func(p): return String(p.name)):
+		if not quiz_tray_order.has(name_text):
+			quiz_tray_order.append(name_text)
+	quiz_board.restore(world,s.places.map(func(n): return by_name[n]),s.placed,s.locked,s.checked)
+	return true
+
+# The test as it stands, in the save of the active pilot; written only when something changed.
+func remember_quiz() -> void:
+	if is_capture_mode or quiz_key.is_empty() or quiz_board.places.is_empty():
+		return
+	var s: Dictionary=quiz_board.session()
+	s.key=quiz_key
+	s.tray=Array(quiz_tray_order)
+	s.first_try=quiz_first_try
+	s.active=quiz_open
+	if quiz_board.checked and quiz_result.has("right"):
+		s.result={"right":int(quiz_result.right),"total":int(quiz_result.total)}
+		if quiz_result.has("record"):
+			s.result.record=quiz_result.record
+	if saved.get("quiz_open") is Dictionary and saved.quiz_open==s:
+		return
+	saved.quiz_open=s
+	save_data()
 
 # New numbering and a new order of the names: the test cannot be done from memory of the last one.
 func new_quiz_round() -> void:
@@ -3242,6 +3358,7 @@ func refresh_quiz() -> void:
 		quiz_status.text="%d van %d geplaatst%s. %s" % [quiz_board.placed_count(),total," (%d al goed)" % fixed if fixed>0 else "",hint]
 	quiz_check.disabled=quiz_board.checked
 	quiz_retry.disabled=not quiz_board.checked or int(quiz_result.get("right",0))==total
+	remember_quiz()
 
 # "Huiswerk · A + B" when a mission is exactly some homework assignments.
 func homework_title(places: Array) -> String:
@@ -4039,7 +4156,9 @@ func ocr_response(result: int,code: int,headers: PackedStringArray,body: PackedB
 func _notification(what: int) -> void:
 	# Hangar and pilot choices live in memory until their panel closes: save when the app is
 	# backgrounded or closed, since the OS may end it without another chance.
+	# A flight under way is saved with where the aircraft is now; an Overhoren test is saved on every change.
 	if what in [NOTIFICATION_APPLICATION_PAUSED,NOTIFICATION_APPLICATION_FOCUS_OUT,NOTIFICATION_WM_CLOSE_REQUEST] and not is_capture_mode and is_instance_valid(ui):
+		remember_flight(false)
 		save_data()
 	if is_test_mode or is_capture_mode:
 		return
@@ -4270,9 +4389,35 @@ func smoke_test() -> void:
 		assert(fx.bursts_started>bursts_before,"Correct answer launches fireworks")
 		bursts_before=fx.bursts_started
 	assert(hud_fx.banners_shown==banners_before+1,"Hit banner for the first goal; the last goal opens the summary instead")
+	assert(state=="summary" and not saved.has("flight_open"),"A finished flight leaves nothing to pick up")
 	assert(completed[0].mistakes==1 and completed[1].mistakes==0,"Mistakes reset between goals")
 	assert(mission_stars(1)==1,"Half correct on first try earns one star")
 	assert(JSON.stringify(saved.best)==stars_before,"Custom missions preserve preset stars")
+	# A flight under way is saved and comes back paused, at the same place in the mission.
+	return_menu()
+	start_mission([catalog.lookup.amsterdam,catalog.lookup.arnhem,catalog.lookup.rotterdam])
+	assert(saved.flight_open.index==0 and saved.flight_open.places.size()==3,"A flight is saved as soon as it starts")
+	var flown_order: Array=mission.map(func(p): return p.name)
+	var goal_zero: Dictionary=mission[0]
+	helicopter.position=world.project(goal_zero.lon,goal_zero.lat)
+	answer_cooldown=0
+	answer()
+	assert(saved.flight_open.index==1 and saved.flight_open.completed.size()==1,"Every answer is saved")
+	helicopter.position+=Vector3(3,0,-2)
+	heading=.7
+	flight_time=42.0
+	_notification(NOTIFICATION_APPLICATION_PAUSED)
+	var kept: Dictionary=ProgressStore.clean(JSON.parse_string(JSON.stringify(saved))).flight_open
+	assert(kept.index==1 and kept.completed.size()==1 and is_equal_approx(kept.time,42.0) and is_equal_approx(kept.at[2],.7),"Locking the tablet saves how far the flight got and where the aircraft is")
+	var at_lock: Vector3=helicopter.position
+	return_menu()
+	assert(not saved.has("flight_open"),"Stopping a flight on purpose ends it")
+	saved.flight_open=kept
+	resume_session()
+	assert(state=="paused" and pause_panel.visible and mission.map(func(p): return p.name)==flown_order and mission_index==1 and completed.size()==1 and is_equal_approx(flight_time,42.0),"At the next launch the flight comes back paused, where it was")
+	assert(Vector2(helicopter.position.x,helicopter.position.z).distance_to(Vector2(at_lock.x,at_lock.z))<.01 and is_equal_approx(heading,.7) and title_label.text.ends_with(mission[1].name),"The aircraft is back where it was, on its way to the same place")
+	go_back(false)
+	assert(state=="flight","Continue flies on")
 	mode_select.select(GameMode.LEARN)
 	return_menu()
 	load_world("eu")
@@ -5055,6 +5200,30 @@ func smoke_test() -> void:
 	quiz_board.assign(2,quiz_board.places[1].name)
 	assert(quiz_board.placed_count()==kaart_e.count and quiz_board.names_left().is_empty(),"A name moved to another dot leaves its old dot empty")
 	quiz_board.assign(1,quiz_board.places[1].name)
+	# Every name sits next to its own dot and carries that dot's number.
+	quiz_board.layout()
+	var blocks: Array=quiz_board.label_layout(UiFonts.font("bold"))
+	assert(blocks.size()==kaart_e.count and blocks.all(func(b): return QuizBoard.box_gap(b.box,b.dot)<=QuizBoard.LABEL_REACH+.01),"No name lies far from its dot")
+	assert(blocks.all(func(b): return b.number==str(quiz_board.dot_at.find(b.dot)+1)),"Every name shows the number of its dot")
+	# Tablet closed in the middle of the test: every placed name is already saved and comes back.
+	var before_dots: Array=Array(quiz_board.placed)
+	var before_numbers: Array=quiz_board.places.map(func(p): return p.name)
+	assert(saved.quiz_open.key=="west" and saved.quiz_open.placed==before_dots and saved.quiz_open.active,"Every placed name is saved at once")
+	var reread: Dictionary=ProgressStore.clean(JSON.parse_string(JSON.stringify(saved)))
+	assert(reread.quiz_open==saved.quiz_open and reread.profiles[pilot_name()].quiz_open==saved.quiz_open,"The test under way survives a reload, in the pilot's own profile")
+	close_quiz()
+	assert(not saved.quiz_open.active and saved.quiz_open.placed==before_dots,"Stoppen keeps the test, but does not reopen it at launch")
+	quiz_board.setup(world,[])
+	homework_selected=["west"]
+	start_homework_quiz()
+	assert(quiz_open and Array(quiz_board.placed)==before_dots and quiz_board.places.map(func(p): return p.name)==before_numbers and saved.quiz_open.active,"Overhoren the same card picks up the test where it was")
+	close_quiz()
+	quiz_board.setup(world,[])
+	resume_session()
+	assert(not quiz_open,"A stopped test does not open by itself")
+	saved.quiz_open.active=true
+	resume_session()
+	assert(quiz_open and Array(quiz_board.placed)==before_dots and homework_selected.is_empty(),"A test cut off by the system opens again at launch, as it was")
 	check_quiz()
 	var total: int=kaart_e.count
 	assert(quiz_board.checked and quiz_result.right==total-1 and quiz_status.text.contains("%d van %d goed" % [total-1,total]) and quiz_status.text.contains("cijfer "+quiz_mark(total-1,total)),"Nakijken counts the right dots and gives a mark")
@@ -5085,7 +5254,14 @@ func smoke_test() -> void:
 	open_homework()
 	assert(homework_grid.get_child(4).text.contains("toets 6,0") and not homework_grid.get_child(0).text.contains("toets"),"The card tile shows its best test mark")
 	assert(ProgressStore.clean({"quiz":{"water":8.46,"oost":11,"zuid":"8","":5,"noord+west":1}}).quiz=={"water":8.5,"noord+west":1.0},"Saved test marks are validated")
-	assert("quiz" in ProgressStore.PROFILE_KEYS and ProgressStore.VERSION==2,"Test marks belong to a pilot and bump the save version")
+	assert("quiz" in ProgressStore.PROFILE_KEYS and "quiz_open" in ProgressStore.PROFILE_KEYS and "flight_open" in ProgressStore.PROFILE_KEYS and ProgressStore.VERSION==3,"Test marks and unfinished tests and flights belong to a pilot and bump the save version")
+	assert(ProgressStore.clean_quiz_session({"key":"west","places":["A","B"],"placed":["B","B"],"locked":[false,false],"tray":[]}).is_empty(),"A name on two dots is rejected")
+	assert(ProgressStore.clean_quiz_session({"key":"west","places":["A","B"],"placed":["","C"],"locked":[false,false],"tray":[]}).is_empty(),"A name from another test is rejected")
+	assert(not ProgressStore.clean_quiz_session({"key":"west","places":["A","B"],"placed":["","A"],"locked":[false,false],"tray":["B","A"]}).is_empty(),"A sound test under way is kept")
+	var one_place: Array=[{"name":"X","lat":52.0,"lon":5.0,"kind":"stad"}]
+	assert(ProgressStore.clean_flight_session({"region":"nl","mode":1,"places":one_place,"index":3,"completed":[]}).is_empty(),"A flight past its last place is rejected")
+	assert(ProgressStore.clean_flight_session({"region":"nl","mode":7,"places":one_place,"index":0,"completed":[]}).is_empty(),"An unknown mode is rejected")
+	assert(not ProgressStore.clean_flight_session({"region":"nl","mode":1,"places":one_place,"index":0,"completed":[]}).is_empty(),"A fresh flight is kept")
 	go_back(false)
 	assert(not homework_open,"Back closes the homework screen")
 	assert(ProgressStore.clean({"homework":["west","west",5,"noord"]}).homework==["west","noord"],"Homework progress is validated")
