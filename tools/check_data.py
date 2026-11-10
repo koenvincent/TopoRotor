@@ -278,6 +278,39 @@ def check_places(eu, provinces, nl_map):
     return places, tables
 
 
+# Places the drawn rivers must pass, in km: the river questions themselves and the towns on their banks.
+# Without this check the Maas and IJssel were missing from the map for months.
+ON_RIVER_KM = {"Maas": 1.5, "Waal": 1.5, "Rijn": 1.5, "Neder-Rijn": 1.5, "Lek": 1.5, "IJssel": 2.5, "Merwede": 2.5,
+               "Maastricht": 1.5, "Roermond": 1.5, "Venlo": 1.5, "Arnhem": 1.5, "Deventer": 2.0, "Zutphen": 1.5, "Kampen": 1.5}
+
+
+def km_to_line(lon, lat, line):
+    scale = math.cos(math.radians(52))
+    best = float("inf")
+    for (ax, ay), (bx, by) in zip(line, line[1:]):
+        ax, bx, px = ax * scale, bx * scale, lon * scale
+        dx, dy = bx - ax, by - ay
+        length = dx * dx + dy * dy
+        t = 0.0 if length == 0 else max(0.0, min(1.0, ((px - ax) * dx + (lat - ay) * dy) / length))
+        best = min(best, math.hypot((px - ax - t * dx) * 111.32, (lat - ay - t * dy) * 110.57))
+    return best
+
+
+def check_rivers(nl_map, places):
+    bounds = nl_map["bounds"]
+    rivers = nl_map["rivers"]
+    check(len(rivers) > 0, "map_nl: no rivers")
+    for number, line in enumerate(rivers):
+        check(len(line) >= 2 and all(bounds[0] - 1e-6 <= x <= bounds[2] + 1e-6 and bounds[1] - 1e-6 <= y <= bounds[3] + 1e-6 for x, y in line),
+              "map_nl river %d: needs two or more points inside the bounds" % number)
+    for name, reach in ON_RIVER_KM.items():
+        place = next((p for p in places if p["name"] == name and p["region"] == "nl"), None)
+        check(place is not None, "rivers: place %s missing" % name)
+        if place:
+            distance = min(km_to_line(place["lon"], place["lat"], line) for line in rivers)
+            check(distance <= reach, "rivers: %s lies %.1f km from the nearest drawn river (at most %.1f)" % (name, distance, reach))
+
+
 def check_routes(places, tables):
     everything = {}
     for region in ("eu", "nl"):  # the Dutch entry wins for names that exist in both regions
@@ -300,6 +333,7 @@ def main():
     places, tables = check_places(eu, provinces, nl_map)
     check_city_plans(lakes_hash, nl_map, places)
     check_routes(places, tables)
+    check_rivers(nl_map, places)
     for path in sorted((ROOT / "data").glob("*.json")):
         check(isinstance(json.loads(path.read_text(encoding="utf-8")), dict) or path.name == "places.json", str(path) + ": unexpected top level")
     if failures:
