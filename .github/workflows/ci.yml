@@ -47,11 +47,20 @@ jobs:
             exit 1
           fi
           grep -E '^GODOT_' tools/godot-version.env >> "$GITHUB_ENV"
+      - name: Restore cached Godot downloads
+        # Keyed on the pinned version file, so a new version or checksum starts a new entry.
+        # The sha512 check below still runs on every file, cached or fresh.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/godot-downloads
+          key: godot-editor-${{ runner.os }}-${{ hashFiles('tools/godot-version.env') }}
       - name: Install pinned Godot editor
         run: |
           base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
-          curl --fail --location --retry 3 --output /tmp/godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
-          echo "$GODOT_EDITOR_SHA512  /tmp/godot.zip" | sha512sum --check --strict
-          unzip -q /tmp/godot.zip -d /tmp/godot
+          dl="$HOME/godot-downloads"
+          mkdir -p "$dl"
+          [ -f "$dl/godot.zip" ] || curl --fail --location --retry 3 --output "$dl/godot.zip" "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          echo "$GODOT_EDITOR_SHA512  $dl/godot.zip" | sha512sum --check --strict
+          unzip -q "$dl/godot.zip" -d /tmp/godot
       - name: Import project and run isolated game regressions
         run: GODOT_BIN="/tmp/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" python3 tools/check_godot.py
