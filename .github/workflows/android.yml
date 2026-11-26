@@ -45,17 +45,26 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Restore cached Godot downloads
+        # Keyed on the pinned version file, so a new version or checksum starts a new entry.
+        # The sha512 check below still runs on every file, cached or fresh.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/godot-downloads
+          key: godot-android-${{ runner.os }}-${{ hashFiles('tools/godot-version.env') }}
       - name: Install Godot and export templates
         run: |
           base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
-          curl -fL --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -o /tmp/godot.zip
-          curl -fL --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -o /tmp/templates.zip
-          echo "$GODOT_EDITOR_SHA512  /tmp/godot.zip" | sha512sum --check --strict
-          echo "$GODOT_TEMPLATES_SHA512  /tmp/templates.zip" | sha512sum --check --strict
+          dl="$HOME/godot-downloads"
+          mkdir -p "$dl"
+          [ -f "$dl/godot.zip" ] || curl -fL --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -o "$dl/godot.zip"
+          [ -f "$dl/templates.zip" ] || curl -fL --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -o "$dl/templates.zip"
+          echo "$GODOT_EDITOR_SHA512  $dl/godot.zip" | sha512sum --check --strict
+          echo "$GODOT_TEMPLATES_SHA512  $dl/templates.zip" | sha512sum --check --strict
           cd /tmp
-          unzip -q godot.zip -d godot
+          unzip -q "$dl/godot.zip" -d godot
           sudo install "godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
-          unzip -q templates.zip -d export-templates
+          unzip -q "$dl/templates.zip" -d export-templates
           mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
           mv export-templates/templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
       - name: Configure Android SDK and Godot
